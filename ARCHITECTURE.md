@@ -14,6 +14,10 @@
   selection.
 - A legend and forecast-time control keep the color, arrows, and modal on the
   same model run and valid time.
+- A Wind/Waves switch selects ECMWF's combined wind waves and swell height
+  (`swh`) and mean wave period (`mwp`) from the `wave` stream. Wave map color
+  shows height, while the flag and modal also show period. The free feed does
+  not supply first swell partition (`swh1`/`mwp1`) fields.
 
 ## Coding decisions
 
@@ -40,9 +44,10 @@
   DOM flag follows Leaflet's projected point. Pointer movement on the flag
   proposes location changes. Animation frames do not dispatch SAM proposals;
   user choices and completed loads do.
-- The data source is ECMWF's official AWS Open Data mirror. Read `.index` rows,
-  request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
-  Web Worker. Select a complete forecast run and retain its identity in every
+- The data source is ECMWF's Google Cloud Open Data mirror. Read `.index` rows,
+  request `10u`, `10v`, and optional `10fg` from `oper`, or `swh` and `mwp` from
+  `wave`, by GRIB2 byte range, then decode in a Web Worker. Select a complete
+  forecast run for the active stream and retain its identity in every
   request so late responses cannot replace a newer selection.
 - Keep forecast instants in UTC internally and format timeline, run, and point
   details times in the browser's local timezone.

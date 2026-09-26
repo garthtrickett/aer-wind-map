@@ -1,4 +1,5 @@
 import type { ForecastRun } from "./wind.ts";
+import type { Layer } from "./wave.ts";
 
 export type WeatherError =
   | { readonly kind: "network"; readonly detail: string }
@@ -27,23 +28,24 @@ export const runCandidates = (now: Date): readonly ForecastRun[] =>
   Array.from({ length: 8 }, (_, index) => runAt(new Date(now.getTime() - index * 6 * 3_600_000)))
     .filter((run, index, runs) => runs.findIndex((other) => other.id === run.id) === index);
 
-const forecastPath = (run: ForecastRun, step: number, extension: "index" | "grib2"): string => {
+const forecastPath = (run: ForecastRun, step: number, extension: "index" | "grib2", layer: Layer = "wind"): string => {
   const hh = String(run.hour).padStart(2, "0");
-  return `${run.date}/${hh}z/ifs/0p25/oper/${run.id}0000-${step}h-oper-fc.${extension}`;
+  const stream = layer === "wind" ? "oper" : "wave";
+  return `${run.date}/${hh}z/ifs/0p25/${stream}/${run.id}0000-${step}h-${stream}-fc.${extension}`;
 };
 
-export const forecastUrl = (run: ForecastRun, step: number, extension: "index" | "grib2"): string =>
-  `https://storage.googleapis.com/ecmwf-open-data/${forecastPath(run, step, extension)}`;
+export const forecastUrl = (run: ForecastRun, step: number, extension: "index" | "grib2", layer: Layer = "wind"): string =>
+  `https://storage.googleapis.com/ecmwf-open-data/${forecastPath(run, step, extension, layer)}`;
 
 const listingUrl = (name: string): string => {
   const query = new URLSearchParams({ prefix: name, maxResults: "1", fields: "items(name)" });
   return `https://storage.googleapis.com/storage/v1/b/ecmwf-open-data/o?${query}`;
 };
 
-export const discoverLatest = async (fetcher: typeof fetch = fetch): Promise<RunResult> => {
+export const discoverLatest = async (fetcher: typeof fetch = fetch, layer: Layer = "wind"): Promise<RunResult> => {
   for (const run of runCandidates(new Date())) {
     try {
-      const name = forecastPath(run, 72, "index");
+      const name = forecastPath(run, 72, "index", layer);
       const response = await fetcher(listingUrl(name), { signal: AbortSignal.timeout(8000) });
       if (!response.ok) continue;
       const listing = await response.json() as { readonly items?: readonly { readonly name?: string }[] };

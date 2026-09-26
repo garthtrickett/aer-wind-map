@@ -116,7 +116,7 @@ try {
     throw new Error(`Global view stopped zooming out too early: ${JSON.stringify({ trackpadStart, zoomedOutPoint })}`);
   }
   for (let step = 0; step < 5; step++) await pinchWheel(-32);
-  await page.getByRole("button", { name: "Remove wind flag" }).click();
+  await page.getByRole("button", { name: "Remove forecast flag" }).click();
   const colorSnapshot = async (target: Page): Promise<string> => webgl2
     ? (await target.locator("#map .maplibregl-canvas").screenshot()).toString("base64")
     : await target.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
@@ -235,8 +235,35 @@ try {
     throw error;
   }
   if (!await page.locator(".flag-grab").isVisible()) throw new Error("Wind flag disappeared after changing forecast time");
-  await page.getByRole("button", { name: "Remove wind flag" }).click();
+  await page.getByRole("button", { name: "Remove forecast flag" }).click();
   if (await page.locator(".flag-grab").count()) throw new Error("Wind flag did not close");
+  const windColorBeforeSwitch = await colorSnapshot(page);
+  await page.getByRole("button", { name: "Waves" }).click();
+  await page.getByText("Live forecast").waitFor({ timeout: 60_000 });
+  await page.screenshot({ path: "/tmp/wind-map-waves.png", fullPage: true });
+  if (!await page.locator(".legend").innerText().then((text) => text.includes("WAVES + SWELL HEIGHT"))) {
+    throw new Error("Wave layer did not update the legend");
+  }
+  if (!await page.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
+    throw new Error("Wind arrows remained visible over the wave layer");
+  }
+  if (await colorSnapshot(page) === windColorBeforeSwitch) throw new Error("Wave layer retained the wind colors");
+  await page.locator("#map").click({ position: { x: 430, y: 450 } });
+  const waveFlag = await page.locator(".flag-reading").innerText();
+  if (!waveFlag.includes("m") || !waveFlag.includes("s period") || waveFlag.includes("No data")) {
+    throw new Error(`Wave flag lacks height or period: ${waveFlag}`);
+  }
+  await page.getByRole("button", { name: "Open forecast details" }).click();
+  const waveModal = await page.getByRole("dialog", { name: "Waves at this location" }).innerText();
+  if (!waveModal.includes("Mean wave period") || !waveModal.includes("both wind waves and swell")) {
+    throw new Error(`Wave details are incomplete or mislabeled: ${waveModal}`);
+  }
+  await page.getByRole("button", { name: "Close details" }).click();
+  await page.getByRole("button", { name: "Wind", exact: true }).click();
+  await page.getByText("Live forecast").waitFor({ timeout: 60_000 });
+  if (await page.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
+    throw new Error("Wind arrows did not return after switching layers");
+  }
   const title = await page.title();
   await page.close();
 
@@ -301,7 +328,7 @@ try {
       throw new Error(`Touch drag did not move the flag: ${JSON.stringify({ beforeTouch, afterTouch })}`);
     }
   }
-  await mobile.getByRole("button", { name: "Open wind details" }).click();
+  await mobile.getByRole("button", { name: "Open forecast details" }).click();
   await mobile.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("Mobile layout overflows horizontally");
   await mobile.close();
@@ -406,6 +433,17 @@ try {
       throw new Error(`Canvas fallback arrows stayed fixed during pan: ${panTransform}`);
     }
     await fallback.waitForFunction(() => (document.querySelector("#wind-arrows") as HTMLElement)?.style.transform === "none");
+    await fallback.getByRole("button", { name: "Waves" }).click();
+    await fallback.getByText("Live forecast").waitFor({ timeout: 60_000 });
+    await fallback.waitForFunction(() => {
+      const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+      const x = Math.floor(500 * canvas.width / canvas.clientWidth);
+      const y = Math.floor(450 * canvas.height / canvas.clientHeight);
+      return (canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3] ?? 0) > 0;
+    }, null, { timeout: 10_000 });
+    if (!await fallback.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
+      throw new Error("Canvas fallback retained wind arrows in Waves mode");
+    }
     await fallback.close();
   }
   console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title, modal, errors }, null, 2));

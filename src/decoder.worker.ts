@@ -1,6 +1,7 @@
 // Compiled as a classic worker so the decoder's published scripts can be loaded
 // with importScripts. All network access and GRIB decoding stays here.
 import { forecastUrl } from "./ecmwf.ts";
+import type { Layer } from "./wave.ts";
 type WorkerRun = { date: string; hour: number; id: string; startedAt: string };
 type WorkerError = { kind: "network" | "unavailable" | "index" | "range" | "decode"; detail: string };
 type IndexRow = { param: string; levtype: string; _offset: number; _length: number };
@@ -59,9 +60,9 @@ const decoderReady = (): Promise<{ raw: RawModule; decoder: Decoder }> => {
   return decoderPromise;
 };
 
-const indexRows = async (run: WorkerRun, step: number): Promise<{ ok: true; value: IndexRow[] } | { ok: false; error: WorkerError }> => {
+const indexRows = async (run: WorkerRun, step: number, layer: Layer): Promise<{ ok: true; value: IndexRow[] } | { ok: false; error: WorkerError }> => {
   try {
-    const response = await fetchWeather(forecastUrl(run, step, "index"));
+    const response = await fetchWeather(forecastUrl(run, step, "index", layer));
     if (!response.ok) return { ok: false, error: { kind: "unavailable", detail: `Index HTTP ${response.status}` } };
     const rows = new TextDecoder().decode(response.bytes).trim().split("\n").map((line) => JSON.parse(line) as Partial<IndexRow>);
     if (!rows.every((row) => typeof row.param === "string" && typeof row.levtype === "string" && Number.isSafeInteger(row._offset) && Number.isSafeInteger(row._length))) {
@@ -124,24 +125,24 @@ const decodeField = async (bytes: Uint8Array, name: string): Promise<FieldResult
   }
 };
 
-decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRun; step: number }>): Promise<void> => {
-  const { key, run, step } = event.data;
-  const index = await indexRows(run, step);
+decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRun; step: number; layer: Layer }>): Promise<void> => {
+  const { key, run, step, layer } = event.data;
+  const index = await indexRows(run, step, layer);
   if (!index.ok) { decoderScope.postMessage({ key, ok: false, error: index.error }); return; }
 
   const rowFor = (param: string): IndexRow | undefined => index.value.find((row) => row.param === param && row.levtype === "sfc");
-  const uRow = rowFor("10u");
-  const vRow = rowFor("10v");
+  const uRow = rowFor(layer === "wind" ? "10u" : "swh");
+  const vRow = rowFor(layer === "wind" ? "10v" : "mwp");
   const gustRow = rowFor("10fg") ?? rowFor("10fg3");
   if (!uRow || !vRow) {
-    decoderScope.postMessage({ key, ok: false, error: { kind: "index", detail: "10 m wind fields missing" } });
+    decoderScope.postMessage({ key, ok: false, error: { kind: "index", detail: `${layer === "wind" ? "10 m wind" : "Wave height or period"} fields missing` } });
     return;
   }
-  const url = forecastUrl(run, step, "grib2");
+  const url = forecastUrl(run, step, "grib2", layer);
   const [uBytes, vBytes, gustBytes] = await Promise.all([
     downloadField(url, uRow),
     downloadField(url, vRow),
-    gustRow ? downloadField(url, gustRow) : Promise.resolve(null),
+    layer === "wind" && gustRow ? downloadField(url, gustRow) : Promise.resolve(null),
   ]);
   const failed = [uBytes, vBytes].find((item) => !item.ok);
   if (failed && !failed.ok) { decoderScope.postMessage({ key, ok: false, error: failed.error }); return; }
@@ -154,13 +155,19 @@ decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRu
   if (bad && !bad.ok) { decoderScope.postMessage({ key, ok: false, error: bad.error }); return; }
   if (!u.ok || !v.ok) return;
 
-  const field = {
+  if (u.value.width !== v.value.width || u.value.height !== v.value.height || u.value.firstLatitude !== v.value.firstLatitude || u.value.firstLongitude !== v.value.firstLongitude || u.value.increment !== v.value.increment) {
+    decoderScope.postMessage({ key, ok: false, error: { kind: "decode", detail: "Forecast grids do not match" } });
+    return;
+  }
+  const grid = {
     run, step, width: u.value.width, height: u.value.height,
     firstLatitude: u.value.firstLatitude, firstLongitude: u.value.firstLongitude,
-    increment: u.value.increment, u: u.value.values, v: v.value.values,
-    gust: gust?.ok ? gust.value.values : null,
+    increment: u.value.increment,
   };
-  const transfer: Transferable[] = [field.u.buffer, field.v.buffer];
-  if (field.gust) transfer.push(field.gust.buffer);
+  const field = layer === "wind"
+    ? { ...grid, kind: "wind", u: u.value.values, v: v.value.values, gust: gust?.ok ? gust.value.values : null }
+    : { ...grid, kind: "waves", waveHeight: u.value.values, wavePeriod: v.value.values };
+  const transfer: Transferable[] = [u.value.values.buffer, v.value.values.buffer];
+  if (gust?.ok) transfer.push(gust.value.values.buffer);
   decoderScope.postMessage({ key, ok: true, field }, transfer);
 };

@@ -81,6 +81,10 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .status-dot.busy { background: #f5ca80; box-shadow: 0 0 0 3px rgba(245,202,128,.13); }
 .status-dot.failed { background: #fc9c94; box-shadow: 0 0 0 3px rgba(252,156,148,.13); }
 .model-line { color: #b3d0d2; font-size: 10px; white-space: nowrap; }
+.layer-switch { display: flex; gap: 4px; margin-top: 13px; padding: 4px; border-radius: 11px; background: rgba(1, 21, 30, .45); }
+.layer-switch button { flex: 1; padding: 7px 4px; border: 0; border-radius: 8px; background: transparent; color: #b9d6d7; font-size: 11px; font-weight: 700; }
+.layer-switch button[aria-pressed="true"] { background: #80dacd; color: #082e3b; box-shadow: 0 2px 9px rgba(0, 0, 0, .2); }
+.layer-switch button:hover:not([aria-pressed="true"]) { background: rgba(255,255,255,.12); color: #fff; }
 
 .map-hint {
   position: absolute;
@@ -109,6 +113,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .legend-heading, .legend-labels, .timeline-foot { display: flex; justify-content: space-between; }
 .legend-heading { color: #d8eeea; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
 .legend-ramp { height: 11px; margin: 13px 0 9px; border-radius: 99px; background: linear-gradient(90deg, #81bfc9, #56acb3 14%, #44be8b 28%, #9dc95b 43%, #edc152 58%, #e3804e 73%, #b74d62 87%, #6f3474); }
+.wave-legend .legend-ramp { background: linear-gradient(90deg, #87c7d7, #40b8c9 17%, #46bd91 33%, #bbce75 50%, #efbb61 67%, #db8059 83%, #9e598e); }
 .legend-labels { color: #b5d1d1; font-size: 10px; }
 
 .timeline { left: 50%; bottom: 35px; transform: translateX(-50%); width: min(520px, calc(100% - 620px)); min-width: 365px; padding: 15px 19px 13px; border-radius: 19px; }
@@ -124,7 +129,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .time-control input { width: 100%; accent-color: #90e7c8; cursor: pointer; }
 .timeline-foot { color: #a8c8c9; margin: 7px 39px 0; font-size: 10px; }
 
-.error-card { position: absolute; top: 168px; left: 24px; width: 285px; padding: 17px 18px; border-radius: 16px; color: #092b39; background: #fff9f2; box-shadow: 0 14px 40px rgba(3,29,40,.18); }
+.error-card { position: absolute; top: 220px; left: 24px; width: 285px; padding: 17px 18px; border-radius: 16px; color: #092b39; background: #fff9f2; box-shadow: 0 14px 40px rgba(3,29,40,.18); }
 .error-card strong { font-size: 13px; }
 .error-card p { margin-top: 6px; color: #4d646b; font-size: 12px; line-height: 1.5; }
 .secondary-button { margin-top: 13px; padding: 8px 12px; border: 0; border-radius: 8px; background: #133f4e; color: white; font-size: 11px; font-weight: 700; }
@@ -167,7 +172,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   h1 { font-size: 21px; }
   .masthead-meta { margin-top: 10px; padding-top: 8px; }
   .model-line { display: none; }
-  .error-card { top: 125px; left: 12px; width: 225px; }
+  .error-card { top: 167px; left: 12px; width: 225px; }
   .timeline { bottom: 34px; left: 12px; right: 12px; width: auto; padding: 12px 15px 10px; }
   .legend { left: 12px; bottom: 172px; width: 180px; padding: 11px 13px; }
   .legend-ramp { margin: 9px 0 6px; }

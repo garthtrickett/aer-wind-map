@@ -14,6 +14,7 @@ test("index and GRIB requests address the browser-accessible Google mirror", () 
   const url = forecastUrl(run, 72, "index");
   assert.equal(url, "https://storage.googleapis.com/ecmwf-open-data/20260926/00z/ifs/0p25/oper/20260926000000-72h-oper-fc.index");
   assert.equal(forecastUrl(run, 3, "grib2").endsWith("-3h-oper-fc.grib2"), true);
+  assert.equal(forecastUrl(run, 3, "index", "waves"), "https://storage.googleapis.com/ecmwf-open-data/20260926/00z/ifs/0p25/wave/20260926000000-3h-wave-fc.index");
 });
 
 test("discovery lists one cycle at a time without requesting a missing object", async () => {

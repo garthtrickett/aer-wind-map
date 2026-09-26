@@ -1,9 +1,10 @@
 import type * as L from "leaflet";
-import { sampleWind, type WindField } from "./wind.ts";
+import { sampleWind } from "./wind.ts";
+import { sampleWave, waveColor, type ForecastField } from "./wave.ts";
 
 type Particle = { x: number; y: number; age: number };
 type WindRenderer = Readonly<{
-  setField: (field: WindField | null) => void;
+  setField: (field: ForecastField | null) => void;
   redraw: () => void;
 }>;
 
@@ -35,7 +36,7 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
   const arrowContext = arrows.getContext("2d", { alpha: true });
   if (!colorContext || !arrowContext) throw new Error("Canvas 2D is unavailable");
 
-  let field: WindField | null = null;
+  let field: ForecastField | null = null;
   let particles: Particle[] = [];
   let frame = 0;
   let colorFrame = 0;
@@ -79,9 +80,11 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
       const deadline = performance.now() + 7;
       do {
         for (let x = 0; x < cols; x++) {
-          const sample = sampleWind(paintingField, latitudes[row]!, longitudes[x]!);
-          if (!sample) continue;
-          const [red, green, blue] = windColor(sample.speed);
+          const value = paintingField.kind === "wind"
+            ? sampleWind(paintingField, latitudes[row]!, longitudes[x]!)?.speed
+            : sampleWave(paintingField, latitudes[row]!, longitudes[x]!)?.height;
+          if (value === undefined) continue;
+          const [red, green, blue] = paintingField.kind === "wind" ? windColor(value) : waveColor(value);
           const offset = (row * cols + x) * 4;
           pixels.data[offset] = red;
           pixels.data[offset + 1] = green;
@@ -144,7 +147,7 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
       previewShift = { x: 0, y: 0, scale: 1 };
     }
     arrowContext.clearRect(0, 0, width, height);
-    if (!field || document.hidden || width === 0 || height === 0) return;
+    if (!field || field.kind !== "wind" || document.hidden || width === 0 || height === 0) return;
     const delta = Math.min((now - (lastFrame || now)) / 16.7, 2);
     lastFrame = now;
     const target = Math.min(650, Math.max(180, Math.round(width * height / 1900)));

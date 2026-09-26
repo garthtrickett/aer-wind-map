@@ -1,16 +1,17 @@
 import type { WeatherError } from "./ecmwf.ts";
-import type { ForecastRun, WindField } from "./wind.ts";
+import type { ForecastRun } from "./wind.ts";
+import type { ForecastField, Layer } from "./wave.ts";
 
 type LoadResult =
-  | { readonly ok: true; readonly value: WindField }
+  | { readonly ok: true; readonly value: ForecastField }
   | { readonly ok: false; readonly error: WeatherError };
 
 type WorkerReply =
-  | { readonly key: string; readonly ok: true; readonly field: WindField }
+  | { readonly key: string; readonly ok: true; readonly field: ForecastField }
   | { readonly key: string; readonly ok: false; readonly error: WeatherError };
 
 export type ForecastWorker = Readonly<{
-  load: (run: ForecastRun, step: number, key: string) => Promise<LoadResult>;
+  load: (run: ForecastRun, step: number, key: string, layer: Layer) => Promise<LoadResult>;
   terminate: () => void;
 }>;
 
@@ -41,10 +42,10 @@ export const createForecastWorker = (): ForecastWorker => {
     return next;
   };
   return {
-    load: (run, step, key) => new Promise((resolve) => {
+    load: (run, step, key, layer) => new Promise((resolve) => {
       if (stopped) { resolve({ ok: false, error: { kind: "decode", detail: "Forecast decoder stopped" } }); return; }
       pending.set(key, resolve);
-      try { activeWorker().postMessage({ run, step, key }); }
+      try { activeWorker().postMessage({ run, step, key, layer }); }
       catch (cause) { failPending(String(cause)); }
     }),
     terminate: () => { stopped = true; failPending("Forecast decoder stopped"); },

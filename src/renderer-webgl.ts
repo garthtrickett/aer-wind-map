@@ -1,10 +1,12 @@
 import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
 import type { WindField } from "./wind.ts";
+import { waveColor, type ForecastField } from "./wave.ts";
 import { windColor } from "./renderer-canvas.ts";
 
 type View = Readonly<{ center: Readonly<{ lat: number; lng: number }>; zoom: number }>;
 type Surface = Readonly<{ gl: WebGL2RenderingContext; program: WebGLProgram; texture: WebGLTexture; vao: WebGLVertexArrayObject }>;
-type Renderer = Readonly<{ setField: (field: WindField | null) => void; redraw: () => void }>;
+type Renderer = Readonly<{ setField: (field: ForecastField | null) => void; redraw: () => void }>;
+type ParticleRenderer = Readonly<{ setField: (field: WindField | null) => void; redraw: () => void }>;
 
 const worldCenter = (center: View["center"]): Readonly<{ x: number; y: number }> => {
   const latitude = Math.max(-85.05112878, Math.min(center.lat, 85.05112878));
@@ -148,7 +150,7 @@ const uploadWind = (surface: Surface, field: WindField, values: Float32Array): v
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, field.width, field.height, 0, gl.RG, gl.FLOAT, values);
 };
 
-const useView = (surface: Surface, field: WindField, view: View, width: number, height: number): void => {
+const useView = (surface: Surface, field: ForecastField, view: View, width: number, height: number): void => {
   const { gl, program } = surface;
   const center = worldCenter(view.center);
   gl.useProgram(program);
@@ -186,14 +188,13 @@ type Resources = {
   colorKey: string;
 };
 
-const uploadField = (resources: Resources, field: WindField): void => {
+const uploadField = (resources: Resources, field: ForecastField): void => {
   const { gl } = resources;
   const colors = new Uint8Array(field.width * field.height * 4);
-  for (let index = 0; index < field.u.length; index++) {
-    const u = field.u[index]!;
-    const v = field.v[index]!;
-    if (!Number.isFinite(u) || !Number.isFinite(v)) continue;
-    const [red, green, blue] = windColor(Math.hypot(u, v));
+  for (let index = 0; index < field.width * field.height; index++) {
+    const value = field.kind === "wind" ? Math.hypot(field.u[index]!, field.v[index]!) : field.waveHeight[index]!;
+    if (!Number.isFinite(value)) continue;
+    const [red, green, blue] = field.kind === "wind" ? windColor(value) : waveColor(value);
     colors[index * 4] = red;
     colors[index * 4 + 1] = green;
     colors[index * 4 + 2] = blue;
@@ -206,7 +207,7 @@ const uploadField = (resources: Resources, field: WindField): void => {
 
 const paintColorTexture = (
   resources: Resources,
-  field: WindField,
+  field: ForecastField,
   view: View,
   width: number,
   height: number,
@@ -243,7 +244,7 @@ const paintColorTexture = (
 
 const renderWind = (
   resources: Resources,
-  field: WindField,
+  field: ForecastField,
   view: View,
   width: number,
   height: number,
@@ -302,7 +303,7 @@ const disposeResources = (resources: Resources): void => {
   gl.deleteFramebuffer(resources.framebuffer);
 };
 
-const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Renderer => {
+const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): ParticleRenderer => {
   const baseCanvas = map.getCanvas();
   const parent = baseCanvas.parentElement;
   if (!parent) throw new Error("Map canvas is not attached");
@@ -434,7 +435,7 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Ren
 export const createWebGLWindRenderer = (map: MapLibreMap, arrows: HTMLCanvasElement): Renderer => {
   const particleOverlay = createParticleOverlay(map, arrows);
   let resources: Resources | null = null;
-  let field: WindField | null = null;
+  let field: ForecastField | null = null;
   let revision = 0;
   const layer: CustomLayerInterface = {
     id: "aer-wind",
@@ -470,7 +471,7 @@ export const createWebGLWindRenderer = (map: MapLibreMap, arrows: HTMLCanvasElem
       field = next;
       revision++;
       if (next && resources) uploadField(resources, next);
-      particleOverlay.setField(next);
+      particleOverlay.setField(next?.kind === "wind" ? next : null);
       map.triggerRepaint();
     },
     redraw: () => {

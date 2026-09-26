@@ -6,6 +6,7 @@ export type ForecastRun = Readonly<{
 }>;
 
 export type WindField = Readonly<{
+  kind: "wind";
   run: ForecastRun;
   step: number;
   width: number;

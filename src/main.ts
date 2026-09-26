@@ -8,7 +8,7 @@ import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
 import { flagView, view } from "./view.ts";
-import type { WindField } from "./wind.ts";
+import type { ForecastField } from "./wave.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -28,9 +28,9 @@ const colorCanvas = requireCanvas("wind-color");
 const arrowsCanvas = requireCanvas("wind-arrows");
 const flag = requireElement("selected-flag");
 const forecastWorker = createForecastWorker();
-const cache = new Map<string, WindField>();
+const cache = new Map<string, ForecastField>();
 let state: State = initialState;
-let displayedField: WindField | null = null;
+let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
 let modalWasOpen = false;
 let previousFocus: HTMLElement | null = null;
@@ -107,10 +107,10 @@ flag.addEventListener("lostpointercapture", (event) => {
 const runEffect = (effect: Effect): void => {
   if (effect.kind === "discover") {
     dispatch({ kind: "discoverStarted" });
-    void discoverLatest().then((result) => {
+    void discoverLatest(fetch, effect.layer).then((result) => {
       dispatch(result.ok
-        ? { kind: "runFound", run: result.value }
-        : { kind: "failed", key: null, error: result.error });
+        ? { kind: "runFound", run: result.value, layer: effect.layer }
+        : { kind: "failed", key: null, layer: effect.layer, error: result.error });
     });
     return;
   }
@@ -121,13 +121,13 @@ const runEffect = (effect: Effect): void => {
     dispatch({ kind: "fieldLoaded", key: effect.key, field: cached });
     return;
   }
-  void forecastWorker.load(effect.run, effect.step, effect.key).then((result) => {
+  void forecastWorker.load(effect.run, effect.step, effect.key, effect.layer).then((result) => {
     if (result.ok) {
       cache.set(effect.key, result.value);
       while (cache.size > 3) cache.delete(cache.keys().next().value!);
       dispatch({ kind: "fieldLoaded", key: effect.key, field: result.value });
     } else {
-      dispatch({ kind: "failed", key: effect.key, error: result.error });
+      dispatch({ kind: "failed", key: effect.key, layer: effect.layer, error: result.error });
     }
   });
 };
@@ -136,6 +136,7 @@ function dispatch(proposal: Proposal): void {
   const next = present(state, proposal);
   if (next === state) return;
   state = next;
+  arrowsCanvas.hidden = state.layer === "waves";
   render(view(state, dispatch, windMap.center), ui);
   render(flagView(state, dispatch), flag);
 
