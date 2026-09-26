@@ -21,6 +21,7 @@ npm test
 npm run build
 npm run smoke:live
 BROWSER=firefox npm run smoke:live
+BROWSER=webkit npm run smoke:live
 ```
 
 `npm run build` copies the approved ecCodes WASM decoder, bundles its worker,

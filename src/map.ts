@@ -29,7 +29,7 @@ export const createWindMap = (
 
   const webgl2 = Boolean(document.createElement("canvas").getContext("webgl2"));
   if (webgl2) {
-    maplibreGL({ style: "https://tiles.openfreemap.org/styles/positron" }).addTo(map);
+    maplibreGL({ style: "https://tiles.openfreemap.org/styles/positron", attributionControl: false }).addTo(map);
   } else {
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 10,

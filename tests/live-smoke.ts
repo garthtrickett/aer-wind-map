@@ -52,6 +52,11 @@ try {
     throw error;
   }
   await page.screenshot({ path: "/tmp/wind-map-live.png", fullPage: true });
+  const attribution = await page.locator(".leaflet-control-attribution").innerText();
+  const webgl2 = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl2")));
+  if (!attribution.includes("OpenStreetMap") || !attribution.includes("ECMWF") || (webgl2 && (attribution.match(/OpenFreeMap/g) || []).length !== 1)) {
+    throw new Error(`Incorrect map attribution: ${attribution}`);
+  }
 
   await page.locator("#map").click({ position: { x: 700, y: 400 } });
   await page.getByRole("dialog", { name: "Wind at this location" }).waitFor();
@@ -66,13 +71,34 @@ try {
   await page.getByText("Live forecast").waitFor({ timeout: 45_000 });
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: engine !== firefox, hasTouch: true });
   mobile.on("pageerror", (error) => errors.push(error.message));
+  const mobileStart = Date.now();
   await mobile.goto(base, { waitUntil: "domcontentloaded" });
   await mobile.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  const mobileLoadMs = Date.now() - mobileStart;
   await mobile.screenshot({ path: "/tmp/wind-map-mobile.png", fullPage: true });
   await mobile.getByRole("button", { name: "Inspect map center" }).click();
   await mobile.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("Mobile layout overflows horizontally");
-  console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", title: await page.title(), modal, errors }, null, 2));
+
+  if (engine === chromium) {
+    const reduced = await browser.newPage({ reducedMotion: "reduce" });
+    await reduced.goto(base, { waitUntil: "domcontentloaded" });
+    await reduced.getByText("Live forecast").waitFor({ timeout: 45_000 });
+    await reduced.waitForTimeout(500);
+    const before = await reduced.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    await reduced.waitForTimeout(250);
+    const after = await reduced.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    if (before !== after) throw new Error("Reduced-motion arrows still change between frames");
+
+    const recovery = await browser.newPage();
+    await recovery.route("**/decoder/worker.js", (route) => route.fulfill({ status: 404, body: "Decoder temporarily unavailable" }));
+    await recovery.goto(base, { waitUntil: "domcontentloaded" });
+    await recovery.getByText("Forecast unavailable").waitFor({ timeout: 45_000 });
+    await recovery.unroute("**/decoder/worker.js");
+    await recovery.getByRole("button", { name: "Try again" }).click();
+    await recovery.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  }
+  console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title: await page.title(), modal, errors }, null, 2));
   if (errors.length) process.exitCode = 1;
 } finally {
   await browser?.close();

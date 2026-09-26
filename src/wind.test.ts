@@ -26,3 +26,13 @@ test("rejects coordinates outside the grid and computes valid time", () => {
   assert.equal(sampleWind(field, Number.NaN, 0), null);
   assert.equal(validTime(field).toISOString(), "2026-09-25T21:00:00.000Z");
 });
+
+test("leaves missing wind unpainted and missing gust unavailable", () => {
+  const missingWind = new Float32Array(field.u);
+  missingWind[6] = Number.NaN;
+  assert.equal(sampleWind({ ...field, u: missingWind }, 0, 0), null);
+
+  const missingGust = new Float32Array(field.gust!);
+  missingGust[6] = Number.NaN;
+  assert.equal(sampleWind({ ...field, gust: missingGust }, 0, 0)?.gust, null);
+});

@@ -60,5 +60,9 @@ forecast time, close details with Escape, and exercise the mobile layout.
 WebKit passed the same browser check. For the 2026-09-25 18 UTC step-3 run,
 native ecCodes and the browser worker agreed exactly on first `10u` and `10v`
 values, and on `10fg` within Float32 rounding. Both reported a 1,440 by 721
-grid with the first point at 90° N, 180° E. Physical iOS Safari and mobile
-performance remain unmeasured.
+grid with the first point at 90° N, 180° E; all three fields reported zero
+missing points. The worker maps future missing sentinels to `NaN`, so samples
+show no invented speed or gust. The browser check also blocks the decoder
+script once and verifies that Retry creates a new worker. Emulated mobile
+loads took 5–9 seconds on this Linux host during checks. Physical iOS Safari
+and real-device memory use remain unmeasured.

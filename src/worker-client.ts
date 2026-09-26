@@ -15,24 +15,38 @@ export type ForecastWorker = Readonly<{
 }>;
 
 export const createForecastWorker = (): ForecastWorker => {
-  const worker = new Worker("/decoder/worker.js");
+  let worker: Worker | null = null;
+  let stopped = false;
   const pending = new Map<string, (result: LoadResult) => void>();
-  worker.onmessage = (event: MessageEvent<WorkerReply>) => {
-    const reply = event.data;
-    const resolve = pending.get(reply.key);
-    if (!resolve) return;
-    pending.delete(reply.key);
-    resolve(reply.ok ? { ok: true, value: reply.field } : { ok: false, error: reply.error });
-  };
-  worker.onerror = (event) => {
-    for (const resolve of pending.values()) resolve({ ok: false, error: { kind: "decode", detail: event.message } });
+  const failPending = (detail: string): void => {
+    const error: WeatherError = { kind: "decode", detail };
+    for (const resolve of pending.values()) resolve({ ok: false, error });
     pending.clear();
+    worker?.terminate();
+    worker = null;
+  };
+  const activeWorker = (): Worker => {
+    if (worker) return worker;
+    const next = new Worker("/decoder/worker.js");
+    next.onmessage = (event: MessageEvent<WorkerReply>) => {
+      const reply = event.data;
+      const resolve = pending.get(reply.key);
+      if (!resolve) return;
+      pending.delete(reply.key);
+      resolve(reply.ok ? { ok: true, value: reply.field } : { ok: false, error: reply.error });
+    };
+    next.onerror = (event) => failPending(event.message || "Forecast decoder worker failed");
+    next.onmessageerror = () => failPending("Forecast decoder worker sent an unreadable response");
+    worker = next;
+    return next;
   };
   return {
     load: (run, step, key) => new Promise((resolve) => {
+      if (stopped) { resolve({ ok: false, error: { kind: "decode", detail: "Forecast decoder stopped" } }); return; }
       pending.set(key, resolve);
-      worker.postMessage({ run, step, key });
+      try { activeWorker().postMessage({ run, step, key }); }
+      catch (cause) { failPending(String(cause)); }
     }),
-    terminate: () => worker.terminate(),
+    terminate: () => { stopped = true; failPending("Forecast decoder stopped"); },
   };
 };

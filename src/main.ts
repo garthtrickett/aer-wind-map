@@ -10,16 +10,22 @@ import { fieldKey, initialState, nap, present, type Effect, type Proposal, type 
 import { view } from "./view.ts";
 import type { WindField } from "./wind.ts";
 
-const requireElement = <T extends HTMLElement>(id: string): T => {
+const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing #${id}`);
-  return element as T;
+  return element;
 };
 
-const ui = requireElement<HTMLElement>("ui");
-const mapElement = requireElement<HTMLElement>("map");
-const colorCanvas = requireElement<HTMLCanvasElement>("wind-color");
-const arrowsCanvas = requireElement<HTMLCanvasElement>("wind-arrows");
+const requireCanvas = (id: string): HTMLCanvasElement => {
+  const element = requireElement(id);
+  if (!(element instanceof HTMLCanvasElement)) throw new Error(`#${id} must be a canvas`);
+  return element;
+};
+
+const ui = requireElement("ui");
+const mapElement = requireElement("map");
+const colorCanvas = requireCanvas("wind-color");
+const arrowsCanvas = requireCanvas("wind-arrows");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, WindField>();
 let state: State = initialState;

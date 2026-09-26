@@ -88,7 +88,12 @@ const decodeField = async (bytes: Uint8Array, name: string): Promise<FieldResult
     if (width !== 1440 || height !== 721 || increment !== 0.25 || handle.getLong("iScansNegatively") !== 0 || handle.getLong("jScansPositively") !== 0) {
       return { ok: false, error: { kind: "decode", detail: "Unexpected wind grid geometry" } };
     }
-    const values = Float32Array.from(handle.getDoubleArray("values"));
+    const missing = handle.getLong("numberOfMissing");
+    const missingValue = missing > 0 ? handle.getDouble("missingValue") : null;
+    const values = Float32Array.from(
+      handle.getDoubleArray("values"),
+      (value) => missingValue !== null && value === missingValue ? Number.NaN : value,
+    );
     if (values.length !== width * height) return { ok: false, error: { kind: "decode", detail: "Incomplete wind grid" } };
     return { ok: true, value: { values, width, height, firstLatitude, firstLongitude, increment } };
   } catch (cause) {

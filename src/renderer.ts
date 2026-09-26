@@ -141,8 +141,8 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
       const dy = -wind.v / wind.speed;
       particle.x += dx * distance;
       particle.y += dy * distance;
-      particle.age += delta;
-      drawArrow(particle.x, particle.y, dx, dy, Math.min(0.86, (190 - particle.age) / 65));
+      if (!reducedMotion.matches) particle.age += delta;
+      drawArrow(particle.x, particle.y, dx, dy, reducedMotion.matches ? 0.75 : Math.min(0.86, (190 - particle.age) / 65));
     }
     arrowContext.globalAlpha = 1;
   };
