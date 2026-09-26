@@ -29,28 +29,24 @@ export const runCandidates = (now: Date): readonly ForecastRun[] =>
 
 export const forecastUrl = (run: ForecastRun, step: number, extension: "index" | "grib2"): string => {
   const hh = String(run.hour).padStart(2, "0");
-  return `https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/${run.date}/${hh}z/ifs/0p25/oper/${run.id}0000-${step}h-oper-fc.${extension}`;
+  return `https://storage.googleapis.com/ecmwf-open-data/${run.date}/${hh}z/ifs/0p25/oper/${run.id}0000-${step}h-oper-fc.${extension}`;
 };
 
 export const discoverLatest = async (fetcher: typeof fetch = fetch): Promise<RunResult> => {
-  const candidates = runCandidates(new Date());
-  const results = await Promise.all(candidates.map(async (run) => {
+  for (const run of runCandidates(new Date())) {
     try {
       const response = await fetcher(forecastUrl(run, 72, "index"), { method: "HEAD", signal: AbortSignal.timeout(8000) });
-      return response.ok;
+      if (response.ok) return { ok: true, value: run };
     } catch {
-      return false;
+      // Try an older cycle when this one cannot be reached.
     }
-  }));
-  const found = candidates.find((_, index) => results[index]);
-  return found
-    ? { ok: true, value: found }
-    : { ok: false, error: { kind: "unavailable", detail: "No complete ECMWF forecast run was reachable." } };
+  }
+  return { ok: false, error: { kind: "unavailable", detail: "No complete ECMWF forecast run was reachable." } };
 };
 
 export const describeWeatherError = (error: WeatherError): string => {
   switch (error.kind) {
-    case "network": return "Forecast data could not be reached. Check your connection and try again.";
+    case "network": return "Forecast data could not be reached. Please try again shortly.";
     case "unavailable": return "A complete forecast is temporarily unavailable. Try again shortly.";
     case "index": return "The forecast index could not be read.";
     case "range": return "The forecast field could not be downloaded.";

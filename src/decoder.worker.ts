@@ -28,14 +28,18 @@ let decoderPromise: Promise<{ raw: RawModule; decoder: Decoder }> | null = null;
 const fetchWeather = async (
   url: string, options?: RequestInit,
 ): Promise<{ status: number; ok: boolean; bytes: Uint8Array }> => {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const response = await fetch(url, options);
+      if ([429, 500, 502, 503, 504].includes(response.status) && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+        continue;
+      }
       return { status: response.status, ok: response.ok, bytes: new Uint8Array(await response.arrayBuffer()) };
     }
     catch (cause) {
-      if (attempt === 2) throw cause;
-      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+      if (attempt === 3) throw cause;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
     }
   }
   throw new Error("Weather request exhausted its retries");
