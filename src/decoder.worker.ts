@@ -25,6 +25,22 @@ type BytesResult = { ok: true; value: Uint8Array } | { ok: false; error: WorkerE
 const decoderScope = self as unknown as DecoderScope;
 let decoderPromise: Promise<{ raw: RawModule; decoder: Decoder }> | null = null;
 
+const fetchWeather = async (
+  url: string, options?: RequestInit,
+): Promise<{ status: number; ok: boolean; bytes: Uint8Array }> => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      return { status: response.status, ok: response.ok, bytes: new Uint8Array(await response.arrayBuffer()) };
+    }
+    catch (cause) {
+      if (attempt === 2) throw cause;
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
+  }
+  throw new Error("Weather request exhausted its retries");
+};
+
 const decoderReady = (): Promise<{ raw: RawModule; decoder: Decoder }> => {
   if (decoderPromise) return decoderPromise;
   decoderPromise = (async () => {
@@ -41,9 +57,9 @@ const decoderReady = (): Promise<{ raw: RawModule; decoder: Decoder }> => {
 
 const indexRows = async (run: WorkerRun, step: number): Promise<{ ok: true; value: IndexRow[] } | { ok: false; error: WorkerError }> => {
   try {
-    const response = await fetch(forecastUrl(run, step, "index"));
+    const response = await fetchWeather(forecastUrl(run, step, "index"));
     if (!response.ok) return { ok: false, error: { kind: "unavailable", detail: `Index HTTP ${response.status}` } };
-    const rows = (await response.text()).trim().split("\n").map((line) => JSON.parse(line) as Partial<IndexRow>);
+    const rows = new TextDecoder().decode(response.bytes).trim().split("\n").map((line) => JSON.parse(line) as Partial<IndexRow>);
     if (!rows.every((row) => typeof row.param === "string" && typeof row.levtype === "string" && Number.isSafeInteger(row._offset) && Number.isSafeInteger(row._length))) {
       return { ok: false, error: { kind: "index", detail: "Invalid field index" } };
     }
@@ -56,9 +72,9 @@ const indexRows = async (run: WorkerRun, step: number): Promise<{ ok: true; valu
 const downloadField = async (url: string, row: IndexRow): Promise<BytesResult> => {
   try {
     const end = row._offset + row._length - 1;
-    const response = await fetch(url, { headers: { Range: `bytes=${row._offset}-${end}` } });
+    const response = await fetchWeather(url, { headers: { Range: `bytes=${row._offset}-${end}` } });
     if (response.status !== 206) return { ok: false, error: { kind: "range", detail: `Field HTTP ${response.status}` } };
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = response.bytes;
     if (bytes.byteLength !== row._length) return { ok: false, error: { kind: "range", detail: "Field length disagrees with index" } };
     return { ok: true, value: bytes };
   } catch (cause) {
