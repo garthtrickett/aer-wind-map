@@ -42,6 +42,8 @@
   request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
   Web Worker. Select a complete forecast run and retain its identity in every
   request so late responses cannot replace a newer selection.
+- Keep forecast instants in UTC internally and format timeline, run, and point
+  details times in the browser's local timezone.
 
 ## Decoder evaluation, 2026-09-26
 

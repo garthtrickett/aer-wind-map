@@ -4,7 +4,10 @@ import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import type { Point, Proposal, State } from "./model.ts";
 
 const dateLabel = (date: Date): string =>
-  new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false }).format(date) + " UTC";
+  new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
+
+const runLabel = (date: Date): string =>
+  new Intl.DateTimeFormat("en", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
 
 const speedLabel = (speed: number): string => `${speed.toFixed(1)} m/s`;
 
@@ -90,7 +93,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <input type="range" min="3" max="72" step="3" .value=${String(state.step)} ?disabled=${!state.run} aria-label="Forecast hour" @change=${(event: Event) => propose({ kind: "timeSelected", step: Number((event.target as HTMLInputElement).value) })} />
         <button class="step-button" aria-label="Next forecast time" ?disabled=${!state.run || state.step >= 72} @click=${() => propose({ kind: "timeSelected", step: state.step + 3 })}>+</button>
       </div>
-      <div class="timeline-foot"><span>+3h</span><span>Run ${state.run ? `${state.run.date.slice(4, 6)}/${state.run.date.slice(6)} ${String(state.run.hour).padStart(2, "0")}Z` : "—"}</span><span>+72h</span></div>
+      <div class="timeline-foot"><span>+3h</span><span>Run ${state.run ? runLabel(new Date(state.run.startedAt)) : "—"}</span><span>+72h</span></div>
     </section>
 
     ${state.modalOpen && state.selected ? html`

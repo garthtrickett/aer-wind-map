@@ -4,7 +4,8 @@ Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color cover
 the visible world, and arrows move toward the wind's destination. Click the map
 to place a wind flag, drag the flag to inspect another point, and click its card
 or amber button to open wind speed, source direction, gust, forecast time, and
-coordinates. The timeline steps through the first 72 forecast hours.
+coordinates. The timeline steps through the first 72 forecast hours. Displayed
+times use the browser's local timezone.
 
 ## Run locally
 

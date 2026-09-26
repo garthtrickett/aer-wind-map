@@ -29,8 +29,13 @@ try {
 
   const engine = process.env.BROWSER === "firefox" ? firefox : process.env.BROWSER === "webkit" ? webkit : chromium;
   browser = await engine.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: "Asia/Tokyo" });
   const errors: string[] = [];
+  let fieldRunId: string | null = null;
+  page.on("request", (request) => {
+    const match = request.url().match(/\/(\d{14})-3h-oper-fc\.index$/);
+    if (match) fieldRunId = match[1]!;
+  });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error" && !message.text().startsWith("Failed to load resource")) errors.push(message.text());
@@ -52,6 +57,16 @@ try {
     throw error;
   }
   await page.screenshot({ path: "/tmp/wind-map-live.png", fullPage: true });
+  if (!fieldRunId) throw new Error("Could not identify the loaded ECMWF run");
+  const runStart = new Date(`${fieldRunId.slice(0, 4)}-${fieldRunId.slice(4, 6)}-${fieldRunId.slice(6, 8)}T${fieldRunId.slice(8, 10)}:00:00Z`);
+  const localOptions = { timeZone: "Asia/Tokyo", hourCycle: "h23" as const, timeZoneName: "short" as const };
+  const expectedForecast = new Intl.DateTimeFormat("en", { ...localOptions, weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(runStart.getTime() + 3 * 3_600_000));
+  const expectedRun = new Intl.DateTimeFormat("en", { ...localOptions, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(runStart);
+  const shownForecast = await page.locator(".forecast-time").innerText();
+  const shownRun = await page.locator(".timeline-foot").innerText();
+  if (shownForecast !== expectedForecast || !shownRun.includes(`Run ${expectedRun}`)) {
+    throw new Error(`Forecast times did not use the browser timezone: ${JSON.stringify({ shownForecast, expectedForecast, shownRun, expectedRun })}`);
+  }
   const attribution = await page.locator(".leaflet-control-attribution").innerText();
   const webgl2 = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl2")));
   if (!attribution.includes("OpenStreetMap") || !attribution.includes("ECMWF") || (webgl2 && (attribution.match(/OpenFreeMap/g) || []).length !== 1)) {
@@ -104,6 +119,7 @@ try {
   await page.locator(".flag-grab").click();
   await page.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   const modal = await page.getByRole("dialog").innerText();
+  if (!modal.includes(`Valid ${expectedForecast}`)) throw new Error("Details time did not use the browser timezone");
   await page.screenshot({ path: "/tmp/wind-map-modal.png", fullPage: true });
   if (!modal.includes("Maximum gust") || !modal.includes("Direction from") || !modal.includes("m/s")) throw new Error(`Incomplete modal: ${modal}`);
   const colorAlpha = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")?.getImageData(780, 465, 1, 1).data[3] ?? 0);
