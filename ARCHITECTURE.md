@@ -6,9 +6,12 @@
 - ECMWF IFS Open Data at 0.25-degree resolution, fetched directly by the browser.
 - Wind speed color over the whole visible map, including after a location is
   selected. Animated arrows point and move toward the wind's destination.
-- Clicking the map leaves a marker and opens a modal with 10 m wind speed,
-  meteorological direction (where wind comes from), maximum gust over its stated
-  preceding period, forecast valid time, and coordinates.
+- Clicking the map places a flag with the current 10 m wind speed and source
+  direction. Dragging its card or point changes the selected location. Clicking
+  the card or amber button opens a modal with wind speed, meteorological
+  direction (where wind comes from), maximum gust over its stated preceding
+  period, forecast valid time, and coordinates. The dismiss button removes the
+  selection.
 - A legend and forecast-time control keep the color, arrows, and modal on the
   same model run and valid time.
 
@@ -28,9 +31,9 @@
 - Leaflet owns map interaction. MapLibre renders OpenFreeMap Positron vector
   tiles when WebGL2 is available; otherwise Leaflet loads OSM raster tiles.
   Two canvas layers draw wind color and arrows above the map. A separate DOM
-  marker sits above those canvases and follows Leaflet's projected point. The
-  animation loop does not dispatch a SAM proposal on every frame; user choices
-  and completed loads do.
+  flag sits above those canvases and follows Leaflet's projected point. Pointer
+  movement on the flag proposes location changes; the animation loop does not
+  dispatch a SAM proposal on every frame. User choices and completed loads do.
 - The data source is ECMWF's official AWS Open Data mirror. Read `.index` rows,
   request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
   Web Worker. Select a complete forecast run and retain its identity in every
@@ -56,8 +59,9 @@ will expire; repeat the test against a current run during implementation.
 
 Unit tests cover date-line sampling, source direction, run URLs, stale worker
 responses, and forecast time. Live Chromium and Firefox checks load a current
-forecast through the production static server, select a map point, change
-forecast time, close details with Escape, and exercise the mobile layout.
+forecast through the production static server, select a map point, drag the
+flag, open and close details, change forecast time, and exercise the mobile
+layout. A Chromium mobile check also drags the flag with emulated touch.
 WebKit passed the same browser check. For the 2026-09-25 18 UTC step-3 run,
 native ecCodes and the browser worker agreed exactly on first `10u` and `10v`
 values, and on `10fg` within Float32 rounding. Both reported a 1,440 by 721

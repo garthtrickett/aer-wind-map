@@ -20,3 +20,17 @@ test("time changes discard an in-flight response", () => {
   assert.equal(present(changed, { kind: "fieldLoaded", key: fieldKey(run, 3), field }), changed);
   assert.equal(changed.step, 6);
 });
+
+test("a selected flag can move, open details, and be removed", () => {
+  const first = { latitude: 20, longitude: 30 };
+  const second = { latitude: 24, longitude: 35 };
+  const selected = present(initialState, { kind: "locationSelected", point: first });
+  assert.deepEqual(selected.selected, first);
+  assert.equal(selected.modalOpen, false);
+
+  const moved = present(selected, { kind: "locationDragged", point: second });
+  assert.deepEqual(moved.selected, second);
+  assert.equal(moved.modalOpen, false);
+  assert.equal(present(moved, { kind: "detailsOpened" }).modalOpen, true);
+  assert.deepEqual(present(moved, { kind: "selectionCleared" }).selected, null);
+});

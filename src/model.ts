@@ -22,6 +22,9 @@ export type Proposal =
   | { readonly kind: "failed"; readonly key: string | null; readonly error: WeatherError }
   | { readonly kind: "timeSelected"; readonly step: number }
   | { readonly kind: "locationSelected"; readonly point: Point }
+  | { readonly kind: "locationDragged"; readonly point: Point }
+  | { readonly kind: "detailsOpened" }
+  | { readonly kind: "selectionCleared" }
   | { readonly kind: "modalClosed" }
   | { readonly kind: "playToggled" }
   | { readonly kind: "playTick" }
@@ -48,7 +51,10 @@ export const present = (state: State, proposal: Proposal): State => {
     case "timeSelected":
       if (proposal.step === state.step || proposal.step < 3 || proposal.step > 72 || proposal.step % 3 !== 0) return state;
       return { ...state, phase: "needsField", step: proposal.step, field: null, requestedKey: null, error: null };
-    case "locationSelected": return { ...state, selected: proposal.point, modalOpen: true };
+    case "locationSelected": return { ...state, selected: proposal.point, modalOpen: false };
+    case "locationDragged": return { ...state, selected: proposal.point, modalOpen: false };
+    case "detailsOpened": return state.selected ? { ...state, modalOpen: true } : state;
+    case "selectionCleared": return { ...state, selected: null, modalOpen: false };
     case "modalClosed": return { ...state, modalOpen: false };
     case "playToggled": return { ...state, playing: !state.playing };
     case "playTick":

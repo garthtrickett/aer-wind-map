@@ -20,8 +20,29 @@ button:focus-visible, input:focus-visible { outline: 3px solid #9ff1d8; outline-
 #map { z-index: 0; background: #dbe7e5; }
 #wind-color { z-index: 1; pointer-events: none; }
 #wind-arrows { z-index: 2; pointer-events: none; }
-#selected-marker { position: absolute; z-index: 3; width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #103d4c; box-shadow: 0 0 0 5px rgba(255,255,255,.25), 0 2px 12px rgba(0,22,31,.7); transform: translate(-50%, -50%); pointer-events: none; }
-#selected-marker[hidden] { display: none; }
+#selected-flag { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
+#selected-flag[hidden] { display: none; }
+.flag-stem { position: absolute; left: -1px; bottom: 0; width: 2px; height: var(--flag-rise, 95px); background: rgba(255,255,255,.9); box-shadow: 0 0 4px rgba(5,34,44,.5); }
+.flag-point { position: absolute; left: 0; top: 0; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; transform: translate(-50%, -50%); pointer-events: auto; touch-action: none; cursor: grab; }
+.flag-point::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(13,55,67,.45), 0 1px 8px rgba(0,25,33,.45); }
+.flag-panel { position: absolute; left: var(--flag-panel-left, -16px); bottom: var(--flag-rise, 95px); width: 245px; pointer-events: none; filter: drop-shadow(0 9px 16px rgba(3,29,40,.34)); }
+.flag-grab { display: block; width: 100%; min-height: 81px; padding: 9px 50px 11px 13px; border: 1px solid rgba(255,255,255,.19); border-radius: 11px; background: rgba(37,46,50,.97); color: #fff; text-align: left; pointer-events: auto; touch-action: none; cursor: grab; }
+#selected-flag.dragging .flag-grab, #selected-flag.dragging .flag-point { cursor: grabbing; }
+.flag-caption { display: block; font: 500 15px/1.15 "Outfit", sans-serif; }
+.flag-caption span { color: #f3f8f4; font-size: 21px; line-height: 0; margin-left: 3px; }
+.flag-reading { display: flex; align-items: baseline; gap: 10px; min-height: 32px; margin-top: 6px; white-space: nowrap; }
+.flag-speed { display: flex; align-items: baseline; gap: 4px; }
+.flag-speed strong { font: 500 30px/1 "Outfit", sans-serif; letter-spacing: -.045em; }
+.flag-speed > span { color: #d9e3df; font-size: 11px; }
+.flag-bearing { color: #c9d8d4; font-size: 12px; }
+.flag-waiting { color: #d9e3df; font-size: 12px; }
+.flag-expand, .flag-dismiss { position: absolute; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; pointer-events: auto; }
+.flag-expand { right: -8px; bottom: 5px; width: 39px; height: 39px; background: #eeb000; box-shadow: 0 3px 8px rgba(0,0,0,.35); font: 600 25px/1 "Outfit", sans-serif; }
+.flag-expand:hover { background: #ffc536; }
+.flag-dismiss { right: -10px; top: -20px; width: 29px; height: 29px; background: rgba(48,61,67,.95); box-shadow: 0 2px 6px rgba(0,0,0,.22); font-size: 23px; line-height: 1; }
+.flag-dismiss:hover { background: #61747a; }
+.flag-below .flag-stem { top: 0; bottom: auto; }
+.flag-below .flag-panel { top: var(--flag-rise, 95px); bottom: auto; }
 #ui { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 
@@ -137,6 +158,9 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .legend { bottom: 35px; }
 }
 @media (max-width: 680px) {
+  .flag-panel { width: 220px; }
+  .flag-grab { padding-right: 43px; }
+  .flag-speed strong { font-size: 27px; }
   .masthead { top: 12px; left: 12px; width: 225px; padding: 12px 14px; border-radius: 15px; }
   .logo { width: 34px; height: 34px; font-size: 25px; border-radius: 10px; }
   h1 { font-size: 21px; }

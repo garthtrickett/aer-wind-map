@@ -7,7 +7,7 @@ import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
-import { view } from "./view.ts";
+import { flagView, view } from "./view.ts";
 import type { WindField } from "./wind.ts";
 
 const requireElement = (id: string): HTMLElement => {
@@ -26,7 +26,7 @@ const ui = requireElement("ui");
 const mapElement = requireElement("map");
 const colorCanvas = requireCanvas("wind-color");
 const arrowsCanvas = requireCanvas("wind-arrows");
-const marker = requireElement("selected-marker");
+const flag = requireElement("selected-flag");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, WindField>();
 let state: State = initialState;
@@ -36,8 +36,73 @@ let modalWasOpen = false;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 
-const windMap = createWindMap({ element: mapElement, marker, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
+const windMap = createWindMap({ element: mapElement, flag, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
 const windRenderer = createWindRenderer(windMap.map, colorCanvas, arrowsCanvas);
+let drag: Readonly<{
+  pointerId: number;
+  handle: HTMLElement;
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
+  moved: boolean;
+}> | null = null;
+
+flag.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || !state.selected || !(event.target instanceof Element)) return;
+  const handle = event.target.closest("[data-flag-drag]");
+  if (!(handle instanceof HTMLElement)) return;
+  const rect = mapElement.getBoundingClientRect();
+  const anchor = windMap.screenPoint(state.selected);
+  drag = {
+    pointerId: event.pointerId,
+    handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: anchor.x - (event.clientX - rect.left),
+    offsetY: anchor.y - (event.clientY - rect.top),
+    moved: false,
+  };
+  handle.setPointerCapture(event.pointerId);
+  flag.classList.add("dragging");
+  event.preventDefault();
+  event.stopPropagation();
+});
+
+const dragPoint = (event: PointerEvent): void => {
+  if (!drag) return;
+  const rect = mapElement.getBoundingClientRect();
+  dispatch({ kind: "locationDragged", point: windMap.pointAt({
+    x: event.clientX - rect.left + drag.offsetX,
+    y: event.clientY - rect.top + drag.offsetY,
+  }) });
+};
+
+flag.addEventListener("pointermove", (event) => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 4) return;
+  drag = { ...drag, moved: true };
+  dragPoint(event);
+  event.preventDefault();
+});
+
+flag.addEventListener("pointerup", (event) => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const ended = drag;
+  if (ended.moved) dragPoint(event);
+  drag = null;
+  flag.classList.remove("dragging");
+  if (ended.handle.hasPointerCapture(event.pointerId)) ended.handle.releasePointerCapture(event.pointerId);
+  if (!ended.moved) dispatch({ kind: "detailsOpened" });
+  event.preventDefault();
+  event.stopPropagation();
+});
+flag.addEventListener("pointercancel", (event) => {
+  if (drag?.pointerId === event.pointerId) { drag = null; flag.classList.remove("dragging"); }
+});
+flag.addEventListener("lostpointercapture", (event) => {
+  if (drag?.pointerId === event.pointerId) { drag = null; flag.classList.remove("dragging"); }
+});
 
 const runEffect = (effect: Effect): void => {
   if (effect.kind === "discover") {
@@ -72,6 +137,7 @@ function dispatch(proposal: Proposal): void {
   if (next === state) return;
   state = next;
   render(view(state, dispatch, windMap.center), ui);
+  render(flagView(state, dispatch), flag);
 
   if (displayedField !== state.field) {
     displayedField = state.field;
@@ -113,5 +179,6 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("pagehide", () => forecastWorker.terminate());
 render(view(state, dispatch, windMap.center), ui);
+render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);
 if (firstEffect) runEffect(firstEffect);

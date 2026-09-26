@@ -8,6 +8,32 @@ const dateLabel = (date: Date): string =>
 
 const speedLabel = (speed: number): string => `${speed.toFixed(1)} m/s`;
 
+export const flagView = (state: State, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
+  if (!state.selected) return nothing;
+  const sample = state.field
+    ? sampleWind(state.field, state.selected.latitude, state.selected.longitude)
+    : null;
+  const reading = sample
+    ? html`<span class="flag-speed"><strong>${sample.speed.toFixed(1)}</strong><span>m/s</span></span><span class="flag-bearing">from ${compassDirection(sample.directionFrom)}</span>`
+    : html`<span class="flag-waiting">${state.phase === "failed" ? "Unavailable" : "Loading wind…"}</span>`;
+  const openWithKeyboard = (event: MouseEvent): void => {
+    if (event.detail === 0) propose({ kind: "detailsOpened" });
+  };
+
+  return html`
+    <div class="flag-stem" aria-hidden="true"></div>
+    <button class="flag-point" type="button" data-flag-drag aria-label="Drag selected wind point" @click=${openWithKeyboard}></button>
+    <div class="flag-panel">
+      <button class="flag-grab" type="button" data-flag-drag aria-label="Drag wind flag or open details" @click=${openWithKeyboard}>
+        <span class="flag-caption">Wind <span aria-hidden="true">≋</span></span>
+        <span class="flag-reading">${reading}</span>
+      </button>
+      <button class="flag-expand" type="button" aria-label="Open wind details" @click=${() => propose({ kind: "detailsOpened" })}>⌄</button>
+      <button class="flag-dismiss" type="button" aria-label="Remove wind flag" @click=${() => propose({ kind: "selectionCleared" })}>×</button>
+    </div>
+  `;
+};
+
 export const view = (state: State, propose: (proposal: Proposal) => void, center: () => Point): TemplateResult => {
   const forecastTime = state.run ? dateLabel(validTime({ run: state.run, step: state.step })) : "Finding forecast";
   const sample = state.field && state.selected
@@ -40,7 +66,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <button class="secondary-button" @click=${() => propose({ kind: "retry" })}>Try again</button>
       </div>` : nothing}
 
-    <div class="map-hint">Click anywhere to inspect the wind</div>
+    ${state.selected ? nothing : html`<div class="map-hint">Click anywhere to inspect the wind</div>`}
 
     <section class="legend" aria-label="Wind speed legend">
       <div class="legend-heading"><span>WIND SPEED</span><span>m/s</span></div>

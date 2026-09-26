@@ -59,16 +59,32 @@ try {
   }
 
   await page.locator("#map").click({ position: { x: 700, y: 400 } });
+  await page.locator(".flag-grab").waitFor({ state: "visible" });
+  if (await page.getByRole("dialog").count()) throw new Error("Map click blocked flag dragging with a modal");
+  const pointBefore = await page.locator(".flag-point").boundingBox();
+  if (!pointBefore || Math.abs(pointBefore.x + pointBefore.width / 2 - 700) > 3 || Math.abs(pointBefore.y + pointBefore.height / 2 - 400) > 3) {
+    throw new Error(`Wind flag is not anchored at the selected point: ${JSON.stringify(pointBefore)}`);
+  }
+  await page.screenshot({ path: "/tmp/wind-map-flag.png", fullPage: true });
+  const grab = await page.locator(".flag-grab").boundingBox();
+  if (!grab) throw new Error("Wind flag has no drag handle");
+  const startX = grab.x + grab.width / 2;
+  const startY = grab.y + grab.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 80, startY + 65, { steps: 8 });
+  await page.mouse.up();
+  const pointAfter = await page.locator(".flag-point").boundingBox();
+  if (!pointAfter || Math.abs(pointAfter.x + pointAfter.width / 2 - 780) > 4 || Math.abs(pointAfter.y + pointAfter.height / 2 - 465) > 4) {
+    throw new Error(`Wind flag did not follow the drag: ${JSON.stringify(pointAfter)}`);
+  }
+  if (await page.getByRole("dialog").count()) throw new Error("Dragging the wind flag opened details");
+  await page.locator(".flag-grab").click();
   await page.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   const modal = await page.getByRole("dialog").innerText();
   await page.screenshot({ path: "/tmp/wind-map-modal.png", fullPage: true });
   if (!modal.includes("Maximum gust") || !modal.includes("Direction from") || !modal.includes("m/s")) throw new Error(`Incomplete modal: ${modal}`);
-  if (!await page.locator("#selected-marker").isVisible()) throw new Error("Selected point is not marked on the map");
-  const markerBox = await page.locator("#selected-marker").boundingBox();
-  if (!markerBox || Math.abs(markerBox.x + markerBox.width / 2 - 700) > 3 || Math.abs(markerBox.y + markerBox.height / 2 - 400) > 3) {
-    throw new Error(`Selected point marker is misplaced: ${JSON.stringify(markerBox)}`);
-  }
-  const colorAlpha = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")?.getImageData(700, 400, 1, 1).data[3] ?? 0);
+  const colorAlpha = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")?.getImageData(780, 465, 1, 1).data[3] ?? 0);
   if (!colorAlpha) throw new Error("Wind color disappeared after selecting a point");
 
   await page.getByRole("button", { name: "Close details" }).focus();
@@ -76,8 +92,16 @@ try {
   if (await page.getByRole("dialog").count()) throw new Error("Escape did not close details");
   await page.screenshot({ path: "/tmp/wind-map-selected.png", fullPage: true });
   await page.getByRole("button", { name: "Next forecast time" }).click();
-  await page.getByText("Live forecast").waitFor({ timeout: 45_000 });
-  if (!await page.locator("#selected-marker").isVisible()) throw new Error("Selected point disappeared after changing forecast time");
+  try {
+    await page.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  } catch (error) {
+    await page.screenshot({ path: "/tmp/wind-map-next-step-failed.png", fullPage: true });
+    console.error(JSON.stringify({ ui: await page.locator("#ui").innerText(), errors }, null, 2));
+    throw error;
+  }
+  if (!await page.locator(".flag-grab").isVisible()) throw new Error("Wind flag disappeared after changing forecast time");
+  await page.getByRole("button", { name: "Remove wind flag" }).click();
+  if (await page.locator(".flag-grab").count()) throw new Error("Wind flag did not close");
   const title = await page.title();
   await page.close();
 
@@ -85,10 +109,36 @@ try {
   mobile.on("pageerror", (error) => errors.push(error.message));
   const mobileStart = Date.now();
   await mobile.goto(base, { waitUntil: "domcontentloaded" });
-  await mobile.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  try {
+    await mobile.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  } catch (error) {
+    await mobile.screenshot({ path: "/tmp/wind-map-mobile-failed.png", fullPage: true });
+    console.error(JSON.stringify({ ui: await mobile.locator("#ui").innerText(), errors }, null, 2));
+    throw error;
+  }
   const mobileLoadMs = Date.now() - mobileStart;
   await mobile.screenshot({ path: "/tmp/wind-map-mobile.png", fullPage: true });
   await mobile.getByRole("button", { name: "Inspect map center" }).click();
+  await mobile.locator(".flag-grab").waitFor({ state: "visible" });
+  await mobile.screenshot({ path: "/tmp/wind-map-mobile-flag.png", fullPage: true });
+  if (engine === chromium) {
+    const beforeTouch = await mobile.locator(".flag-point").boundingBox();
+    const handle = await mobile.locator(".flag-grab").boundingBox();
+    if (!beforeTouch || !handle) throw new Error("Mobile wind flag is missing");
+    const startX = handle.x + handle.width / 2;
+    const startY = handle.y + handle.height / 2;
+    const cdp = await mobile.context().newCDPSession(mobile);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: startX, y: startY, id: 1 }] });
+    for (let step = 1; step <= 5; step++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: startX + step * 9, y: startY + step * 7, id: 1 }] });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    const afterTouch = await mobile.locator(".flag-point").boundingBox();
+    if (!afterTouch || Math.abs(afterTouch.x - beforeTouch.x - 45) > 5 || Math.abs(afterTouch.y - beforeTouch.y - 35) > 5) {
+      throw new Error(`Touch drag did not move the flag: ${JSON.stringify({ beforeTouch, afterTouch })}`);
+    }
+  }
+  await mobile.getByRole("button", { name: "Open wind details" }).click();
   await mobile.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("Mobile layout overflows horizontally");
   await mobile.close();
