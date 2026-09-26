@@ -45,6 +45,7 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
   let zooming = false;
   let paintedView: Readonly<{ center: L.LatLng; zoom: number }> | null = null;
   let arrowsPreviewed = false;
+  let previewShift: Readonly<{ x: number; y: number; scale: number }> = { x: 0, y: 0, scale: 1 };
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
   const size = (): { width: number; height: number } => {
@@ -131,10 +132,16 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     if (moving || zooming) { lastFrame = now; return; }
     const { width, height } = size();
     if (arrowsPreviewed) {
+      if (Math.abs(previewShift.scale - 1) < 0.000001) {
+        for (const particle of particles) {
+          particle.x += previewShift.x;
+          particle.y += previewShift.y;
+        }
+      } else particles = [];
       arrows.style.transition = "none";
       arrows.style.transform = "none";
       arrowsPreviewed = false;
-      particles = [];
+      previewShift = { x: 0, y: 0, scale: 1 };
     }
     arrowContext.clearRect(0, 0, width, height);
     if (!field || document.hidden || width === 0 || height === 0) return;
@@ -183,14 +190,6 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     if (!paintedView) return;
     const viewport = map.getSize();
     const scale = map.getZoomScale(zoom, paintedView.zoom);
-    if (scale <= 1) {
-      for (const canvas of [color, arrows]) {
-        canvas.style.transition = "none";
-        canvas.style.transform = "none";
-      }
-      arrowsPreviewed = true;
-      return;
-    }
     const longitude = center.lng + Math.round((paintedView.center.lng - center.lng) / 360) * 360;
     const prior = map.project(paintedView.center, zoom);
     const next = map.project([center.lat, longitude], zoom);
@@ -202,9 +201,10 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
       canvas.style.transition = transition;
       canvas.style.transform = transform;
     }
+    previewShift = { x: dx, y: dy, scale };
     arrowsPreviewed = true;
   };
-  const startMove = (): void => { moving = true; arrowsPreviewed = true; cancelColor(); };
+  const startMove = (): void => { moving = true; arrowsPreviewed = true; previewShift = { x: 0, y: 0, scale: 1 }; cancelColor(); };
   const finishMove = (): void => {
     moving = false;
     if (!zooming) requestColor();

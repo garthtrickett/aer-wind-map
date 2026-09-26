@@ -6,6 +6,12 @@ type View = Readonly<{ center: Readonly<{ lat: number; lng: number }>; zoom: num
 type Surface = Readonly<{ gl: WebGL2RenderingContext; program: WebGLProgram; texture: WebGLTexture; vao: WebGLVertexArrayObject }>;
 type Renderer = Readonly<{ setField: (field: WindField | null) => void; redraw: () => void }>;
 
+const worldCenter = (center: View["center"]): Readonly<{ x: number; y: number }> => {
+  const latitude = Math.max(-85.05112878, Math.min(center.lat, 85.05112878));
+  const sine = Math.sin(latitude * Math.PI / 180);
+  return { x: (center.lng + 180) / 360, y: .5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI) };
+};
+
 const common = `
   uniform sampler2D u_wind;
   uniform vec2 u_grid;
@@ -73,11 +79,12 @@ const particleVertex = `#version 300 es
   out float opacity;
   ${common}
   void main() {
-    vec2 wind = windAt(seed.xy);
+    vec2 screen = (seed.xy - u_center) * u_worldPixels + u_viewport * .5;
+    vec2 wind = windAt(screen);
     float speed = length(wind);
     direction = speed > .3 ? vec2(wind.x, -wind.y) / speed : vec2(1.0, 0.0);
     float age = fract(u_time / 3.2 + seed.z);
-    vec2 position = seed.xy + direction * min(3.0, max(.45, speed * .13)) * age * 190.0;
+    vec2 position = screen + direction * min(3.0, max(.45, speed * .13)) * age * 190.0;
     gl_Position = vec4(position / u_viewport * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
     gl_PointSize = 19.0 * u_pixelRatio;
     opacity = speed < .3 || isnan(speed) || isinf(speed) ? 0.0 : min(.86, (1.0 - age) * 2.9);
@@ -143,9 +150,7 @@ const uploadWind = (surface: Surface, field: WindField, values: Float32Array): v
 
 const useView = (surface: Surface, field: WindField, view: View, width: number, height: number): void => {
   const { gl, program } = surface;
-  const latitude = Math.max(-85.05112878, Math.min(view.center.lat, 85.05112878));
-  const sine = Math.sin(latitude * Math.PI / 180);
-  const mercatorY = .5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI);
+  const center = worldCenter(view.center);
   gl.useProgram(program);
   gl.bindVertexArray(surface.vao);
   gl.activeTexture(gl.TEXTURE0);
@@ -155,7 +160,7 @@ const useView = (surface: Surface, field: WindField, view: View, width: number, 
   gl.uniform1f(gl.getUniformLocation(program, "u_firstLongitude"), field.firstLongitude);
   gl.uniform1f(gl.getUniformLocation(program, "u_firstLatitude"), field.firstLatitude);
   gl.uniform1f(gl.getUniformLocation(program, "u_increment"), field.increment);
-  gl.uniform2f(gl.getUniformLocation(program, "u_center"), (view.center.lng + 180) / 360, mercatorY);
+  gl.uniform2f(gl.getUniformLocation(program, "u_center"), center.x, center.y);
   gl.uniform1f(gl.getUniformLocation(program, "u_worldPixels"), 512 * 2 ** view.zoom);
   gl.uniform2f(gl.getUniformLocation(program, "u_viewport"), width, height);
 };
@@ -332,6 +337,9 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Ren
   let particleCount = 0;
   let seedWidth = 0;
   let seedHeight = 0;
+  let seeds: Float32Array | null = null;
+  let seedView: Readonly<{ center: Readonly<{ x: number; y: number }>; zoom: number }> | null = null;
+  let zoomResetTimer: number | null = null;
   const paint = (now: number): void => {
     frame = 0;
     const width = baseCanvas.clientWidth;
@@ -346,20 +354,52 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Ren
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (field && !document.hidden && width > 0 && height > 0) {
-      if (seedWidth !== width || seedHeight !== height) {
+      const view: View = { center: map.getCenter(), zoom: map.getZoom() };
+      const center = worldCenter(view.center);
+      const worldPixels = 512 * 2 ** view.zoom;
+      if (!seeds || seedWidth !== width || seedHeight !== height) {
         particleCount = Math.min(850, Math.max(240, Math.round(width * height / 1500)));
-        const seeds = new Float32Array(particleCount * 3);
+        seeds = new Float32Array(particleCount * 3);
         for (let index = 0; index < particleCount; index++) {
-          seeds[index * 3] = Math.random() * width;
-          seeds[index * 3 + 1] = Math.random() * height;
+          seeds[index * 3] = center.x + (Math.random() - .5) * width / worldPixels;
+          seeds[index * 3 + 1] = center.y + (Math.random() - .5) * height / worldPixels;
           seeds[index * 3 + 2] = Math.random();
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, seedBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
         seedWidth = width;
         seedHeight = height;
+      } else if (seedView && (center.x !== seedView.center.x || center.y !== seedView.center.y || view.zoom !== seedView.zoom)) {
+        let changed = false;
+        const worldWrap = Math.round(center.x - seedView.center.x);
+        if (worldWrap) {
+          for (let index = 0; index < particleCount; index++) seeds[index * 3]! += worldWrap;
+          changed = true;
+        }
+        if (Math.abs(view.zoom - seedView.zoom) > 0.000001) {
+          if (zoomResetTimer !== null) clearTimeout(zoomResetTimer);
+          zoomResetTimer = window.setTimeout(() => { seedWidth = 0; zoomResetTimer = null; requestPaint(); }, 180);
+        } else {
+          const margin = 24;
+          const wrap = (position: number, span: number): number =>
+            ((position + margin) % (span + margin * 2) + span + margin * 2) % (span + margin * 2) - margin;
+          for (let index = 0; index < particleCount; index++) {
+            const offset = index * 3;
+            const x = (seeds[offset]! - center.x) * worldPixels + width * .5;
+            const y = (seeds[offset + 1]! - center.y) * worldPixels + height * .5;
+            if (x >= -margin && x <= width + margin && y >= -margin && y <= height + margin) continue;
+            seeds[offset] = center.x + (wrap(x, width) - width * .5) / worldPixels;
+            seeds[offset + 1] = center.y + (wrap(y, height) - height * .5) / worldPixels;
+            changed = true;
+          }
+        }
+        if (changed) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, seedBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+        }
       }
-      useView(particles, field, { center: map.getCenter(), zoom: map.getZoom() }, width, height);
+      seedView = { center, zoom: view.zoom };
+      useView(particles, field, view, width, height);
       gl.uniform1f(gl.getUniformLocation(particles.program, "u_time"), reducedMotion.matches ? 0 : (now - started) / 1000);
       gl.uniform1f(gl.getUniformLocation(particles.program, "u_pixelRatio"), arrows.width / width);
       gl.drawArrays(gl.POINTS, 0, particleCount);
@@ -375,6 +415,8 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Ren
   return {
     setField: (next) => {
       field = next;
+      seeds = null;
+      seedView = null;
       if (next) {
         const vectors = new Float32Array(next.width * next.height * 2);
         for (let index = 0; index < next.u.length; index++) {

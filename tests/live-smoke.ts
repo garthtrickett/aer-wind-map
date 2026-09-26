@@ -315,6 +315,55 @@ try {
     await reduced.waitForTimeout(250);
     const after = await arrowSnapshot(reduced);
     if (before !== after) throw new Error("Reduced-motion arrows still change between frames");
+    if (webgl2) {
+      await reduced.addStyleTag({ content: "#map { background: #000 !important; } #map .maplibregl-canvas, #map .leaflet-control-container { visibility: hidden !important; }" });
+      await reduced.locator("#map").click({ position: { x: 350, y: 400 } });
+      const anchorBefore = await reduced.locator(".flag-point").boundingBox();
+      const arrowsBeforePan = (await reduced.locator("#map").screenshot()).toString("base64");
+      await reduced.mouse.move(600, 350);
+      await reduced.mouse.down();
+      await reduced.mouse.move(720, 390, { steps: 8 });
+      await reduced.mouse.up();
+      await reduced.waitForTimeout(250);
+      const anchorAfter = await reduced.locator(".flag-point").boundingBox();
+      const arrowsAfterPan = (await reduced.locator("#map").screenshot()).toString("base64");
+      if (!anchorBefore || !anchorAfter) throw new Error("Map pan lost its geographic anchor");
+      const offset = { x: Math.round(anchorAfter.x - anchorBefore.x), y: Math.round(anchorAfter.y - anchorBefore.y) };
+      if (Math.abs(offset.x - 120) > 5 || Math.abs(offset.y - 40) > 5) throw new Error(`Map did not pan as expected: ${JSON.stringify(offset)}`);
+      const matches = await reduced.evaluate(async ({ before, after, offset }) => {
+        const pixels = async (png: string): Promise<ImageData> => {
+          const bytes = Uint8Array.from(atob(png), (character) => character.charCodeAt(0));
+          const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+          const canvas = document.createElement("canvas");
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext("2d")!;
+          context.drawImage(image, 0, 0);
+          return context.getImageData(0, 0, canvas.width, canvas.height);
+        };
+        const first = await pixels(before);
+        const second = await pixels(after);
+        const isArrow = (data: Uint8ClampedArray, x: number, y: number): boolean => {
+          if (x < 0 || y < 0 || x >= first.width || y >= first.height) return false;
+          const at = (y * first.width + x) * 4;
+          return data[at]! > 110 && data[at + 1]! > 110 && data[at + 2]! > 110;
+        };
+        const score = (dx: number, dy: number): number => {
+          let total = 0;
+          let shared = 0;
+          for (let y = 80; y < first.height - 80; y += 2) for (let x = 80; x < first.width - 80; x += 2) {
+            if (!isArrow(first.data, x, y)) continue;
+            total++;
+            if (isArrow(second.data, x + dx, y + dy)) shared++;
+          }
+          return total ? shared / total : 0;
+        };
+        return { shifted: score(offset.x, offset.y), fixed: score(0, 0) };
+      }, { before: arrowsBeforePan, after: arrowsAfterPan, offset });
+      if (matches.shifted < .3 || matches.shifted <= matches.fixed * 1.5) {
+        throw new Error(`Wind arrows did not stay with the map during pan: ${JSON.stringify({ offset, matches })}`);
+      }
+    }
     await reduced.close();
 
     const recovery = await browser.newPage();
@@ -348,6 +397,15 @@ try {
     if (fallbackColor.width >= fallbackColor.cssWidth || !fallbackAlpha) {
       throw new Error(`Canvas fallback did not render reduced-resolution wind color: ${JSON.stringify({ fallbackColor, fallbackAlpha })}`);
     }
+    await fallback.mouse.move(600, 350);
+    await fallback.mouse.down();
+    await fallback.mouse.move(720, 390, { steps: 8 });
+    const panTransform = await fallback.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.style.transform);
+    await fallback.mouse.up();
+    if (!panTransform.startsWith("translate3d(") || panTransform.startsWith("translate3d(0px, 0px")) {
+      throw new Error(`Canvas fallback arrows stayed fixed during pan: ${panTransform}`);
+    }
+    await fallback.waitForFunction(() => (document.querySelector("#wind-arrows") as HTMLElement)?.style.transform === "none");
     await fallback.close();
   }
   console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title, modal, errors }, null, 2));
