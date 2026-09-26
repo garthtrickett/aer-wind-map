@@ -16,16 +16,21 @@ test("index and GRIB requests address the browser-accessible Google mirror", () 
   assert.equal(forecastUrl(run, 3, "grib2").endsWith("-3h-oper-fc.grib2"), true);
 });
 
-test("discovery checks one cycle at a time and stops at the newest available run", async () => {
+test("discovery lists one cycle at a time without requesting a missing object", async () => {
   const checked: string[] = [];
   let active = false;
-  const fetcher = (async (url: string | URL | Request) => {
+  const fetcher = (async (url: string | URL | Request, options?: RequestInit) => {
     assert.equal(active, false);
+    assert.equal(options?.method, undefined);
     active = true;
-    checked.push(String(url));
+    const request = new URL(String(url));
+    assert.equal(request.pathname, "/storage/v1/b/ecmwf-open-data/o");
+    const name = request.searchParams.get("prefix");
+    assert.ok(name?.endsWith("-72h-oper-fc.index"));
+    checked.push(name);
     await Promise.resolve();
     active = false;
-    return { ok: checked.length === 2 } as Response;
+    return { ok: true, json: async () => checked.length === 2 ? { items: [{ name }] } : {} } as Response;
   }) as typeof fetch;
   const result = await discoverLatest(fetcher);
   assert.equal(result.ok, true);

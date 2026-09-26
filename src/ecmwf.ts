@@ -27,16 +27,27 @@ export const runCandidates = (now: Date): readonly ForecastRun[] =>
   Array.from({ length: 8 }, (_, index) => runAt(new Date(now.getTime() - index * 6 * 3_600_000)))
     .filter((run, index, runs) => runs.findIndex((other) => other.id === run.id) === index);
 
-export const forecastUrl = (run: ForecastRun, step: number, extension: "index" | "grib2"): string => {
+const forecastPath = (run: ForecastRun, step: number, extension: "index" | "grib2"): string => {
   const hh = String(run.hour).padStart(2, "0");
-  return `https://storage.googleapis.com/ecmwf-open-data/${run.date}/${hh}z/ifs/0p25/oper/${run.id}0000-${step}h-oper-fc.${extension}`;
+  return `${run.date}/${hh}z/ifs/0p25/oper/${run.id}0000-${step}h-oper-fc.${extension}`;
+};
+
+export const forecastUrl = (run: ForecastRun, step: number, extension: "index" | "grib2"): string =>
+  `https://storage.googleapis.com/ecmwf-open-data/${forecastPath(run, step, extension)}`;
+
+const listingUrl = (name: string): string => {
+  const query = new URLSearchParams({ prefix: name, maxResults: "1", fields: "items(name)" });
+  return `https://storage.googleapis.com/storage/v1/b/ecmwf-open-data/o?${query}`;
 };
 
 export const discoverLatest = async (fetcher: typeof fetch = fetch): Promise<RunResult> => {
   for (const run of runCandidates(new Date())) {
     try {
-      const response = await fetcher(forecastUrl(run, 72, "index"), { method: "HEAD", signal: AbortSignal.timeout(8000) });
-      if (response.ok) return { ok: true, value: run };
+      const name = forecastPath(run, 72, "index");
+      const response = await fetcher(listingUrl(name), { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) continue;
+      const listing = await response.json() as { readonly items?: readonly { readonly name?: string }[] };
+      if (listing.items?.some((item) => item.name === name)) return { ok: true, value: run };
     } catch {
       // Try an older cycle when this one cannot be reached.
     }

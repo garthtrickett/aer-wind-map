@@ -53,10 +53,10 @@ try {
     if (message.type() === "error" && !message.text().startsWith("Failed to load resource")) errors.push(message.text());
   });
   page.on("requestfailed", (request) => {
-    if (request.method() === "GET") errors.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText}`);
+    if (["GET", "HEAD"].includes(request.method())) errors.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText}`);
   });
   page.on("response", (response) => {
-    if (response.request().method() === "GET" && response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+    if (["GET", "HEAD"].includes(response.request().method()) && response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
   });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   const wasm = await page.request.head(`${base}/decoder/eccodes.wasm`, { headers: { "Accept-Encoding": "gzip" } });
