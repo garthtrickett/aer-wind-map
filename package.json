@@ -1,0 +1,30 @@
+{
+  "name": "wind-map",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "prepare:decoder": "node scripts/copy-decoder.ts && esbuild src/decoder.worker.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=public/decoder/worker.js",
+    "dev": "npm run prepare:decoder && vite --host 0.0.0.0",
+    "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "test": "node --test src/wind.test.ts src/ecmwf.test.ts src/model.test.ts",
+    "smoke:live": "node tests/live-smoke.ts",
+    "build": "npm run prepare:decoder && npm run check && vite build && node scripts/compress.ts",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
+    "@meri-imperiumi/eccodes-wasm": "2.48.2",
+    "leaflet": "^1.9.4",
+    "lit-html": "^3.3.3",
+    "maplibre-gl": "^6.11.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^24.19.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

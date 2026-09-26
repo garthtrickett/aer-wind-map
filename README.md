@@ -1,0 +1,49 @@
+# Aer — global wind forecast
+
+Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color covers
+the visible world, arrows move toward the wind's destination, and selecting a
+point opens its wind speed, source direction, gust, forecast time, and
+coordinates. The timeline steps through the first 72 forecast hours.
+
+## Run locally
+
+Node 22.12 or newer is needed for Vite. The deployment image uses Node 24.
+
+```sh
+npm ci
+npm run dev
+```
+
+For a production build and live browser check:
+
+```sh
+npm test
+npm run build
+npm run smoke:live
+BROWSER=firefox npm run smoke:live
+```
+
+`npm run build` copies the approved ecCodes WASM decoder, bundles its worker,
+and compresses the WASM file for the production server. `node scripts/serve.ts`
+serves `dist` on `$PORT` (default 3000); `GET /health` responds with `ok`.
+The Dockerfile builds and runs the same static server on Railway.
+
+The browser fetches ECMWF's `.index` and GRIB2 byte ranges directly from its
+official AWS Open Data mirror. No ECMWF key or weather proxy is needed.
+MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
+Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
+stay visible on the map.
+
+## Limits
+
+- ECMWF keeps a rolling archive, so Aer selects the newest reachable run with
+  its 72-hour file available. A new run may appear after the page was opened;
+  reload to select it.
+- Each forecast step downloads three compressed global fields, and first use
+  downloads a 39.6 MB WASM decoder (about 6.8 MB over the network with gzip).
+  Decoding and animation can be demanding on older phones.
+- Gusts are shown as unavailable if the gust field cannot be fetched or decoded.
+- Browser checks cover Chromium, Firefox, and WebKit desktop/mobile on Linux.
+  Physical iOS Safari and older phones have not been measured.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.

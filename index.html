@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071a24" />
+    <title>Aer — Global wind forecast</title>
+    <link rel="preconnect" href="https://tiles.openfreemap.org" />
+    <link rel="preconnect" href="https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com" />
+  </head>
+  <body>
+    <main id="app">
+      <div id="map" aria-label="Interactive global wind map"></div>
+      <canvas id="wind-color" aria-hidden="true"></canvas>
+      <canvas id="wind-arrows" aria-hidden="true"></canvas>
+      <div id="ui"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
