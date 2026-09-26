@@ -20,6 +20,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #9ff1d8; outline-
 #map { z-index: 0; background: #dbe7e5; }
 #wind-color { z-index: 1; pointer-events: none; transform-origin: 0 0; }
 #wind-arrows { z-index: 2; pointer-events: none; transform-origin: 0 0; }
+#wind-color[hidden], #wind-arrows[hidden] { display: none; }
 #selected-flag { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
 #selected-flag[hidden] { display: none; }
 .flag-stem { position: absolute; left: -1px; bottom: 0; width: 2px; height: var(--flag-rise, 95px); background: rgba(255,255,255,.9); box-shadow: 0 0 4px rgba(5,34,44,.5); }

@@ -36,6 +36,9 @@ official AWS Open Data mirror. No ECMWF key or weather proxy is needed.
 MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
 Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
 stay visible on the map.
+Wind color uses a reduced-size texture in a MapLibre WebGL layer. Animated
+arrows use a second WebGL canvas that follows the map's zoom transform. Browsers
+without WebGL2 use reduced-resolution Canvas 2D color and arrows.
 
 ## Limits
 
@@ -49,6 +52,7 @@ stay visible on the map.
   animation can be demanding on older phones.
 - Gusts are shown as unavailable if the gust field cannot be fetched or decoded.
 - Browser checks cover Chromium, Firefox, and WebKit desktop/mobile on Linux.
-  Physical iOS Safari and older phones have not been measured.
+  Physical iOS Safari, older phones, and actual zoom frame rates on hardware
+  have not been measured.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.

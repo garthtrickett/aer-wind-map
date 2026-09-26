@@ -37,7 +37,7 @@ let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 
 const windMap = createWindMap({ element: mapElement, flag, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
-const windRenderer = createWindRenderer(windMap.map, colorCanvas, arrowsCanvas);
+const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
 let drag: Readonly<{
   pointerId: number;
   handle: HTMLElement;

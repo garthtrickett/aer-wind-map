@@ -30,14 +30,16 @@
   generic result helper only if concrete result types become repetitive.
 - Leaflet owns map interaction. MapLibre renders OpenFreeMap Positron vector
   tiles when WebGL2 is available; otherwise Leaflet loads OSM raster tiles.
-  Two canvas layers draw wind color and arrows above the map. A separate DOM
-  flag sits above those canvases and follows Leaflet's projected point. Pointer
-  movement on the flag proposes location changes. During map navigation, the
-  renderer pauses particle work and reuses the current color layer; zooming in
-  scales that layer with the map. Once movement ends, it samples the new view
-  in short batches across animation frames and restarts arrows at the new coordinates.
-  The animation loop does not dispatch a SAM proposal on every frame; user
-  choices and completed loads do.
+  A custom MapLibre WebGL layer renders wind color into a texture at 40% of
+  the map canvas dimensions, then composites it with the vector map. It
+  updates that texture when the map view or forecast changes. A WebGL particle
+  canvas draws animated arrow glyphs from the wind-vector texture. It shares
+  MapLibre's map pane and copies the map canvas's zoom transform, so colors,
+  arrows, and geography move together during zoom. Without WebGL2, the two
+  overlays use Canvas 2D, with color stored at sampling resolution. A separate
+  DOM flag follows Leaflet's projected point. Pointer movement on the flag
+  proposes location changes. Animation frames do not dispatch SAM proposals;
+  user choices and completed loads do.
 - The data source is ECMWF's official AWS Open Data mirror. Read `.index` rows,
   request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
   Web Worker. Select a complete forecast run and retain its identity in every
@@ -79,3 +81,9 @@ loads took 5–9 seconds on this Linux host during checks. A one-field-set
 Chromium diagnostic measured a 64 MiB WASM heap plus 12.5 MB of decoded U, V,
 and gust arrays. Physical iOS Safari and total real-device memory use remain
 unmeasured.
+
+The zoom smoke check also verifies that the particle canvas takes the same
+transform as MapLibre's canvas, that arrows keep changing during zoom, and
+that reduced-motion arrows stay still. Chromium checks the low-resolution
+Canvas 2D fallback. Headless zoom frame timings vary on this shared host;
+physical-device smoothness remains to be measured.

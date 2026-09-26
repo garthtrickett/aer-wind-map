@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { chromium, firefox, webkit, type Browser } from "@playwright/test";
+import { chromium, firefox, webkit, type Browser, type Page } from "@playwright/test";
 
 const availablePort = async (): Promise<number> => new Promise((resolve, reject) => {
   const server = createServer();
@@ -17,6 +17,18 @@ const port = remoteBase ? null : await availablePort();
 const server = port === null ? null : spawn(process.execPath, ["scripts/serve.ts"], { stdio: "pipe", env: { ...process.env, PORT: String(port) } });
 const base = remoteBase ?? `http://127.0.0.1:${port}`;
 let browser: Browser | null = null;
+
+const colorAlphaAt = (canvas: HTMLCanvasElement, { x, y }: Readonly<{ x: number; y: number }>): number => {
+  const pixelX = Math.min(canvas.width - 1, Math.floor(x * canvas.width / canvas.clientWidth));
+  const pixelY = Math.min(canvas.height - 1, Math.floor(y * canvas.height / canvas.clientHeight));
+  const gl = canvas.getContext("webgl2");
+  if (gl) {
+    const pixel = new Uint8Array(4);
+    gl.readPixels(pixelX, canvas.height - 1 - pixelY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    return pixel[3]!;
+  }
+  return canvas.getContext("2d")?.getImageData(pixelX, pixelY, 1, 1).data[3] ?? 0;
+};
 
 try {
   let ready = false;
@@ -72,26 +84,76 @@ try {
   if (!attribution.includes("OpenStreetMap") || !attribution.includes("ECMWF") || (webgl2 && (attribution.match(/OpenFreeMap/g) || []).length !== 1)) {
     throw new Error(`Incorrect map attribution: ${attribution}`);
   }
+  const colorSnapshot = async (target: Page): Promise<string> => webgl2
+    ? (await target.locator("#map .maplibregl-canvas").screenshot()).toString("base64")
+    : await target.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  const arrowSnapshot = async (target: Page): Promise<string> => webgl2
+    ? (await target.locator("#wind-arrows").screenshot()).toString("base64")
+    : await target.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  const waitForColorChange = async (target: Page, before: string): Promise<void> => {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      if (await colorSnapshot(target) !== before) return;
+      await target.waitForTimeout(100);
+    }
+    throw new Error("Wind map did not repaint after zoom");
+  };
+  if (webgl2) {
+    const surfaces = await page.evaluate(() => {
+      const color = document.querySelector("#wind-color") as HTMLCanvasElement;
+      const arrows = document.querySelector("#wind-arrows") as HTMLCanvasElement;
+      const base = document.querySelector("#map .maplibregl-canvas") as HTMLCanvasElement;
+      return { hiddenColor: color.hidden, arrowWebGL: Boolean(arrows.getContext("webgl2")), arrowInMap: Boolean(arrows.closest("#map")), mapCanvas: Boolean(base), arrowZ: Number(getComputedStyle(arrows).zIndex), baseZ: Number(getComputedStyle(base).zIndex) };
+    });
+    if (!surfaces.hiddenColor || !surfaces.arrowWebGL || !surfaces.arrowInMap || !surfaces.mapCanvas || surfaces.arrowZ <= surfaces.baseZ) {
+      throw new Error(`Wind did not use the map-aligned WebGL surfaces: ${JSON.stringify(surfaces)}`);
+    }
+  }
 
-  const colorBeforeZoom = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  const colorBeforeZoom = await colorSnapshot(page);
   await page.locator(".leaflet-control-zoom-in").click();
   if (engine !== webkit) {
-    await page.waitForFunction(() => (document.querySelector("#wind-color") as HTMLElement)?.style.transform.includes("scale("));
+    await page.waitForFunction((accelerated) => {
+      const canvas = document.querySelector(accelerated ? "#map .maplibregl-canvas" : "#wind-color") as HTMLElement;
+      return canvas?.style.transform.includes("scale(");
+    }, webgl2);
+    if (webgl2) await page.waitForFunction(() => {
+      const mapCanvas = document.querySelector("#map .maplibregl-canvas") as HTMLCanvasElement;
+      const arrows = document.querySelector("#wind-arrows") as HTMLCanvasElement;
+      return arrows.style.transform === mapCanvas.style.transform;
+    });
+    if (engine === chromium) {
+      const arrowsBefore = await arrowSnapshot(page);
+      await page.waitForTimeout(60);
+      const arrowsAfter = await arrowSnapshot(page);
+      if (arrowsBefore === arrowsAfter) throw new Error("Wind particles stopped during zoom");
+    }
     await page.screenshot({ path: "/tmp/wind-map-zooming.png", fullPage: true });
   }
-  await page.waitForFunction((before) => {
-    const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
-    return canvas.toDataURL() !== before;
-  }, colorBeforeZoom);
-  await page.waitForFunction(() => (document.querySelector("#wind-color") as HTMLElement)?.style.transform === "none");
-  const colorAfterZoom = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  await waitForColorChange(page, colorBeforeZoom);
+  if (!webgl2) await page.waitForFunction(() => (document.querySelector("#wind-color") as HTMLElement)?.style.transform === "none");
+  const colorAfterZoom = await colorSnapshot(page);
   await page.screenshot({ path: "/tmp/wind-map-zoomed.png", fullPage: true });
-  await page.locator(".leaflet-control-zoom-out").click();
+  if (process.env.PROFILE_ZOOM) {
+    const frames = await page.evaluate(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const times: number[] = [];
+      const started = performance.now();
+      const complete = new Promise<number[]>((resolve) => {
+        const tick = (now: number): void => {
+          times.push(now);
+          if (now - started < 650) requestAnimationFrame(tick);
+          else resolve(times);
+        };
+        requestAnimationFrame(tick);
+      });
+      (document.querySelector(".leaflet-control-zoom-out") as HTMLElement).click();
+      return complete;
+    });
+    const gaps = frames.slice(1).map((frame, index) => frame - frames[index]!).sort((a, b) => a - b);
+    console.log(`Zoom frame gaps: median ${gaps[Math.floor(gaps.length / 2)]?.toFixed(1)}ms, p95 ${gaps[Math.floor(gaps.length * .95)]?.toFixed(1)}ms, ${gaps.length} frames`);
+  } else await page.locator(".leaflet-control-zoom-out").click();
   await page.screenshot({ path: "/tmp/wind-map-zooming-out.png", fullPage: true });
-  await page.waitForFunction((before) => {
-    const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
-    return canvas.toDataURL() !== before;
-  }, colorAfterZoom);
+  await waitForColorChange(page, colorAfterZoom);
   await page.waitForTimeout(350);
 
   await page.locator("#map").click({ position: { x: 700, y: 400 } });
@@ -122,8 +184,10 @@ try {
   if (!modal.includes(`Valid ${expectedForecast}`)) throw new Error("Details time did not use the browser timezone");
   await page.screenshot({ path: "/tmp/wind-map-modal.png", fullPage: true });
   if (!modal.includes("Maximum gust") || !modal.includes("Direction from") || !modal.includes("m/s")) throw new Error(`Incomplete modal: ${modal}`);
-  const colorAlpha = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")?.getImageData(780, 465, 1, 1).data[3] ?? 0);
-  if (!colorAlpha) throw new Error("Wind color disappeared after selecting a point");
+  if (!webgl2) {
+    const colorAlpha = await page.locator("#wind-color").evaluate(colorAlphaAt, { x: 780, y: 465 });
+    if (!colorAlpha) throw new Error("Wind color disappeared after selecting a point");
+  }
 
   await page.getByRole("button", { name: "Close details" }).focus();
   await page.keyboard.press("Escape");
@@ -157,11 +221,11 @@ try {
   const mobileLoadMs = Date.now() - mobileStart;
   await mobile.screenshot({ path: "/tmp/wind-map-mobile.png", fullPage: true });
   if (engine === chromium) {
-    await mobile.waitForFunction(() => {
+    if (!webgl2) await mobile.waitForFunction(() => {
       const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
-      return (canvas.getContext("2d")?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data[3] ?? 0) > 0;
+      return (canvas.getContext("2d")?.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data[3] ?? 0) > 0;
     });
-    const colorBeforePinch = await mobile.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    const colorBeforePinch = await colorSnapshot(mobile);
     const pinch = await mobile.context().newCDPSession(mobile);
     await pinch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 130, y: 350, id: 1 }, { x: 260, y: 350, id: 2 }] });
     for (let step = 1; step <= 5; step++) {
@@ -170,10 +234,7 @@ try {
       ] });
     }
     await pinch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await mobile.waitForFunction((before) => {
-      const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
-      return canvas.toDataURL() !== before;
-    }, colorBeforePinch);
+    await waitForColorChange(mobile, colorBeforePinch);
     await mobile.screenshot({ path: "/tmp/wind-map-mobile-zoomed.png", fullPage: true });
   }
   await mobile.getByRole("button", { name: "Inspect map center" }).click();
@@ -206,9 +267,9 @@ try {
     await reduced.goto(base, { waitUntil: "domcontentloaded" });
     await reduced.getByText("Live forecast").waitFor({ timeout: 45_000 });
     await reduced.waitForTimeout(500);
-    const before = await reduced.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    const before = await arrowSnapshot(reduced);
     await reduced.waitForTimeout(250);
-    const after = await reduced.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    const after = await arrowSnapshot(reduced);
     if (before !== after) throw new Error("Reduced-motion arrows still change between frames");
     await reduced.close();
 
@@ -220,6 +281,24 @@ try {
     await recovery.getByRole("button", { name: "Try again" }).click();
     await recovery.getByText("Live forecast").waitFor({ timeout: 45_000 });
     await recovery.close();
+
+    const fallback = await browser.newPage();
+    await fallback.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext;
+      Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+        value: function (kind: string, ...options: unknown[]) {
+          return kind === "webgl2" ? null : Reflect.apply(original, this, [kind, ...options]);
+        },
+      });
+    });
+    await fallback.goto(base, { waitUntil: "domcontentloaded" });
+    await fallback.getByText("Live forecast").waitFor({ timeout: 45_000 });
+    const fallbackColor = await fallback.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => ({ width: canvas.width, cssWidth: canvas.clientWidth }));
+    const fallbackAlpha = await fallback.locator("#wind-color").evaluate(colorAlphaAt, { x: 500, y: 300 });
+    if (fallbackColor.width >= fallbackColor.cssWidth || !fallbackAlpha) {
+      throw new Error(`Canvas fallback did not render reduced-resolution wind color: ${JSON.stringify({ fallbackColor, fallbackAlpha })}`);
+    }
+    await fallback.close();
   }
   console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title, modal, errors }, null, 2));
   if (errors.length) process.exitCode = 1;

@@ -1,11 +1,12 @@
 import * as L from "leaflet";
 import maplibreGL from "@maplibre/maplibre-gl-leaflet";
-import { setWorkerUrl } from "maplibre-gl";
+import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Point } from "./model.ts";
 
 export type WindMap = Readonly<{
   map: L.Map;
+  maplibre: MapLibreMap | null;
   select: (point: Point | null) => void;
   center: () => Point;
   screenPoint: (point: Point) => Readonly<{ x: number; y: number }>;
@@ -29,8 +30,10 @@ export const createWindMap = (
   }).setView([28, 0], 2.25);
 
   const webgl2 = Boolean(document.createElement("canvas").getContext("webgl2"));
+  let maplibre: MapLibreMap | null = null;
   if (webgl2) {
-    maplibreGL({ style: "https://tiles.openfreemap.org/styles/positron", attributionControl: false }).addTo(map);
+    const layer = maplibreGL({ style: "https://tiles.openfreemap.org/styles/positron", attributionControl: false }).addTo(map);
+    maplibre = layer.getMaplibreMap();
   } else {
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 10,
@@ -74,6 +77,7 @@ export const createWindMap = (
 
   return {
     map,
+    maplibre,
     center: () => ({ latitude: map.getCenter().lat, longitude: longitudeWithinWorld(map.getCenter().lng) }),
     screenPoint,
     pointAt: (position) => {
