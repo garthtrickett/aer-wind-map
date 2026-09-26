@@ -20,7 +20,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid #9ff1d8; outline-
 #map { z-index: 0; background: #dbe7e5; }
 #wind-color { z-index: 1; pointer-events: none; }
 #wind-arrows { z-index: 2; pointer-events: none; }
-#ui { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+#selected-marker { position: absolute; z-index: 3; width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #103d4c; box-shadow: 0 0 0 5px rgba(255,255,255,.25), 0 2px 12px rgba(0,22,31,.7); transform: translate(-50%, -50%); pointer-events: none; }
+#selected-marker[hidden] { display: none; }
+#ui { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 
 .masthead {

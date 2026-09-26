@@ -14,8 +14,7 @@ const longitudeWithinWorld = (longitude: number): number =>
   ((longitude + 180) % 360 + 360) % 360 - 180;
 
 export const createWindMap = (
-  element: HTMLElement,
-  onSelect: (point: Point) => void,
+  { element, marker, onSelect }: Readonly<{ element: HTMLElement; marker: HTMLElement; onSelect: (point: Point) => void }>,
 ): WindMap => {
   setWorkerUrl(maplibreWorkerUrl);
   const map = L.map(element, {
@@ -46,7 +45,16 @@ export const createWindMap = (
     '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data">ECMWF IFS</a> · CC BY 4.0',
   );
 
-  let marker: L.CircleMarker | null = null;
+  let selected: Point | null = null;
+  const positionMarker = (): void => {
+    marker.hidden = selected === null;
+    if (!selected) return;
+    const nearestLongitude = selected.longitude + Math.round((map.getCenter().lng - selected.longitude) / 360) * 360;
+    const position = map.latLngToContainerPoint([selected.latitude, nearestLongitude]);
+    marker.style.left = `${position.x}px`;
+    marker.style.top = `${position.y}px`;
+  };
+  map.on("move zoom resize", positionMarker);
   map.on("click", (event: L.LeafletMouseEvent) =>
     onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) }),
   );
@@ -55,16 +63,8 @@ export const createWindMap = (
     map,
     center: () => ({ latitude: map.getCenter().lat, longitude: longitudeWithinWorld(map.getCenter().lng) }),
     select: (point) => {
-      if (marker) { marker.remove(); marker = null; }
-      if (point) {
-        marker = L.circleMarker([point.latitude, point.longitude], {
-          radius: 7,
-          color: "#ffffff",
-          weight: 2,
-          fillColor: "#082b3a",
-          fillOpacity: 1,
-        }).addTo(map);
-      }
+      selected = point;
+      positionMarker();
     },
   };
 };

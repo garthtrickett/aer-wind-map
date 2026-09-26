@@ -27,9 +27,10 @@
   generic result helper only if concrete result types become repetitive.
 - Leaflet owns map interaction. MapLibre renders OpenFreeMap Positron vector
   tiles when WebGL2 is available; otherwise Leaflet loads OSM raster tiles.
-  Two canvas layers draw wind color and arrows above the map. The animation
-  loop does not dispatch a SAM proposal
-  on every frame; user choices and completed loads do.
+  Two canvas layers draw wind color and arrows above the map. A separate DOM
+  marker sits above those canvases and follows Leaflet's projected point. The
+  animation loop does not dispatch a SAM proposal on every frame; user choices
+  and completed loads do.
 - The data source is ECMWF's official AWS Open Data mirror. Read `.index` rows,
   request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
   Web Worker. Select a complete forecast run and retain its identity in every

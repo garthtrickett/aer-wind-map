@@ -26,6 +26,7 @@ const ui = requireElement("ui");
 const mapElement = requireElement("map");
 const colorCanvas = requireCanvas("wind-color");
 const arrowsCanvas = requireCanvas("wind-arrows");
+const marker = requireElement("selected-marker");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, WindField>();
 let state: State = initialState;
@@ -35,7 +36,7 @@ let modalWasOpen = false;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 
-const windMap = createWindMap(mapElement, (point) => dispatch({ kind: "locationSelected", point }));
+const windMap = createWindMap({ element: mapElement, marker, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
 const windRenderer = createWindRenderer(windMap.map, colorCanvas, arrowsCanvas);
 
 const runEffect = (effect: Effect): void => {

@@ -62,13 +62,22 @@ try {
   await page.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   const modal = await page.getByRole("dialog").innerText();
   await page.screenshot({ path: "/tmp/wind-map-modal.png", fullPage: true });
-  if (!modal.includes("Maximum gust") || !modal.includes("Direction from")) throw new Error(`Incomplete modal: ${modal}`);
+  if (!modal.includes("Maximum gust") || !modal.includes("Direction from") || !modal.includes("m/s")) throw new Error(`Incomplete modal: ${modal}`);
+  if (!await page.locator("#selected-marker").isVisible()) throw new Error("Selected point is not marked on the map");
+  const markerBox = await page.locator("#selected-marker").boundingBox();
+  if (!markerBox || Math.abs(markerBox.x + markerBox.width / 2 - 700) > 3 || Math.abs(markerBox.y + markerBox.height / 2 - 400) > 3) {
+    throw new Error(`Selected point marker is misplaced: ${JSON.stringify(markerBox)}`);
+  }
+  const colorAlpha = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")?.getImageData(700, 400, 1, 1).data[3] ?? 0);
+  if (!colorAlpha) throw new Error("Wind color disappeared after selecting a point");
 
   await page.getByRole("button", { name: "Close details" }).focus();
   await page.keyboard.press("Escape");
   if (await page.getByRole("dialog").count()) throw new Error("Escape did not close details");
+  await page.screenshot({ path: "/tmp/wind-map-selected.png", fullPage: true });
   await page.getByRole("button", { name: "Next forecast time" }).click();
   await page.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  if (!await page.locator("#selected-marker").isVisible()) throw new Error("Selected point disappeared after changing forecast time");
   const title = await page.title();
   await page.close();
 
