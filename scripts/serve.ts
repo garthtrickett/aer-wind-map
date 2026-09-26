@@ -53,7 +53,7 @@ const server = createServer(async (request, response) => {
   response.writeHead(200, {
     "Content-Type": types[extname(file)] || "application/octet-stream",
     "Content-Length": info.size,
-    "Cache-Control": pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : pathname.startsWith("/decoder/") ? "public, max-age=86400" : "no-cache",
+    "Cache-Control": pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
     ...(compressed ? { "Content-Encoding": "gzip", Vary: "Accept-Encoding" } : {}),
   });
   if (request.method === "HEAD") { response.end(); return; }

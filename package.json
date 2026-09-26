@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "prepare:decoder": "node scripts/copy-decoder.ts && esbuild src/decoder.worker.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=public/decoder/worker.js",
+    "prepare:decoder": "node scripts/copy-decoder.ts",
     "dev": "npm run prepare:decoder && vite --host 0.0.0.0",
     "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "test": "node --test src/wind.test.ts src/ecmwf.test.ts src/model.test.ts",

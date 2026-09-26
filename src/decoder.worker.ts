@@ -16,7 +16,7 @@ type GribHandle = {
 };
 type Decoder = { openGrib: (path: string) => GribHandle };
 type DecoderScope = DedicatedWorkerGlobalScope & {
-  createEccodes: () => Promise<RawModule>;
+  createEccodes: (options: { locateFile: (path: string) => string }) => Promise<RawModule>;
   module: { exports: { createEccodes: (raw: RawModule) => Promise<Decoder> } };
 };
 type FieldResult = { ok: true; value: FieldValues } | { ok: false; error: WorkerError };
@@ -52,7 +52,7 @@ const decoderReady = (): Promise<{ raw: RawModule; decoder: Decoder }> => {
     const createWasmModule = decoderScope.createEccodes;
     decoderScope.module = { exports: {} as DecoderScope["module"]["exports"] };
     importScripts("/decoder/index.js");
-    const raw = await createWasmModule();
+    const raw = await createWasmModule({ locateFile: (path) => `/decoder/${path}` });
     const decoder = await decoderScope.module.exports.createEccodes(raw);
     return { raw, decoder };
   })();

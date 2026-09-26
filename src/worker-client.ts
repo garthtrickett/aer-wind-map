@@ -27,7 +27,7 @@ export const createForecastWorker = (): ForecastWorker => {
   };
   const activeWorker = (): Worker => {
     if (worker) return worker;
-    const next = new Worker("/decoder/worker.js");
+    const next = new Worker(new URL("./decoder.worker.ts", import.meta.url), { type: "classic" });
     next.onmessage = (event: MessageEvent<WorkerReply>) => {
       const reply = event.data;
       const resolve = pending.get(reply.key);

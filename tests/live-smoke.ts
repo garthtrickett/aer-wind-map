@@ -274,10 +274,10 @@ try {
     await reduced.close();
 
     const recovery = await browser.newPage();
-    await recovery.route("**/decoder/worker.js", (route) => route.fulfill({ status: 404, body: "Decoder temporarily unavailable" }));
+    await recovery.route("**/assets/decoder.worker-*.js", (route) => route.fulfill({ status: 404, body: "Decoder temporarily unavailable" }));
     await recovery.goto(base, { waitUntil: "domcontentloaded" });
     await recovery.getByText("Forecast unavailable").waitFor({ timeout: 45_000 });
-    await recovery.unroute("**/decoder/worker.js");
+    await recovery.unroute("**/assets/decoder.worker-*.js");
     await recovery.getByRole("button", { name: "Try again" }).click();
     await recovery.getByText("Live forecast").waitFor({ timeout: 45_000 });
     await recovery.close();
