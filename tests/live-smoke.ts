@@ -69,6 +69,9 @@ try {
   if (await page.getByRole("dialog").count()) throw new Error("Escape did not close details");
   await page.getByRole("button", { name: "Next forecast time" }).click();
   await page.getByText("Live forecast").waitFor({ timeout: 45_000 });
+  const title = await page.title();
+  await page.close();
+
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: engine !== firefox, hasTouch: true });
   mobile.on("pageerror", (error) => errors.push(error.message));
   const mobileStart = Date.now();
@@ -79,6 +82,7 @@ try {
   await mobile.getByRole("button", { name: "Inspect map center" }).click();
   await mobile.getByRole("dialog", { name: "Wind at this location" }).waitFor();
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("Mobile layout overflows horizontally");
+  await mobile.close();
 
   if (engine === chromium) {
     const reduced = await browser.newPage({ reducedMotion: "reduce" });
@@ -89,6 +93,7 @@ try {
     await reduced.waitForTimeout(250);
     const after = await reduced.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
     if (before !== after) throw new Error("Reduced-motion arrows still change between frames");
+    await reduced.close();
 
     const recovery = await browser.newPage();
     await recovery.route("**/decoder/worker.js", (route) => route.fulfill({ status: 404, body: "Decoder temporarily unavailable" }));
@@ -97,8 +102,9 @@ try {
     await recovery.unroute("**/decoder/worker.js");
     await recovery.getByRole("button", { name: "Try again" }).click();
     await recovery.getByText("Live forecast").waitFor({ timeout: 45_000 });
+    await recovery.close();
   }
-  console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title: await page.title(), modal, errors }, null, 2));
+  console.log(JSON.stringify({ ok: true, browser: engine === chromium ? "chromium" : engine === firefox ? "firefox" : "webkit", mobileLoadMs, title, modal, errors }, null, 2));
   if (errors.length) process.exitCode = 1;
 } finally {
   await browser?.close();

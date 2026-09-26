@@ -64,5 +64,7 @@ grid with the first point at 90° N, 180° E; all three fields reported zero
 missing points. The worker maps future missing sentinels to `NaN`, so samples
 show no invented speed or gust. The browser check also blocks the decoder
 script once and verifies that Retry creates a new worker. Emulated mobile
-loads took 5–9 seconds on this Linux host during checks. Physical iOS Safari
-and real-device memory use remain unmeasured.
+loads took 5–9 seconds on this Linux host during checks. A one-field-set
+Chromium diagnostic measured a 64 MiB WASM heap plus 12.5 MB of decoded U, V,
+and gust arrays. Physical iOS Safari and total real-device memory use remain
+unmeasured.

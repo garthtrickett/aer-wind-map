@@ -42,7 +42,9 @@ stay visible on the map.
   reload to select it.
 - Each forecast step downloads three compressed global fields, and first use
   downloads a 39.6 MB WASM decoder (about 6.8 MB over the network with gzip).
-  Decoding and animation can be demanding on older phones.
+  In one Chromium step-3 check, its WASM heap was 64 MiB and the three decoded
+  arrays totaled 12.5 MB, before map and browser overhead. Decoding and
+  animation can be demanding on older phones.
 - Gusts are shown as unavailable if the gust field cannot be fetched or decoded.
 - Browser checks cover Chromium, Firefox, and WebKit desktop/mobile on Linux.
   Physical iOS Safari and older phones have not been measured.
