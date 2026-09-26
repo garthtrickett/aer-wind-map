@@ -10,6 +10,9 @@ export type WindMap = Readonly<{
   center: () => Point;
 }>;
 
+const longitudeWithinWorld = (longitude: number): number =>
+  ((longitude + 180) % 360 + 360) % 360 - 180;
+
 export const createWindMap = (
   element: HTMLElement,
   onSelect: (point: Point) => void,
@@ -45,12 +48,12 @@ export const createWindMap = (
 
   let marker: L.CircleMarker | null = null;
   map.on("click", (event: L.LeafletMouseEvent) =>
-    onSelect({ latitude: event.latlng.lat, longitude: event.latlng.lng }),
+    onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) }),
   );
 
   return {
     map,
-    center: () => ({ latitude: map.getCenter().lat, longitude: map.getCenter().lng }),
+    center: () => ({ latitude: map.getCenter().lat, longitude: longitudeWithinWorld(map.getCenter().lng) }),
     select: (point) => {
       if (marker) { marker.remove(); marker = null; }
       if (point) {
