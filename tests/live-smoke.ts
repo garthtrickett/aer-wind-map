@@ -58,6 +58,27 @@ try {
     throw new Error(`Incorrect map attribution: ${attribution}`);
   }
 
+  const colorBeforeZoom = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  await page.locator(".leaflet-control-zoom-in").click();
+  if (engine !== webkit) {
+    await page.waitForFunction(() => (document.querySelector("#wind-color") as HTMLElement)?.style.transform.includes("scale("));
+    await page.screenshot({ path: "/tmp/wind-map-zooming.png", fullPage: true });
+  }
+  await page.waitForFunction((before) => {
+    const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+    return canvas.toDataURL() !== before;
+  }, colorBeforeZoom);
+  await page.waitForFunction(() => (document.querySelector("#wind-color") as HTMLElement)?.style.transform === "none");
+  const colorAfterZoom = await page.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  await page.screenshot({ path: "/tmp/wind-map-zoomed.png", fullPage: true });
+  await page.locator(".leaflet-control-zoom-out").click();
+  await page.screenshot({ path: "/tmp/wind-map-zooming-out.png", fullPage: true });
+  await page.waitForFunction((before) => {
+    const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+    return canvas.toDataURL() !== before;
+  }, colorAfterZoom);
+  await page.waitForTimeout(350);
+
   await page.locator("#map").click({ position: { x: 700, y: 400 } });
   await page.locator(".flag-grab").waitFor({ state: "visible" });
   if (await page.getByRole("dialog").count()) throw new Error("Map click blocked flag dragging with a modal");
@@ -76,6 +97,7 @@ try {
   await page.mouse.up();
   const pointAfter = await page.locator(".flag-point").boundingBox();
   if (!pointAfter || Math.abs(pointAfter.x + pointAfter.width / 2 - 780) > 4 || Math.abs(pointAfter.y + pointAfter.height / 2 - 465) > 4) {
+    await page.screenshot({ path: "/tmp/wind-map-drag-failed.png", fullPage: true });
     throw new Error(`Wind flag did not follow the drag: ${JSON.stringify(pointAfter)}`);
   }
   if (await page.getByRole("dialog").count()) throw new Error("Dragging the wind flag opened details");
@@ -118,6 +140,26 @@ try {
   }
   const mobileLoadMs = Date.now() - mobileStart;
   await mobile.screenshot({ path: "/tmp/wind-map-mobile.png", fullPage: true });
+  if (engine === chromium) {
+    await mobile.waitForFunction(() => {
+      const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+      return (canvas.getContext("2d")?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data[3] ?? 0) > 0;
+    });
+    const colorBeforePinch = await mobile.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    const pinch = await mobile.context().newCDPSession(mobile);
+    await pinch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 130, y: 350, id: 1 }, { x: 260, y: 350, id: 2 }] });
+    for (let step = 1; step <= 5; step++) {
+      await pinch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [
+        { x: 130 - step * 8, y: 350, id: 1 }, { x: 260 + step * 8, y: 350, id: 2 },
+      ] });
+    }
+    await pinch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await mobile.waitForFunction((before) => {
+      const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+      return canvas.toDataURL() !== before;
+    }, colorBeforePinch);
+    await mobile.screenshot({ path: "/tmp/wind-map-mobile-zoomed.png", fullPage: true });
+  }
   await mobile.getByRole("button", { name: "Inspect map center" }).click();
   await mobile.locator(".flag-grab").waitFor({ state: "visible" });
   await mobile.screenshot({ path: "/tmp/wind-map-mobile-flag.png", fullPage: true });

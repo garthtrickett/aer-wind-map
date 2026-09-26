@@ -42,7 +42,12 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
   let particles: Particle[] = [];
   let frame = 0;
   let colorFrame = 0;
+  let colorRevision = 0;
   let lastFrame = 0;
+  let moving = false;
+  let zooming = false;
+  let paintedView: Readonly<{ center: L.LatLng; zoom: number }> | null = null;
+  let arrowsPreviewed = false;
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
   const size = (): { width: number; height: number } => {
@@ -60,11 +65,11 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     return { width, height };
   };
 
-  const paintColor = (): void => {
+  const paintColor = (revision: number): void => {
     colorFrame = 0;
     const { width, height } = size();
-    colorContext.clearRect(0, 0, width, height);
-    if (!field || width === 0 || height === 0) return;
+    if (!field || width === 0 || height === 0 || moving || zooming) return;
+    const paintingField = field;
 
     const cell = width < 700 ? 5 : 4;
     const cols = Math.ceil(width / cell);
@@ -74,21 +79,37 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     const pixels = lowContext.createImageData(cols, rows);
     const longitudes = Array.from({ length: cols }, (_, x) => map.containerPointToLatLng([x * cell, 0]).lng);
     const latitudes = Array.from({ length: rows }, (_, y) => map.containerPointToLatLng([0, y * cell]).lat);
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        const sample = sampleWind(field, latitudes[y]!, longitudes[x]!);
-        if (!sample) continue;
-        const [red, green, blue] = windColor(sample.speed);
-        const offset = (y * cols + x) * 4;
-        pixels.data[offset] = red;
-        pixels.data[offset + 1] = green;
-        pixels.data[offset + 2] = blue;
-        pixels.data[offset + 3] = 178;
+    let row = 0;
+    const paintRows = (): void => {
+      colorFrame = 0;
+      if (revision !== colorRevision || moving || zooming || paintingField !== field) return;
+      const deadline = performance.now() + 7;
+      do {
+        for (let x = 0; x < cols; x++) {
+          const sample = sampleWind(paintingField, latitudes[row]!, longitudes[x]!);
+          if (!sample) continue;
+          const [red, green, blue] = windColor(sample.speed);
+          const offset = (row * cols + x) * 4;
+          pixels.data[offset] = red;
+          pixels.data[offset + 1] = green;
+          pixels.data[offset + 2] = blue;
+          pixels.data[offset + 3] = 178;
+        }
+        row++;
+      } while (row < rows && performance.now() < deadline);
+      if (row < rows) {
+        colorFrame = requestAnimationFrame(paintRows);
+        return;
       }
-    }
-    lowContext.putImageData(pixels, 0, 0);
-    colorContext.imageSmoothingEnabled = true;
-    colorContext.drawImage(lowResolution, 0, 0, width, height);
+      lowContext.putImageData(pixels, 0, 0);
+      colorContext.clearRect(0, 0, width, height);
+      colorContext.imageSmoothingEnabled = true;
+      colorContext.drawImage(lowResolution, 0, 0, width, height);
+      paintedView = { center: map.getCenter(), zoom: map.getZoom() };
+      color.style.transition = "none";
+      color.style.transform = "none";
+    };
+    paintRows();
   };
 
   const makeParticle = (width: number, height: number): Particle => ({
@@ -114,7 +135,14 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
 
   const animate = (now: number): void => {
     frame = requestAnimationFrame(animate);
+    if (moving || zooming) { lastFrame = now; return; }
     const { width, height } = size();
+    if (arrowsPreviewed) {
+      arrows.style.transition = "none";
+      arrows.style.transform = "none";
+      arrowsPreviewed = false;
+      particles = [];
+    }
     arrowContext.clearRect(0, 0, width, height);
     if (!field || document.hidden || width === 0 || height === 0) return;
     const delta = Math.min((now - (lastFrame || now)) / 16.7, 2);
@@ -147,12 +175,53 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     arrowContext.globalAlpha = 1;
   };
 
-  const requestColor = (): void => {
-    if (colorFrame) return;
-    colorFrame = requestAnimationFrame(paintColor);
+  const cancelColor = (): void => {
+    colorRevision++;
+    if (colorFrame) cancelAnimationFrame(colorFrame);
+    colorFrame = 0;
   };
-  map.on("move", requestColor);
-  map.on("zoom", requestColor);
+  const requestColor = (): void => {
+    cancelColor();
+    const revision = colorRevision;
+    if (!field || moving || zooming) return;
+    colorFrame = requestAnimationFrame(() => paintColor(revision));
+  };
+  const preview = (center: L.LatLng, zoom: number, animated: boolean): void => {
+    if (!paintedView) return;
+    const viewport = map.getSize();
+    const scale = map.getZoomScale(zoom, paintedView.zoom);
+    if (scale <= 1) {
+      for (const canvas of [color, arrows]) {
+        canvas.style.transition = "none";
+        canvas.style.transform = "none";
+      }
+      arrowsPreviewed = true;
+      return;
+    }
+    const longitude = center.lng + Math.round((paintedView.center.lng - center.lng) / 360) * 360;
+    const prior = map.project(paintedView.center, zoom);
+    const next = map.project([center.lat, longitude], zoom);
+    const dx = viewport.x * (1 - scale) / 2 + prior.x - next.x;
+    const dy = viewport.y * (1 - scale) / 2 + prior.y - next.y;
+    const transition = animated ? "transform 250ms cubic-bezier(0, 0, .25, 1)" : "none";
+    const transform = `translate3d(${dx}px, ${dy}px, 0) scale(${scale})`;
+    for (const canvas of [color, arrows]) {
+      canvas.style.transition = transition;
+      canvas.style.transform = transform;
+    }
+    arrowsPreviewed = true;
+  };
+  const startMove = (): void => { moving = true; arrowsPreviewed = true; cancelColor(); };
+  const finishMove = (): void => {
+    moving = false;
+    if (!zooming) requestColor();
+  };
+  map.on("movestart", startMove);
+  map.on("zoomstart", () => { zooming = true; cancelColor(); });
+  map.on("move", () => preview(map.getCenter(), map.getZoom(), false));
+  map.on("zoomanim", (event) => preview(event.center, event.zoom, true));
+  map.on("moveend", finishMove);
+  map.on("zoomend", () => { zooming = false; if (!moving) requestColor(); });
   map.on("resize", requestColor);
   frame = requestAnimationFrame(animate);
 
@@ -160,8 +229,17 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     setField: (next) => {
       field = next;
       particles = [];
-      requestColor();
-      if (next === null) arrowContext.clearRect(0, 0, arrows.clientWidth, arrows.clientHeight);
+      if (next === null) {
+        cancelColor();
+        paintedView = null;
+        color.style.transition = "none";
+        color.style.transform = "none";
+        arrows.style.transition = "none";
+        arrows.style.transform = "none";
+        arrowsPreviewed = false;
+        colorContext.clearRect(0, 0, color.clientWidth, color.clientHeight);
+        arrowContext.clearRect(0, 0, arrows.clientWidth, arrows.clientHeight);
+      } else requestColor();
     },
     redraw: requestColor,
   };

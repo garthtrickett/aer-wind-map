@@ -32,8 +32,12 @@
   tiles when WebGL2 is available; otherwise Leaflet loads OSM raster tiles.
   Two canvas layers draw wind color and arrows above the map. A separate DOM
   flag sits above those canvases and follows Leaflet's projected point. Pointer
-  movement on the flag proposes location changes; the animation loop does not
-  dispatch a SAM proposal on every frame. User choices and completed loads do.
+  movement on the flag proposes location changes. During map navigation, the
+  renderer pauses particle work and reuses the current color layer; zooming in
+  scales that layer with the map. Once movement ends, it samples the new view
+  in short batches across animation frames and restarts arrows at the new coordinates.
+  The animation loop does not dispatch a SAM proposal on every frame; user
+  choices and completed loads do.
 - The data source is ECMWF's official AWS Open Data mirror. Read `.index` rows,
   request `10u`, `10v`, and optional `10fg` by GRIB2 byte range, then decode in a
   Web Worker. Select a complete forecast run and retain its identity in every
