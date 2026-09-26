@@ -84,6 +84,39 @@ try {
   if (!attribution.includes("OpenStreetMap") || !attribution.includes("ECMWF") || (webgl2 && (attribution.match(/OpenFreeMap/g) || []).length !== 1)) {
     throw new Error(`Incorrect map attribution: ${attribution}`);
   }
+  await page.locator("#map").click({ position: { x: 400, y: 430 } });
+  const trackpadStart = await page.locator(".flag-point").boundingBox();
+  const pinchWheel = async (deltaY: number): Promise<void> => {
+    await page.locator("#map").evaluate((element, delta) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true, ctrlKey: true,
+        clientX: 720, clientY: 450, deltaY: delta, deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+      }));
+    }, deltaY);
+    await page.waitForTimeout(80);
+  };
+  let previousTrackpadPoint = trackpadStart;
+  for (let step = 0; step < 5; step++) {
+    await pinchWheel(-4);
+    const point = await page.locator(".flag-point").boundingBox();
+    const distance = (previousTrackpadPoint?.x ?? 0) - (point?.x ?? 0);
+    if (!previousTrackpadPoint || !point || distance < 2 || distance > 15) {
+      throw new Error(`Trackpad pinch did not move continuously: ${JSON.stringify({ step, previousTrackpadPoint, point })}`);
+    }
+    previousTrackpadPoint = point;
+  }
+  for (let step = 0; step < 5; step++) await pinchWheel(4);
+  const trackpadReturned = await page.locator(".flag-point").boundingBox();
+  if (!trackpadReturned || Math.abs(trackpadReturned.x - trackpadStart.x) > 3) {
+    throw new Error(`Reverse trackpad pinch did not return smoothly: ${JSON.stringify({ trackpadStart, trackpadReturned })}`);
+  }
+  for (let step = 0; step < 5; step++) await pinchWheel(32);
+  const zoomedOutPoint = await page.locator(".flag-point").boundingBox();
+  if (!zoomedOutPoint || zoomedOutPoint.x - trackpadStart.x < 90) {
+    throw new Error(`Global view stopped zooming out too early: ${JSON.stringify({ trackpadStart, zoomedOutPoint })}`);
+  }
+  for (let step = 0; step < 5; step++) await pinchWheel(-32);
+  await page.getByRole("button", { name: "Remove wind flag" }).click();
   const colorSnapshot = async (target: Page): Promise<string> => webgl2
     ? (await target.locator("#map .maplibregl-canvas").screenshot()).toString("base64")
     : await target.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
@@ -225,15 +258,26 @@ try {
       const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
       return (canvas.getContext("2d")?.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data[3] ?? 0) > 0;
     });
+    await mobile.locator("#map").click({ position: { x: 95, y: 350 } });
+    const beforePinchPoint = await mobile.locator(".flag-point").boundingBox();
     const colorBeforePinch = await colorSnapshot(mobile);
     const pinch = await mobile.context().newCDPSession(mobile);
     await pinch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 130, y: 350, id: 1 }, { x: 260, y: 350, id: 2 }] });
     for (let step = 1; step <= 5; step++) {
       await pinch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [
-        { x: 130 - step * 8, y: 350, id: 1 }, { x: 260 + step * 8, y: 350, id: 2 },
+        { x: 130 - step * 7, y: 350, id: 1 }, { x: 260 + step * 7, y: 350, id: 2 },
       ] });
+      await mobile.waitForTimeout(25);
     }
+    const duringPinchPoint = await mobile.locator(".flag-point").boundingBox();
     await pinch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await mobile.waitForTimeout(300);
+    const afterPinchPoint = await mobile.locator(".flag-point").boundingBox();
+    if (!beforePinchPoint || !duringPinchPoint || !afterPinchPoint ||
+      Math.abs(duringPinchPoint.x - beforePinchPoint.x) < 20 ||
+      Math.abs(afterPinchPoint.x - duringPinchPoint.x) > 3) {
+      throw new Error(`Touch pinch stepped on release: ${JSON.stringify({ beforePinchPoint, duringPinchPoint, afterPinchPoint })}`);
+    }
     await waitForColorChange(mobile, colorBeforePinch);
     await mobile.screenshot({ path: "/tmp/wind-map-mobile-zoomed.png", fullPage: true });
   }
@@ -293,6 +337,12 @@ try {
     });
     await fallback.goto(base, { waitUntil: "domcontentloaded" });
     await fallback.getByText("Live forecast").waitFor({ timeout: 45_000 });
+    await fallback.waitForFunction(() => {
+      const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;
+      const x = Math.floor(500 * canvas.width / canvas.clientWidth);
+      const y = Math.floor(300 * canvas.height / canvas.clientHeight);
+      return (canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3] ?? 0) > 0;
+    }, null, { timeout: 10_000 });
     const fallbackColor = await fallback.locator("#wind-color").evaluate((canvas: HTMLCanvasElement) => ({ width: canvas.width, cssWidth: canvas.clientWidth }));
     const fallbackAlpha = await fallback.locator("#wind-color").evaluate(colorAlphaAt, { x: 500, y: 300 });
     if (fallbackColor.width >= fallbackColor.cssWidth || !fallbackAlpha) {

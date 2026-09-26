@@ -22,12 +22,33 @@ export const createWindMap = (
   setWorkerUrl(maplibreWorkerUrl);
   const map = L.map(element, {
     zoomControl: false,
-    minZoom: 2,
+    minZoom: 1,
     maxZoom: 10,
-    zoomSnap: 0.25,
+    zoomSnap: 0,
+    wheelDebounceTime: 0,
     worldCopyJump: true,
     preferCanvas: true,
   }).setView([28, 0], 2.25);
+
+  let pinchFrame = 0;
+  let pinchDelta = 0;
+  let pinchPoint = L.point(0, 0);
+  element.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? element.clientHeight : 1;
+    const rect = element.getBoundingClientRect();
+    pinchPoint = L.point(event.clientX - rect.left, event.clientY - rect.top);
+    pinchDelta = Math.max(-0.5, Math.min(0.5, pinchDelta - event.deltaY * unit / 160));
+    if (pinchFrame) return;
+    pinchFrame = requestAnimationFrame(() => {
+      pinchFrame = 0;
+      const zoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), map.getZoom() + pinchDelta));
+      pinchDelta = 0;
+      map.setZoomAround(pinchPoint, zoom, { animate: false });
+    });
+  }, { capture: true, passive: false });
 
   const webgl2 = Boolean(document.createElement("canvas").getContext("webgl2"));
   let maplibre: MapLibreMap | null = null;
