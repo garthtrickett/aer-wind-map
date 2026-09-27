@@ -4,7 +4,7 @@ import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
-import { bearingFromPointer, createHistoryMiniMap, type BearingHandle } from "./history-compass.ts";
+import { bearingFromPointer, createHistoryMiniMap, defaultHistoryMapZoom, type BearingHandle } from "./history-compass.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
@@ -37,7 +37,8 @@ let selectedPoint: State["selected"] = null;
 let overlayKind: "details" | "history" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
-let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void }> | null = null;
+let miniMapZoom = defaultHistoryMapZoom;
+let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
 
 const syncMiniMap = (): void => {
   const element = ui.querySelector<HTMLElement>("#history-mini-map");
@@ -46,8 +47,21 @@ const syncMiniMap = (): void => {
     miniMap.remove();
     miniMap = null;
   }
-  if (element && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, point) };
+  if (!point) miniMapZoom = defaultHistoryMapZoom;
+  if (element && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, point, miniMapZoom) };
+  const slider = ui.querySelector<HTMLInputElement>("#history-map-zoom");
+  const output = ui.querySelector<HTMLOutputElement>("#history-map-zoom-value");
+  if (slider) slider.value = String(miniMapZoom);
+  if (output) output.value = String(miniMapZoom);
 };
+
+ui.addEventListener("input", (event) => {
+  if (!(event.target instanceof HTMLInputElement) || event.target.id !== "history-map-zoom") return;
+  miniMapZoom = Number(event.target.value);
+  miniMap?.setZoom(miniMapZoom);
+  const output = ui.querySelector<HTMLOutputElement>("#history-map-zoom-value");
+  if (output) output.value = String(miniMapZoom);
+});
 
 let compassDrag: Readonly<{ pointerId: number; handle: SVGCircleElement; field: BearingHandle }> | null = null;
 const setCompassBearing = (event: PointerEvent, field: BearingHandle): void => {

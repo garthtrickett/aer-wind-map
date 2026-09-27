@@ -57,6 +57,19 @@ try {
   assert.equal(await page.locator("#history-mini-map .leaflet-tile").count() > 0, true);
   await page.waitForFunction(() => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
     .some((image) => (image as HTMLImageElement).naturalWidth > 0), null, { timeout: 15_000 });
+  const zoomSlider = page.getByRole("slider", { name: "Map zoom" });
+  assert.equal(await zoomSlider.inputValue(), "11");
+  await zoomSlider.focus();
+  await zoomSlider.press("End");
+  assert.equal(await page.locator("#history-map-zoom-value").innerText(), "15");
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
+    .some((image) => (image as HTMLImageElement).src.includes("tile.openstreetmap.org/15/")));
+  await zoomSlider.evaluate((element) => {
+    (element as HTMLInputElement).value = "11";
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  assert.equal(await page.locator("#history-map-zoom-value").innerText(), "11");
+  assert.equal(archiveRequests.length, 2, "zooming the preview should not reload historical data");
   assert.equal(await page.locator(".compass-sector").count(), 2);
   const svgBox = await page.locator(".history-compass-overlay").boundingBox();
   assert.ok(svgBox);
@@ -67,6 +80,7 @@ try {
   await page.mouse.move(svgBox.x + svgBox.width * 261 / 280, svgBox.y + svgBox.height / 2, { steps: 5 });
   await page.mouse.up();
   assert.equal(await page.getByLabel("Wind from").inputValue(), "90");
+  assert.equal(await zoomSlider.inputValue(), "11", "scoring updates should preserve the preview zoom");
   const swellEnd = await page.locator('[data-bearing-handle="swellFromEnd"]').boundingBox();
   assert.ok(swellEnd);
   await page.mouse.move(swellEnd.x + swellEnd.width / 2, swellEnd.y + swellEnd.height / 2);

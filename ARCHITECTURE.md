@@ -27,7 +27,9 @@
   The history panel shows a separate noninteractive Leaflet map centered on
   the selected point. SVG sectors and draggable bearing handles update the
   same immutable criteria as the numeric controls; the local map is created
-  and removed explicitly when the panel opens and closes.
+  and removed explicitly when the panel opens and closes. Its zoom slider
+  controls Leaflet directly and does not change history criteria or trigger
+  archive requests.
 
 ## Coding decisions
 
