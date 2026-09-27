@@ -38,9 +38,10 @@ export const waveColor = (height: number): readonly [number, number, number] => 
   return [158, 89, 142];
 };
 
-const interpolate = (values: Float32Array, field: WaveField, latitude: number, longitude: number): number => {
+export const sampleWave = (field: WaveField, latitude: number, longitude: number): Readonly<{ height: number; period: number }> | null => {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const y = (field.firstLatitude - latitude) / field.increment;
-  if (y < 0 || y > field.height - 1) return Number.NaN;
+  if (y < 0 || y > field.height - 1) return null;
   const x = (((longitude - field.firstLongitude) % 360) + 360) % 360 / field.increment;
   const x0 = Math.floor(x) % field.width;
   const x1 = (x0 + 1) % field.width;
@@ -48,14 +49,23 @@ const interpolate = (values: Float32Array, field: WaveField, latitude: number, l
   const y1 = Math.min(y0 + 1, field.height - 1);
   const tx = x - Math.floor(x);
   const ty = y - y0;
-  const top = values[y0 * field.width + x0]! * (1 - tx) + values[y0 * field.width + x1]! * tx;
-  const bottom = values[y1 * field.width + x0]! * (1 - tx) + values[y1 * field.width + x1]! * tx;
-  return top * (1 - ty) + bottom * ty;
-};
-
-export const sampleWave = (field: WaveField, latitude: number, longitude: number): Readonly<{ height: number; period: number }> | null => {
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  const height = interpolate(field.waveHeight, field, latitude, longitude);
-  const period = interpolate(field.wavePeriod, field, latitude, longitude);
-  return Number.isFinite(height) && Number.isFinite(period) ? { height, period } : null;
+  const corners = [
+    { index: y0 * field.width + x0, weight: (1 - tx) * (1 - ty) },
+    { index: y0 * field.width + x1, weight: tx * (1 - ty) },
+    { index: y1 * field.width + x0, weight: (1 - tx) * ty },
+    { index: y1 * field.width + x1, weight: tx * ty },
+  ];
+  let totalWeight = 0;
+  let height = 0;
+  let period = 0;
+  for (const corner of corners) {
+    if (corner.weight === 0) continue;
+    const cornerHeight = field.waveHeight[corner.index]!;
+    const cornerPeriod = field.wavePeriod[corner.index]!;
+    if (!Number.isFinite(cornerHeight) || !Number.isFinite(cornerPeriod)) continue;
+    totalWeight += corner.weight;
+    height += cornerHeight * corner.weight;
+    period += cornerPeriod * corner.weight;
+  }
+  return totalWeight > 0 ? { height: height / totalWeight, period: period / totalWeight } : null;
 };
