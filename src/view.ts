@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import { describeWeatherError } from "./ecmwf.ts";
 import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import { sampleWave } from "./wave.ts";
+import { historyView } from "./history-view.ts";
 import type { Point, Proposal, State } from "./model.ts";
 
 const dateLabel = (date: Date): string =>
@@ -128,8 +129,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             <div class="detail-grid"><div><span>Mean wave period</span><strong>${waves.period.toFixed(1)} s</strong></div></div>
             <p class="gust-note">Height and period include both wind waves and swell. They do not isolate the primary swell.</p>
           ` : html`<p class="modal-loading">${busy ? `Loading ${state.layer === "wind" ? "wind" : "waves"} at this time…` : "Forecast data is unavailable here."}</p>`}
+          <button class="history-open" type="button" @click=${() => propose({ kind: "historyOpened" })}>Explore historical swell and wind →</button>
           <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
         </section>
       </div>` : nothing}
+    ${historyView(state.history, propose)}
   `;
 };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fieldKey, initialState, nap, present } from "./model.ts";
+import { fieldKey, historyKey, initialState, nap, present } from "./model.ts";
+import type { HistoricalData } from "./history.ts";
 import type { WindField } from "./wind.ts";
 
 const run = { date: "20260925", hour: 18, id: "2026092518", startedAt: "2026-09-25T18:00:00Z" };
@@ -44,4 +45,25 @@ test("a selected flag can move, open details, and be removed", () => {
   assert.equal(moved.modalOpen, false);
   assert.equal(present(moved, { kind: "detailsOpened" }).modalOpen, true);
   assert.deepEqual(present(moved, { kind: "selectionCleared" }).selected, null);
+});
+
+test("historical results belong to the selected spot and criteria rescore cached data", () => {
+  const point = { latitude: -8.85, longitude: 115.1 };
+  const selected = present(initialState, { kind: "locationSelected", point });
+  const opened = present(selected, { kind: "historyOpened" });
+  const key = historyKey(point, opened.history.startYear, opened.history.endYear);
+  assert.deepEqual(nap(opened), { kind: "loadHistory", point,
+    startYear: opened.history.startYear, endYear: opened.history.endYear, key });
+  const loading = present(opened, { kind: "historyLoadStarted", key });
+  const data: HistoricalData = {
+    startYear: opened.history.startYear, endYear: opened.history.endYear, timezone: "Asia/Makassar",
+    waveGrid: point, windGrid: point, hours: [],
+  };
+  const changedSpot = present(loading, { kind: "locationSelected", point: { latitude: -9, longitude: 115 } });
+  assert.equal(present(changedSpot, { kind: "historyLoaded", key, data }), changedSpot);
+  const ready = present(loading, { kind: "historyLoaded", key, data });
+  assert.equal(ready.history.phase, "ready");
+  const rescored = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxWindSpeed: 3 } });
+  assert.equal(rescored.history.data, data);
+  assert.equal(nap(rescored)?.kind, "discover");
 });

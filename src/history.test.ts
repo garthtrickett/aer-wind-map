@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { defaultHistoryCriteria, historyCsv, loadHistoricalSpot, summarizeHistory, type HistoricalData, type HistoricalHour } from "./history.ts";
+
+const hoursFor = (date: string, matching: readonly number[], direction = 355, available = 24): HistoricalHour[] =>
+  Array.from({ length: 24 }, (_, hour) => ({
+    time: Date.parse(`${date}T${String(hour).padStart(2, "0")}:00:00Z`) / 1000,
+    day: date,
+    swellHeight: hour < available ? matching.includes(hour) ? 2 : 0.5 : null,
+    swellPeriod: hour < available ? 12 : null,
+    windSpeed: hour < available ? 3 : null,
+    windDirection: hour < available ? direction : null,
+  }));
+
+test("monthly score requires consecutive matching hours and enough paired data", () => {
+  const data: HistoricalData = {
+    startYear: 2025, endYear: 2025, timezone: "UTC",
+    waveGrid: { latitude: 0, longitude: 0 }, windGrid: { latitude: 0, longitude: 0 },
+    hours: [
+      ...hoursFor("2025-01-01", [10, 11]),
+      ...hoursFor("2025-01-02", [10, 12]),
+      ...hoursFor("2025-01-03", [10, 11], 355, 17),
+      ...hoursFor("2025-02-01", [10, 11], 180),
+    ],
+  };
+  const summary = summarizeHistory(data, { ...defaultHistoryCriteria, windFrom: 0, windTolerance: 20 });
+  assert.deepEqual(summary.months[0], { month: 0, qualifyingDays: 1, observedDays: 2, totalDays: 31, percent: 50 });
+  assert.deepEqual(summary.months[1], { month: 1, qualifyingDays: 0, observedDays: 1, totalDays: 28, percent: 0 });
+  assert.equal(summary.days.find((day) => day.day === "2025-01-01")?.longestWindow, 2);
+  assert.equal(summary.days.find((day) => day.day === "2025-01-03")?.qualifies, false);
+  const csv = historyCsv(data, { ...defaultHistoryCriteria, windFrom: 0, windTolerance: 20 });
+  assert.ok(csv.includes("2025-01-01T10:00:00.000Z,2025-01-01,2,12,3,355,1"));
+});
+
+test("historical fetch joins marine and wind by instant and uses the spot time zone", async () => {
+  const first = Date.parse("2025-06-01T00:00:00Z") / 1000;
+  const urls: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    urls.push(url);
+    const marine = url.includes("marine-api");
+    return new Response(JSON.stringify(marine ? {
+      latitude: -8.875, longitude: 115.125, timezone: "Asia/Makassar",
+      hourly: { time: [first, first + 3600], swell_wave_height: [1.8, 2], swell_wave_period: [12, 13] },
+    } : {
+      latitude: -8.82, longitude: 115.08, timezone: "Asia/Makassar",
+      hourly: { time: [first + 3600, first + 7200], wind_speed_10m: [4, 5], wind_direction_10m: [90, 100] },
+    }));
+  }) as typeof fetch;
+  const result = await loadHistoricalSpot({ point: { latitude: -8.85, longitude: 115.1 }, startYear: 2025, endYear: 2025, fetcher });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.hours[0]?.day, "2025-06-01");
+  assert.equal(result.value.hours[0]?.windSpeed, null);
+  assert.equal(result.value.hours[1]?.windSpeed, 4);
+  assert.equal(result.value.waveGrid.latitude, -8.875);
+  assert.ok(urls.some((url) => url.includes("models=meteofrance_wave") && url.includes("cell_selection=sea")));
+  assert.ok(urls.some((url) => url.includes("models=ecmwf_ifs") && url.includes("wind_speed_unit=ms")));
+});

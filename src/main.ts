@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
+import { historyCsv, loadHistoricalSpot } from "./history.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
@@ -32,7 +33,7 @@ const cache = new Map<string, ForecastField>();
 let state: State = initialState;
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
-let modalWasOpen = false;
+let overlayKind: "details" | "history" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 
@@ -105,6 +106,26 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "downloadHistory") {
+    const csv = historyCsv(effect.data, effect.criteria);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `aer-history-${effect.data.startYear}-${effect.data.endYear}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    dispatch({ kind: "historyDownloadCompleted" });
+    return;
+  }
+  if (effect.kind === "loadHistory") {
+    dispatch({ kind: "historyLoadStarted", key: effect.key });
+    void loadHistoricalSpot({ point: effect.point, startYear: effect.startYear, endYear: effect.endYear }).then((result) => {
+      dispatch(result.ok
+        ? { kind: "historyLoaded", key: effect.key, data: result.value }
+        : { kind: "historyFailed", key: effect.key, error: result.error });
+    });
+    return;
+  }
   if (effect.kind === "discover") {
     dispatch({ kind: "discoverStarted" });
     void discoverLatest(fetch, effect.layer).then((result) => {
@@ -148,10 +169,11 @@ function dispatch(proposal: Proposal): void {
     selectedPoint = state.selected;
     windMap.select(selectedPoint);
   }
-  if (state.modalOpen !== modalWasOpen) {
-    modalWasOpen = state.modalOpen;
-    if (state.modalOpen) {
-      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const nextOverlay = state.history.open ? "history" : state.modalOpen ? "details" : null;
+  if (nextOverlay !== overlayKind) {
+    if (overlayKind === null && nextOverlay !== null) previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayKind = nextOverlay;
+    if (nextOverlay !== null) {
       requestAnimationFrame(() => ui.querySelector<HTMLElement>(".close-button")?.focus());
     } else {
       previousFocus?.focus();
@@ -166,8 +188,9 @@ function dispatch(proposal: Proposal): void {
 }
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.modalOpen) dispatch({ kind: "modalClosed" });
-  if (event.key !== "Tab" || !state.modalOpen) return;
+  if (event.key === "Escape" && state.history.open) dispatch({ kind: "historyClosed" });
+  else if (event.key === "Escape" && state.modalOpen) dispatch({ kind: "modalClosed" });
+  if (event.key !== "Tab" || (!state.modalOpen && !state.history.open)) return;
   const dialog = ui.querySelector<HTMLElement>("[role=dialog]");
   if (!dialog) return;
   const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")];

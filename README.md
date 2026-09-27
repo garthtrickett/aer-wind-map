@@ -9,6 +9,13 @@ height as map color, with mean wave period in the flag and details panel. These
 are not primary swell partition values. The timeline steps through the first
 72 forecast hours. Displayed times use the browser's local timezone.
 
+Click a point, open its details, and choose **Explore historical swell and wind**
+to compare up to five complete years. Set a swell-height range, minimum swell
+period, maximum wind speed, preferred wind-from direction and tolerance, and
+minimum consecutive hours. Aer ranks months by the share of usable days with
+a matching window, shows qualifying dates, and exports the paired hourly data
+as CSV. Historical days use the selected spot's local timezone.
+
 ## Run locally
 
 Node 22.12 or newer is needed for Vite. The deployment image uses Node 24.
@@ -24,6 +31,7 @@ For a production build and live browser check:
 npm test
 npm run build
 npm run smoke:live
+npm run smoke:history
 BROWSER=firefox npm run smoke:live
 BROWSER=webkit npm run smoke:live
 ```
@@ -36,6 +44,10 @@ The Dockerfile builds and runs the same static server on Railway.
 The browser fetches ECMWF's `.index` and GRIB2 byte ranges directly from its
 Google Cloud Open Data mirror. Wind uses the `oper` stream; waves use `wave`.
 No ECMWF key or weather proxy is needed.
+Historical swell uses Météo-France MFWAM through Open-Meteo Marine; historical
+10 m wind uses ECMWF IFS through Open-Meteo Archive. Both are requested directly
+by the browser for sea grid cells near the selected point. Source links and
+the returned model-cell coordinates appear in the history panel.
 MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
 Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
 stay visible on the map.
@@ -55,6 +67,12 @@ without WebGL2 use reduced-resolution Canvas 2D color and arrows.
   arrays totaled 12.5 MB, before map and browser overhead. Decoding and
   animation can be demanding on older phones.
 - Gusts are shown as unavailable if the gust field cannot be fetched or decoded.
+- Monthly history covers complete years from 2022 onward. A day needs at least
+  18 paired hourly values to count in the denominator. MFWAM's source cadence
+  is three hours; Open-Meteo provides interpolated hourly values between model
+  outputs. These are model estimates useful for seasonal screening, not
+  observed conditions at a break. Open-Meteo's free API is for noncommercial
+  use; a commercial deployment needs a suitable API plan or self-hosted source.
 - Browser checks cover Chromium, Firefox, and WebKit desktop/mobile on Linux.
   Physical iOS Safari, older phones, and actual zoom frame rates on hardware
   have not been measured.
