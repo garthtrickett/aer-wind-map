@@ -3,6 +3,7 @@ import maplibreGL from "@maplibre/maplibre-gl-leaflet";
 import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Point } from "./model.ts";
+import type { SavedSpot } from "./saved-spots.ts";
 
 export type WindMap = Readonly<{
   map: L.Map;
@@ -11,13 +12,17 @@ export type WindMap = Readonly<{
   center: () => Point;
   screenPoint: (point: Point) => Readonly<{ x: number; y: number }>;
   pointAt: (position: Readonly<{ x: number; y: number }>) => Point;
+  focus: (point: Point) => void;
+  setSavedSpots: (spots: readonly SavedSpot[]) => void;
 }>;
 
 const longitudeWithinWorld = (longitude: number): number =>
   ((longitude + 180) % 360 + 360) % 360 - 180;
 
 export const createWindMap = (
-  { element, flag, onSelect }: Readonly<{ element: HTMLElement; flag: HTMLElement; onSelect: (point: Point) => void }>,
+  { element, flag, onSelect, onSavedSpotSelect }: Readonly<{
+    element: HTMLElement; flag: HTMLElement; onSelect: (point: Point) => void; onSavedSpotSelect: (id: string) => void;
+  }>,
 ): WindMap => {
   setWorkerUrl(maplibreWorkerUrl);
   const map = L.map(element, {
@@ -95,10 +100,26 @@ export const createWindMap = (
   map.on("click", (event: L.LeafletMouseEvent) =>
     onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) }),
   );
+  const savedLayer = L.layerGroup().addTo(map);
+  const savedIcon = L.divIcon({ className: "saved-spot-icon", html: '<span aria-hidden="true"></span>',
+    iconSize: [28, 28], iconAnchor: [14, 27] });
+  const setSavedSpots = (spots: readonly SavedSpot[]): void => {
+    savedLayer.clearLayers();
+    for (const spot of spots) {
+      const label = document.createElement("span");
+      label.textContent = spot.name;
+      L.marker([spot.point.latitude, spot.point.longitude], { icon: savedIcon, title: spot.name })
+        .bindTooltip(label, { direction: "top", offset: [0, -18] })
+        .on("click", () => onSavedSpotSelect(spot.id))
+        .addTo(savedLayer);
+    }
+  };
 
   return {
     map,
     maplibre,
+    setSavedSpots,
+    focus: (point) => map.setView([point.latitude, point.longitude], Math.max(map.getZoom(), 6), { animate: true }),
     center: () => ({ latitude: map.getCenter().lat, longitude: longitudeWithinWorld(map.getCenter().lng) }),
     screenPoint,
     pointAt: (position) => {

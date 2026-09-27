@@ -30,6 +30,13 @@
   and removed explicitly when the panel opens and closes. Its zoom slider
   controls Leaflet directly and does not change history criteria or trigger
   archive requests.
+- Named spot presets store point, historical years, criteria, alert opt-in,
+  and minimum matching days in browser local storage. Leaflet markers and a
+  map list reopen the preset. Storage parsing and writes return typed errors.
+- The 14-day alert requests GFS Wave swell and ECMWF IFS 10 m wind through
+  Open-Meteo for opted-in spots. It joins hourly instants, scores consecutive
+  matches by each spot's local calendar day, and shows an on-screen alert
+  when the number of matching days reaches the saved threshold.
 
 ## Coding decisions
 
@@ -72,6 +79,10 @@
   accept stale results. Criteria changes rescore the cached hourly series
   without a new request. Days with fewer than 18 paired hours are excluded
   from the monthly denominator.
+- Forecast alert requests are batched, keyed by spot and criteria, and use a
+  generation number to discard late responses after a preset changes. Checks
+  refresh about every six hours while the page is open and retry failures
+  sooner. The alert card can be dismissed without disabling checks.
 
 ## Decoder evaluation, 2026-09-26
 

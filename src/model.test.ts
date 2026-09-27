@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fieldKey, historyKey, initialState, nap, present } from "./model.ts";
+import { forecastAlertKey } from "./forecast-alerts.ts";
 import type { HistoricalData } from "./history.ts";
 import type { WindField } from "./wind.ts";
 
@@ -66,4 +67,61 @@ test("historical results belong to the selected spot and criteria rescore cached
   const rescored = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxWindSpeed: 3 } });
   assert.equal(rescored.history.data, data);
   assert.equal(nap(rescored)?.kind, "discover");
+});
+
+test("named spot presets save, reopen, update, and remove independently", () => {
+  const point = { latitude: -8.78, longitude: 115.07 };
+  const opened = present(present(initialState, { kind: "locationSelected", point }), { kind: "historyOpened" });
+  const named = present(opened, { kind: "savedSpotNameChanged", name: "Wet season Bukit" });
+  const criteria = { ...named.history.criteria, windFromStart: 315, windFromEnd: 45,
+    swellFromStart: 180, swellFromEnd: 270 };
+  const configured = present(present(present(named, { kind: "historyCriteriaChanged", criteria }),
+    { kind: "savedSpotAlertChanged", enabled: true }), { kind: "savedSpotAlertMinDaysChanged", days: 3 });
+  const saved = present(configured, { kind: "savedSpotSaved", id: "spot-1" });
+  assert.equal(saved.savedSpots.length, 1);
+  assert.deepEqual(saved.savedSpots[0]?.criteria, criteria);
+  assert.equal(saved.savedSpots[0]?.alertMinDays, 3);
+  assert.equal(saved.savedSpots[0]?.alertEnabled, true);
+  assert.equal(saved.history.savedSpotId, "spot-1");
+  const anotherName = present(saved, { kind: "savedSpotNameChanged", name: "Dry season Bukit" });
+  const second = present(anotherName, { kind: "savedSpotSaved", id: "spot-2" });
+  assert.equal(second.savedSpots.length, 2);
+  const reopened = present(present(second, { kind: "historyClosed" }), { kind: "savedSpotOpened", id: "spot-1" });
+  assert.equal(reopened.history.open, true);
+  assert.equal(reopened.history.saveName, "Wet season Bukit");
+  assert.deepEqual(reopened.history.criteria, criteria);
+  assert.equal(reopened.history.alertMinDays, 3);
+  assert.deepEqual(reopened.selected, point);
+  const updated = present(present(reopened, { kind: "savedSpotNameChanged", name: "Storm season Bukit" }),
+    { kind: "savedSpotSaved", id: "spot-1" });
+  assert.equal(updated.savedSpots.length, 2);
+  assert.equal(updated.savedSpots.find((item) => item.id === "spot-1")?.name, "Storm season Bukit");
+  const removed = present(updated, { kind: "savedSpotRemoved", id: "spot-1" });
+  assert.equal(removed.savedSpots.length, 1);
+  assert.equal(removed.history.savedSpotId, null);
+  assert.equal(present(removed, { kind: "savedSpotOpened", id: "spot-1" }), removed);
+});
+
+test("a late forecast alert cannot replace changed spot rules", () => {
+  const point = { latitude: -8.78, longitude: 115.07 };
+  const opened = present(present(initialState, { kind: "locationSelected", point }), { kind: "historyOpened" });
+  const configured = present(present(opened, { kind: "savedSpotNameChanged", name: "Bukit" }),
+    { kind: "savedSpotAlertChanged", enabled: true });
+  const saved = present(configured, { kind: "savedSpotSaved", id: "bukit" });
+  const spot = saved.savedSpots[0]!;
+  const key = forecastAlertKey(spot);
+  const loading = present(saved, { kind: "forecastAlertsStarted", generation: 1, entries: [{ id: spot.id, key }] });
+  const changed = present(present(loading, { kind: "savedSpotAlertMinDaysChanged", days: 3 }),
+    { kind: "savedSpotSaved", id: spot.id });
+  const summary = { matchingDays: 2, availableDays: 14, horizonDays: 14,
+    requiredHours: 2, nextWindowStart: null, timezone: "UTC", checkedAt: 0 };
+  const stale = present(changed, { kind: "forecastAlertsCompleted", generation: 1,
+    checks: [{ id: spot.id, key, ok: true, summary }] });
+  assert.equal(stale.forecastAlerts[spot.id]?.kind, "loading");
+  const nextKey = forecastAlertKey(changed.savedSpots[0]!);
+  const nextLoading = present(stale, { kind: "forecastAlertsStarted", generation: 2,
+    entries: [{ id: spot.id, key: nextKey }] });
+  const completed = present(nextLoading, { kind: "forecastAlertsCompleted", generation: 2,
+    checks: [{ id: spot.id, key: nextKey, ok: true, summary }] });
+  assert.equal(completed.forecastAlerts[spot.id]?.kind, "ready");
 });

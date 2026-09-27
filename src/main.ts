@@ -9,6 +9,8 @@ import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
+import { readSavedSpots, writeSavedSpots } from "./saved-spots.ts";
+import { forecastAlertKey, loadForecastAlerts } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
 
@@ -34,6 +36,10 @@ const cache = new Map<string, ForecastField>();
 let state: State = initialState;
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
+let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
+let alertSignature = "";
+let nextAlertRefreshAt = 0;
+let alertGeneration = 0;
 let overlayKind: "details" | "history" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
@@ -108,7 +114,10 @@ ui.addEventListener("keydown", (event) => {
   event.preventDefault();
 });
 
-const windMap = createWindMap({ element: mapElement, flag, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
+const windMap = createWindMap({ element: mapElement, flag,
+  onSelect: (point) => dispatch({ kind: "locationSelected", point }),
+  onSavedSpotSelect: (id) => dispatch({ kind: "savedSpotOpened", id }),
+});
 const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
 let drag: Readonly<{
   pointerId: number;
@@ -224,9 +233,31 @@ const runEffect = (effect: Effect): void => {
   });
 };
 
+const refreshForecastAlerts = (): void => {
+  const spots = state.savedSpots.filter((spot) => spot.alertEnabled);
+  if (!spots.length) { alertSignature = ""; return; }
+  const signature = JSON.stringify(spots.map(forecastAlertKey));
+  const now = new Date();
+  if (signature === alertSignature && now.getTime() < nextAlertRefreshAt) return;
+  alertSignature = signature;
+  nextAlertRefreshAt = now.getTime() + 6 * 60 * 60 * 1000;
+  const generation = ++alertGeneration;
+  dispatch({ kind: "forecastAlertsStarted", generation, entries: spots.map((spot) => ({ id: spot.id, key: forecastAlertKey(spot) })) });
+  void loadForecastAlerts(spots, now).then((checks) => {
+    if (generation === alertGeneration && checks.some((check) => !check.ok))
+      nextAlertRefreshAt = Math.min(nextAlertRefreshAt, Date.now() + 15 * 60 * 1000);
+    dispatch({ kind: "forecastAlertsCompleted", generation, checks });
+  });
+};
+
 function dispatch(proposal: Proposal): void {
-  const next = present(state, proposal);
+  const previous = state;
+  let next = present(state, proposal);
   if (next === state) return;
+  if ((proposal.kind === "savedSpotSaved" || proposal.kind === "savedSpotRemoved") && next.savedSpots !== previous.savedSpots) {
+    const result = writeSavedSpots(() => window.localStorage, next.savedSpots);
+    if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
+  }
   state = next;
   arrowsCanvas.hidden = state.layer === "waves";
   render(view(state, dispatch, windMap.center), ui);
@@ -240,6 +271,14 @@ function dispatch(proposal: Proposal): void {
   if (selectedPoint !== state.selected) {
     selectedPoint = state.selected;
     windMap.select(selectedPoint);
+  }
+  if (displayedSavedSpots !== state.savedSpots) {
+    displayedSavedSpots = state.savedSpots;
+    windMap.setSavedSpots(displayedSavedSpots);
+    queueMicrotask(refreshForecastAlerts);
+  }
+  if (proposal.kind === "savedSpotOpened" && state.history.savedSpotId === proposal.id && state.history.point) {
+    windMap.focus(state.history.point);
   }
   const nextOverlay = state.history.open ? "history" : state.modalOpen ? "details" : null;
   if (nextOverlay !== overlayKind) {
@@ -273,7 +312,15 @@ document.addEventListener("keydown", (event) => {
   if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
 
-window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); });
+const alertTimer = window.setInterval(refreshForecastAlerts, 15 * 60 * 1000);
+window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); clearInterval(alertTimer); });
+const savedSpotsResult = readSavedSpots(() => window.localStorage);
+state = present(state, savedSpotsResult.ok
+  ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
+  : { kind: "savedSpotsLoadFailed", error: savedSpotsResult.error });
+displayedSavedSpots = state.savedSpots;
+windMap.setSavedSpots(displayedSavedSpots);
+queueMicrotask(refreshForecastAlerts);
 render(view(state, dispatch, windMap.center), ui);
 render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);

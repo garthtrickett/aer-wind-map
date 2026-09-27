@@ -27,6 +27,8 @@ const numberControl = (
 export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
+  const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
+    id: asNew || !history.savedSpotId ? crypto.randomUUID() : history.savedSpotId });
   const criteria = history.criteria;
   const summary = history.phase === "ready" && history.data ? summarizeHistory(history.data, criteria) : null;
   const ranked = summary?.months.filter((month) => month.qualifyingDays > 0)
@@ -94,6 +96,34 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               </select></label>
               <span>Up to five complete years</span>
             </div>
+            <form class="history-save" @submit=${(event: Event) => { event.preventDefault(); saveSpot(false); }}>
+              <label for="history-spot-name">Name this spot and season</label>
+              <div class="history-save-actions">
+                <input id="history-spot-name" type="text" maxlength="80" autocomplete="off"
+                  placeholder="e.g. Wet season Bukit" .value=${history.saveName}
+                  @input=${(event: Event) => propose({ kind: "savedSpotNameChanged", name: (event.target as HTMLInputElement).value })} />
+                <button type="submit">${history.savedSpotId ? "Update saved spot" : "Save spot"}</button>
+                ${history.savedSpotId ? html`<button type="button" class="history-save-new" @click=${() => saveSpot(true)}>Save as new</button>` : nothing}
+              </div>
+              <label class="history-alert-option"><input type="checkbox" .checked=${history.alertEnabled}
+                @change=${(event: Event) => propose({ kind: "savedSpotAlertChanged", enabled: (event.target as HTMLInputElement).checked })} />
+                Check the next 14 days and alert on screen when these conditions last at least
+                ${Math.max(2, criteria.minConsecutiveHours)} consecutive hours</label>
+              ${history.alertEnabled ? html`<label class="history-alert-days" for="history-alert-days">Alert when at least
+                <input id="history-alert-days" type="number" min="1" max="14" step="1" .value=${String(history.alertMinDays)}
+                  @change=${(event: Event) => {
+                    const input = event.target as HTMLInputElement;
+                    const parsed = Number(input.value);
+                    const days = Number.isFinite(parsed) ? Math.min(14, Math.max(1, Math.round(parsed))) : history.alertMinDays;
+                    input.value = String(days);
+                    propose({ kind: "savedSpotAlertMinDaysChanged", days });
+                  }} />
+                of the next 14 days match</label>` : nothing}
+              ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
+                role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."
+                  : history.saveFeedback === "nameRequired" ? "Enter a name to save this spot."
+                    : "Browser storage is unavailable. This spot was not saved."}</p>` : nothing}
+            </form>
           </div>
           ${history.phase === "loading" || history.phase === "needsData" ? html`
             <div class="history-message" role="status">Loading hourly swell and wind history for ${history.startYear}–${history.endYear}…</div>`

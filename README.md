@@ -20,6 +20,19 @@ range, or enter degrees directly. The preview starts at zoom level 11; its slide
 changes only the map scale. Historical days use the selected spot's local
 timezone.
 
+Name and save a point from **Find your season** to keep its location, years,
+and conditions. **Saved spots** on the map lists them; their markers reopen
+the same settings. You can update a spot, save a copy, or remove one. These
+saves stay in this browser's local storage.
+
+Each saved spot can also check its conditions against the next 14 local
+calendar days. Choose the minimum number of matching days for an on-screen
+alert. A matching day needs at least two consecutive hours (or the larger
+minimum window set in the conditions). The alert appears in the top-right
+corner, shows the matching-day count and next matching window, and opens the
+spot when clicked. Alerts refresh while the app is open; they are not push
+notifications.
+
 ## Run locally
 
 Node 22.12 or newer is needed for Vite. The deployment image uses Node 24.
@@ -36,6 +49,7 @@ npm test
 npm run build
 npm run smoke:live
 npm run smoke:history
+npm run smoke:saved
 BROWSER=firefox npm run smoke:live
 BROWSER=webkit npm run smoke:live
 ```
@@ -52,6 +66,9 @@ Historical swell uses Météo-France MFWAM through Open-Meteo Marine; historical
 10 m wind uses ECMWF IFS through Open-Meteo Archive. Both are requested directly
 by the browser for sea grid cells near the selected point. Source links and
 the returned model-cell coordinates appear in the history panel.
+The 14-day alert uses GFS Wave swell and ECMWF IFS wind forecasts through
+Open-Meteo. These are requested directly by the browser and differ from the
+historical MFWAM swell source and the live ECMWF GRIB map layer.
 MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
 Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
 stay visible on the map.
@@ -80,5 +97,9 @@ without WebGL2 use reduced-resolution Canvas 2D color and arrows.
 - Browser checks cover Chromium, Firefox, and WebKit desktop/mobile on Linux.
   Physical iOS Safari, older phones, and actual zoom frame rates on hardware
   have not been measured.
+- Forecast alerts check when the page opens and about every six hours while it
+  remains open. Available future model output becomes coarser farther ahead;
+  Open-Meteo interpolates it to hourly samples. Conditions are estimates at
+  the chosen sea grid cell, not surf reports at the exact shore point.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.

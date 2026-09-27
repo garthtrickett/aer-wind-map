@@ -2,9 +2,15 @@ import type { WeatherError } from "./ecmwf.ts";
 import type { ForecastRun } from "./wind.ts";
 import type { ForecastField, Layer } from "./wave.ts";
 import { defaultHistoryCriteria, type HistoricalData, type HistoryCriteria, type HistoryError } from "./history.ts";
+import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
+import { forecastAlertKey, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
+export type ForecastAlertStatus =
+  | Readonly<{ kind: "loading"; key: string; generation: number }>
+  | Readonly<{ kind: "ready"; key: string; generation: number; summary: ForecastAlertSummary }>
+  | Readonly<{ kind: "failed"; key: string; generation: number; error: ForecastAlertError }>;
 
 export type HistoryPanel = Readonly<{
   open: boolean;
@@ -18,6 +24,11 @@ export type HistoryPanel = Readonly<{
   error: HistoryError | null;
   selectedMonth: number | null;
   downloadRequested: boolean;
+  savedSpotId: string | null;
+  saveName: string;
+  alertEnabled: boolean;
+  alertMinDays: number;
+  saveFeedback: "saved" | "nameRequired" | "storageFailed" | null;
 }>;
 
 export type State = Readonly<{
@@ -32,6 +43,11 @@ export type State = Readonly<{
   error: WeatherError | null;
   playing: boolean;
   history: HistoryPanel;
+  savedSpots: readonly SavedSpot[];
+  savedSpotsOpen: boolean;
+  savedSpotsError: SavedSpotsError | null;
+  forecastAlerts: Readonly<Record<string, ForecastAlertStatus>>;
+  forecastAlertsDismissed: boolean;
 }>;
 
 export type Proposal =
@@ -60,15 +76,32 @@ export type Proposal =
   | { readonly kind: "historyFailed"; readonly key: string; readonly error: HistoryError }
   | { readonly kind: "historyRetry" }
   | { readonly kind: "historyDownloadRequested" }
-  | { readonly kind: "historyDownloadCompleted" };
+  | { readonly kind: "historyDownloadCompleted" }
+  | { readonly kind: "savedSpotsLoaded"; readonly spots: readonly SavedSpot[] }
+  | { readonly kind: "savedSpotsLoadFailed"; readonly error: SavedSpotsError }
+  | { readonly kind: "savedSpotsToggled" }
+  | { readonly kind: "savedSpotOpened"; readonly id: string }
+  | { readonly kind: "savedSpotNameChanged"; readonly name: string }
+  | { readonly kind: "savedSpotAlertChanged"; readonly enabled: boolean }
+  | { readonly kind: "savedSpotAlertMinDaysChanged"; readonly days: number }
+  | { readonly kind: "savedSpotSaved"; readonly id: string }
+  | { readonly kind: "savedSpotRemoved"; readonly id: string }
+  | { readonly kind: "savedSpotsPersistFailed"; readonly error: SavedSpotsError }
+  | { readonly kind: "forecastAlertsStarted"; readonly generation: number; readonly entries: readonly Readonly<{ id: string; key: string }>[] }
+  | { readonly kind: "forecastAlertsCompleted"; readonly generation: number; readonly checks: readonly ForecastAlertCheck[] }
+  | { readonly kind: "forecastAlertsDismissed" }
+  | { readonly kind: "forecastAlertsShown" };
 
 export const initialState: State = {
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
   selected: null, modalOpen: false, error: null, playing: false,
+  savedSpots: [], savedSpotsOpen: false, savedSpotsError: null,
+  forecastAlerts: {}, forecastAlertsDismissed: false,
   history: {
     open: false, phase: "needsData", point: null,
     startYear: Math.max(2022, lastCompleteHistoryYear - 2), endYear: lastCompleteHistoryYear,
     criteria: defaultHistoryCriteria, requestedKey: null, data: null, error: null, selectedMonth: null, downloadRequested: false,
+    savedSpotId: null, saveName: "", alertEnabled: false, alertMinDays: 1, saveFeedback: null,
   },
 };
 
@@ -76,7 +109,7 @@ export const fieldKey = (run: ForecastRun, step: number, layer: Layer = "wind"):
 export const historyKey = (point: Point, startYear: number, endYear: number): string =>
   `${point.latitude}:${point.longitude}:${startYear}:${endYear}`;
 
-const validCriteria = (criteria: HistoryCriteria): boolean =>
+export const validCriteria = (criteria: HistoryCriteria): boolean =>
   Number.isFinite(criteria.minSwellHeight) && criteria.minSwellHeight >= 0 && criteria.minSwellHeight <= 15 &&
   Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
   Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
@@ -89,7 +122,8 @@ const validCriteria = (criteria: HistoryCriteria): boolean =>
 
 const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
-  history: { ...state.history, open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null, downloadRequested: false },
+  history: { ...state.history, open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
+    downloadRequested: false, savedSpotId: null, saveName: "", alertEnabled: false, alertMinDays: 1, saveFeedback: null },
 });
 
 export const present = (state: State, proposal: Proposal): State => {
@@ -127,6 +161,78 @@ export const present = (state: State, proposal: Proposal): State => {
           ? "ready" : "needsData",
         requestedKey: null, error: null,
       } };
+    case "savedSpotsLoaded": return { ...state, savedSpots: proposal.spots, savedSpotsError: null };
+    case "savedSpotsLoadFailed": return { ...state, savedSpotsError: proposal.error };
+    case "savedSpotsToggled": return { ...state, savedSpotsOpen: !state.savedSpotsOpen };
+    case "savedSpotOpened": {
+      const spot = state.savedSpots.find((item) => item.id === proposal.id);
+      if (!spot) return state;
+      const sameData = state.history.data && state.history.point?.latitude === spot.point.latitude &&
+        state.history.point.longitude === spot.point.longitude &&
+        state.history.startYear === spot.startYear && state.history.endYear === spot.endYear;
+      return { ...state, selected: spot.point, modalOpen: false, savedSpotsOpen: false, history: {
+        ...state.history, open: true, point: spot.point, startYear: spot.startYear, endYear: spot.endYear,
+        criteria: spot.criteria, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
+        requestedKey: null, error: null, selectedMonth: null, downloadRequested: false,
+        savedSpotId: spot.id, saveName: spot.name, alertEnabled: spot.alertEnabled, alertMinDays: spot.alertMinDays, saveFeedback: null,
+      } };
+    }
+    case "savedSpotNameChanged":
+      return state.history.open ? { ...state, history: { ...state.history, saveName: proposal.name, saveFeedback: null } } : state;
+    case "savedSpotAlertChanged":
+      return state.history.open ? { ...state, history: { ...state.history, alertEnabled: proposal.enabled, saveFeedback: null } } : state;
+    case "savedSpotAlertMinDaysChanged":
+      return state.history.open && Number.isInteger(proposal.days) && proposal.days >= 1 && proposal.days <= 14
+        ? { ...state, history: { ...state.history, alertMinDays: proposal.days, saveFeedback: null } } : state;
+    case "savedSpotSaved": {
+      const history = state.history;
+      if (!history.open || !history.point) return state;
+      const name = history.saveName.trim();
+      if (!name || name.length > 80) return { ...state, history: { ...history, saveFeedback: "nameRequired" } };
+      const spot: SavedSpot = { id: proposal.id, name, point: history.point,
+        startYear: history.startYear, endYear: history.endYear, criteria: history.criteria,
+        alertEnabled: history.alertEnabled, alertMinDays: history.alertMinDays };
+      const exists = state.savedSpots.some((item) => item.id === proposal.id);
+      return { ...state, savedSpots: exists ? state.savedSpots.map((item) => item.id === proposal.id ? spot : item) : [spot, ...state.savedSpots],
+        savedSpotsError: null, history: { ...history, savedSpotId: proposal.id, saveName: name, saveFeedback: "saved" } };
+    }
+    case "savedSpotRemoved": {
+      const spots = state.savedSpots.filter((spot) => spot.id !== proposal.id);
+      if (spots.length === state.savedSpots.length) return state;
+      const alerts = { ...state.forecastAlerts };
+      delete alerts[proposal.id];
+      return { ...state, savedSpots: spots, savedSpotsError: null, forecastAlerts: alerts,
+        history: state.history.savedSpotId === proposal.id
+        ? { ...state.history, savedSpotId: null, saveFeedback: null } : state.history };
+    }
+    case "savedSpotsPersistFailed": return { ...state, savedSpotsError: proposal.error,
+      history: { ...state.history, saveFeedback: "storageFailed" } };
+    case "forecastAlertsStarted": {
+      const alerts = { ...state.forecastAlerts };
+      const newRules = proposal.entries.some((entry) => alerts[entry.id]?.key !== entry.key);
+      for (const entry of proposal.entries) {
+        const spot = state.savedSpots.find((item) => item.id === entry.id);
+        if (spot?.alertEnabled && forecastAlertKey(spot) === entry.key) {
+          const previous = alerts[entry.id];
+          alerts[entry.id] = previous?.kind === "ready" && previous.key === entry.key
+            ? { ...previous, generation: proposal.generation }
+            : { kind: "loading", key: entry.key, generation: proposal.generation };
+        }
+      }
+      return { ...state, forecastAlerts: alerts, forecastAlertsDismissed: newRules ? false : state.forecastAlertsDismissed };
+    }
+    case "forecastAlertsCompleted": {
+      const alerts = { ...state.forecastAlerts };
+      for (const check of proposal.checks) {
+        const spot = state.savedSpots.find((item) => item.id === check.id);
+        if (!spot?.alertEnabled || forecastAlertKey(spot) !== check.key || alerts[check.id]?.generation !== proposal.generation) continue;
+        alerts[check.id] = check.ok ? { kind: "ready", key: check.key, generation: proposal.generation, summary: check.summary }
+          : { kind: "failed", key: check.key, generation: proposal.generation, error: check.error };
+      }
+      return { ...state, forecastAlerts: alerts };
+    }
+    case "forecastAlertsDismissed": return { ...state, forecastAlertsDismissed: true };
+    case "forecastAlertsShown": return { ...state, forecastAlertsDismissed: false };
     case "historyClosed": return { ...state, history: { ...state.history, open: false, requestedKey: null, downloadRequested: false } };
     case "historyYearsChanged":
       if (!Number.isInteger(proposal.startYear) || !Number.isInteger(proposal.endYear) ||
@@ -134,10 +240,10 @@ export const present = (state: State, proposal: Proposal): State => {
         proposal.startYear > proposal.endYear || proposal.endYear - proposal.startYear > 4) return state;
       if (proposal.startYear === state.history.startYear && proposal.endYear === state.history.endYear) return state;
       return { ...state, history: { ...state.history, startYear: proposal.startYear, endYear: proposal.endYear,
-        phase: "needsData", requestedKey: null, data: null, error: null, selectedMonth: null } };
+        phase: "needsData", requestedKey: null, data: null, error: null, selectedMonth: null, saveFeedback: null } };
     case "historyCriteriaChanged":
       return validCriteria(proposal.criteria)
-        ? { ...state, history: { ...state.history, criteria: proposal.criteria, selectedMonth: null } } : state;
+        ? { ...state, history: { ...state.history, criteria: proposal.criteria, selectedMonth: null, saveFeedback: null } } : state;
     case "historyMonthSelected":
       return proposal.month >= 0 && proposal.month < 12
         ? { ...state, history: { ...state.history, selectedMonth: proposal.month } } : state;

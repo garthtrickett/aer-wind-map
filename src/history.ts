@@ -176,7 +176,7 @@ export const directionInClockwiseRange = (actual: number, start: number, end: nu
   return span === 360 || offset <= span;
 };
 
-const matches = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
+export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
   hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
   hour.windSpeed !== null && hour.windDirection !== null &&
   hour.swellHeight >= criteria.minSwellHeight && hour.swellHeight <= criteria.maxSwellHeight &&
@@ -190,7 +190,7 @@ export const historyCsv = (data: HistoricalData, criteria: HistoryCriteria): str
   for (const hour of data.hours) {
     lines.push([
       new Date(hour.time * 1000).toISOString(), hour.day, value(hour.swellHeight), value(hour.swellPeriod),
-      value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection), matches(hour, criteria) ? "1" : "0",
+      value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection), hourMatchesCriteria(hour, criteria) ? "1" : "0",
     ].join(","));
   }
   return `${lines.join("\n")}\n`;
@@ -213,7 +213,7 @@ export const summarizeHistory = (data: HistoricalData, criteria: HistoryCriteria
     const available = hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
       hour.windSpeed !== null && hour.windDirection !== null;
     if (available) day.available++;
-    if (!matches(hour, criteria)) { day.run = 0; day.runStart = null; day.lastTime = null; continue; }
+    if (!hourMatchesCriteria(hour, criteria)) { day.run = 0; day.runStart = null; day.lastTime = null; continue; }
     if (day.lastTime !== null && hour.time - day.lastTime === 3600) day.run++;
     else { day.run = 1; day.runStart = hour.time; }
     day.lastTime = hour.time;

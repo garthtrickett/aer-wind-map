@@ -3,6 +3,7 @@ import { describeWeatherError } from "./ecmwf.ts";
 import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import { sampleWave } from "./wave.ts";
 import { historyView } from "./history-view.ts";
+import { forecastAlertKey } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
 
 const dateLabel = (date: Date): string =>
@@ -12,6 +13,8 @@ const runLabel = (date: Date): string =>
   new Intl.DateTimeFormat("en", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
 
 const speedLabel = (speed: number): string => `${speed.toFixed(1)} m/s`;
+const spotCoordinates = (point: Point): string =>
+  `${Math.abs(point.latitude).toFixed(2)}°${point.latitude >= 0 ? "N" : "S"} · ${Math.abs(point.longitude).toFixed(2)}°${point.longitude >= 0 ? "E" : "W"}`;
 
 export const flagView = (state: State, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
   if (!state.selected) return nothing;
@@ -50,6 +53,12 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
   const status = state.phase === "failed"
     ? "Forecast unavailable"
     : busy ? "Loading forecast" : "Live forecast";
+  const forecastMatches = state.savedSpots.flatMap((spot) => {
+    const alert = state.forecastAlerts[spot.id];
+    return spot.alertEnabled && alert?.kind === "ready" && alert.key === forecastAlertKey(spot) &&
+      alert.summary.matchingDays >= spot.alertMinDays
+      ? [{ spot, summary: alert.summary }] : [];
+  });
 
   return html`
     <header class="masthead">
@@ -68,7 +77,51 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <button type="button" aria-pressed=${state.layer === "wind"} @click=${() => propose({ kind: "layerSelected", layer: "wind" })}>Wind</button>
         <button type="button" aria-pressed=${state.layer === "waves"} @click=${() => propose({ kind: "layerSelected", layer: "waves" })}>Waves</button>
       </div>
+      <button class="saved-spots-toggle" type="button" aria-expanded=${state.savedSpotsOpen}
+        @click=${() => propose({ kind: "savedSpotsToggled" })}>Saved spots <span>${state.savedSpots.length}</span></button>
     </header>
+
+    ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
+      <div class="saved-spots-head"><strong>Saved spots</strong><button type="button" aria-label="Close saved spots"
+        @click=${() => propose({ kind: "savedSpotsToggled" })}>×</button></div>
+      ${state.savedSpotsError ? html`<p class="saved-spots-error" role="alert">${state.savedSpotsError.kind === "invalid"
+        ? "Saved spots could not be read in this browser." : "Browser storage is unavailable. Changes could not be saved."}</p>` : nothing}
+      ${state.savedSpots.length ? html`<div class="saved-spots-list">${state.savedSpots.map((spot) => {
+        const alert = state.forecastAlerts[spot.id];
+        return html`
+        <div class="saved-spot-row">
+          <button type="button" class="saved-spot-open" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
+            <strong>${spot.name}</strong><span>${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
+            ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot) && alert.kind === "ready"
+              ? `${alert.summary.matchingDays} of 14 forecast days match · alert at ${spot.alertMinDays}`
+              : alert?.key === forecastAlertKey(spot) && alert.kind === "failed" ? "Alert check unavailable" : "Checking forecast…"}</small>` : nothing}
+          </button>
+          <button type="button" class="saved-spot-remove" aria-label=${`Remove ${spot.name}`}
+            @click=${() => propose({ kind: "savedSpotRemoved", id: spot.id })}>×</button>
+        </div>`;
+      })}</div>` : html`<p class="saved-spots-empty">Open a point’s Find your season panel to save its settings here.</p>`}
+      <p class="saved-spots-foot">Saved in this browser</p>
+    </section>` : nothing}
+
+    ${forecastMatches.length ? state.forecastAlertsDismissed ? html`
+      <button class="forecast-alert-chip" type="button" @click=${() => propose({ kind: "forecastAlertsShown" })}>
+        ${forecastMatches.length} forecast ${forecastMatches.length === 1 ? "match" : "matches"} ↗</button>` : html`
+      <section class="forecast-alert-card" role="status" aria-label="Saved spot forecast matches">
+        <div class="forecast-alert-head"><div><span>FORECAST MATCH</span><strong>Next 14 days</strong></div>
+          <button type="button" aria-label="Dismiss forecast alerts" @click=${() => propose({ kind: "forecastAlertsDismissed" })}>×</button></div>
+        <div class="forecast-alert-list">${forecastMatches.map(({ spot, summary }) => html`
+          <button type="button" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
+            <strong>${spot.name}</strong>
+            <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hours (alert threshold ${spot.alertMinDays})</span>
+            ${summary.nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
+              timeZone: summary.timezone, weekday: "short", month: "short", day: "numeric",
+              hour: "numeric", minute: "2-digit", timeZoneName: "short",
+            }).format(new Date(summary.nextWindowStart * 1000))}</small>`}
+            ${summary.availableDays < summary.horizonDays ? html`<small>Paired data on ${summary.availableDays} of 14 days</small>` : nothing}
+          </button>`)}</div>
+        <p>Forecast estimates: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">GFS Wave swell</a>
+          and <a href="https://open-meteo.com/en/docs/ecmwf-api" target="_blank" rel="noopener noreferrer">ECMWF IFS wind</a> via Open-Meteo.</p>
+      </section>` : nothing}
 
     ${state.phase === "failed" ? html`
       <div class="error-card" role="alert">
