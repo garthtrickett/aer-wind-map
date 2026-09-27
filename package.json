@@ -7,7 +7,7 @@
     "prepare:decoder": "node scripts/copy-decoder.ts",
     "dev": "npm run prepare:decoder && vite --host 0.0.0.0",
     "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
-    "test": "node --test src/wind.test.ts src/wave.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts",
+    "test": "node --test src/wind.test.ts src/wave.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts src/history-compass.test.ts",
     "smoke:live": "node tests/live-smoke.ts",
     "smoke:history": "node tests/history-smoke.ts",
     "build": "npm run prepare:decoder && npm run check && vite build && node scripts/compress.ts",

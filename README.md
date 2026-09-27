@@ -14,7 +14,10 @@ to compare up to five complete years. Set a swell-height range, minimum swell
 period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
 minimum consecutive hours. Aer ranks months by the share of usable days with
 a matching window, shows qualifying dates, and exports the paired hourly data
-as CSV. Historical days use the selected spot's local timezone.
+as CSV. A circular map in the history panel centers the selected spot; drag the
+teal wind dots or amber swell dots around it to set each clockwise bearing
+range, or enter degrees directly. Historical days use the selected spot's local
+timezone.
 
 ## Run locally
 

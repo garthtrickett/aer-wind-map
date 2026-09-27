@@ -24,6 +24,10 @@
   ranges. It ranks calendar months over up to
   five complete years by the fraction of usable days with a configurable
   consecutive-hour window, then lists matching dates and exports hourly CSV.
+  The history panel shows a separate noninteractive Leaflet map centered on
+  the selected point. SVG sectors and draggable bearing handles update the
+  same immutable criteria as the numeric controls; the local map is created
+  and removed explicitly when the panel opens and closes.
 
 ## Coding decisions
 

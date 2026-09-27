@@ -4,6 +4,7 @@ import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
+import { bearingFromPointer, createHistoryMiniMap, type BearingHandle } from "./history-compass.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
@@ -36,6 +37,62 @@ let selectedPoint: State["selected"] = null;
 let overlayKind: "details" | "history" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
+let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void }> | null = null;
+
+const syncMiniMap = (): void => {
+  const element = ui.querySelector<HTMLElement>("#history-mini-map");
+  const point = state.history.open ? state.history.point : null;
+  if (miniMap && (!point || miniMap.element !== element || miniMap.latitude !== point.latitude || miniMap.longitude !== point.longitude)) {
+    miniMap.remove();
+    miniMap = null;
+  }
+  if (element && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, point) };
+};
+
+let compassDrag: Readonly<{ pointerId: number; handle: SVGCircleElement; field: BearingHandle }> | null = null;
+const setCompassBearing = (event: PointerEvent, field: BearingHandle): void => {
+  const svg = ui.querySelector<SVGSVGElement>(".history-compass-overlay");
+  if (!svg) return;
+  const bearing = bearingFromPointer(event, svg);
+  if (state.history.criteria[field] === bearing) return;
+  dispatch({ kind: "historyCriteriaChanged", criteria: { ...state.history.criteria, [field]: bearing } });
+};
+
+ui.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || !(event.target instanceof Element)) return;
+  const handle = event.target.closest("[data-bearing-handle]");
+  if (!(handle instanceof SVGCircleElement)) return;
+  const field = handle.dataset.bearingHandle as BearingHandle;
+  compassDrag = { pointerId: event.pointerId, handle, field };
+  handle.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+ui.addEventListener("pointermove", (event) => {
+  if (!compassDrag || compassDrag.pointerId !== event.pointerId) return;
+  setCompassBearing(event, compassDrag.field);
+  event.preventDefault();
+});
+ui.addEventListener("pointerup", (event) => {
+  if (!compassDrag || compassDrag.pointerId !== event.pointerId) return;
+  setCompassBearing(event, compassDrag.field);
+  const handle = compassDrag.handle;
+  compassDrag = null;
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  event.preventDefault();
+});
+ui.addEventListener("pointercancel", (event) => {
+  if (compassDrag?.pointerId === event.pointerId) compassDrag = null;
+});
+ui.addEventListener("keydown", (event) => {
+  if (!(event.target instanceof SVGCircleElement)) return;
+  const field = event.target.dataset.bearingHandle as BearingHandle | undefined;
+  if (!field || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const current = state.history.criteria[field];
+  const next = event.key === "Home" ? 0 : event.key === "End" ? field.endsWith("End") ? 360 : 359
+    : (current + (event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1) + 360) % 360;
+  dispatch({ kind: "historyCriteriaChanged", criteria: { ...state.history.criteria, [field]: next } });
+  event.preventDefault();
+});
 
 const windMap = createWindMap({ element: mapElement, flag, onSelect: (point) => dispatch({ kind: "locationSelected", point }) });
 const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
@@ -160,6 +217,7 @@ function dispatch(proposal: Proposal): void {
   arrowsCanvas.hidden = state.layer === "waves";
   render(view(state, dispatch, windMap.center), ui);
   render(flagView(state, dispatch), flag);
+  syncMiniMap();
 
   if (displayedField !== state.field) {
     displayedField = state.field;
@@ -201,7 +259,7 @@ document.addEventListener("keydown", (event) => {
   if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
 
-window.addEventListener("pagehide", () => forecastWorker.terminate());
+window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); });
 render(view(state, dispatch, windMap.center), ui);
 render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);

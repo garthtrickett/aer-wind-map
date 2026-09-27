@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
+import { historyCompassView } from "./history-compass.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
@@ -54,6 +55,9 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
             ${criteria.minConsecutiveHours} consecutive hourly samples. Months rank by the share of days with usable data that qualify.</div>
           <div class="history-settings">
             <div class="history-settings-head"><h3>Your conditions</h3><span>Directions describe where wind and swell come from</span></div>
+            <div class="history-settings-layout">
+              ${historyCompassView(criteria)}
+              <div class="history-settings-fields">
             <div class="history-controls">
               ${numberControl("Swell height from", criteria.minSwellHeight, 0, 15, .1,
                 (value) => setCriteria({ ...criteria, minSwellHeight: value,
@@ -77,6 +81,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 (value) => setCriteria({ ...criteria, minConsecutiveHours: value }), "hours")}
             </div>
             <p class="history-direction-note">Each “to” bearing is clockwise from its “from” bearing. For example, 315° to 45° crosses north; 0° to 360° includes every direction.</p>
+              </div>
+            </div>
             <div class="history-years">
               <label>From year <select
                 @change=${(event: Event) => propose({ kind: "historyYearsChanged", startYear: numberValue(event), endYear: history.endYear })}>

@@ -54,6 +54,32 @@ try {
   assert.ok((await page.locator(".history-month").allInnerTexts()).some((text) => /\d+\/\d+ days/.test(text) && !text.includes("/0 days")));
   assert.ok((await page.locator(".history-coverage").innerText()).includes("Times are local to"));
   assert.equal(archiveRequests.length, 2);
+  assert.equal(await page.locator("#history-mini-map .leaflet-tile").count() > 0, true);
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
+    .some((image) => (image as HTMLImageElement).naturalWidth > 0), null, { timeout: 15_000 });
+  assert.equal(await page.locator(".compass-sector").count(), 2);
+  const svgBox = await page.locator(".history-compass-overlay").boundingBox();
+  assert.ok(svgBox);
+  const windStart = await page.locator('[data-bearing-handle="windFromStart"]').boundingBox();
+  assert.ok(windStart);
+  await page.mouse.move(windStart.x + windStart.width / 2, windStart.y + windStart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(svgBox.x + svgBox.width * 261 / 280, svgBox.y + svgBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+  assert.equal(await page.getByLabel("Wind from").inputValue(), "90");
+  const swellEnd = await page.locator('[data-bearing-handle="swellFromEnd"]').boundingBox();
+  assert.ok(swellEnd);
+  await page.mouse.move(swellEnd.x + swellEnd.width / 2, swellEnd.y + swellEnd.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(svgBox.x + svgBox.width * 35 / 280, svgBox.y + svgBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+  assert.ok(Math.abs(Number(await page.getByLabel("Swell to").inputValue()) - 270) <= 1);
+  assert.equal(archiveRequests.length, 2, "dragging a compass dot should reuse downloaded history");
+  await page.locator('[data-bearing-handle="swellFromEnd"]').focus();
+  await page.keyboard.press("Home");
+  assert.equal(await page.getByLabel("Swell to").inputValue(), "0");
+  await page.keyboard.press("End");
+  assert.equal(await page.getByLabel("Swell to").inputValue(), "360");
   for (const [label, value] of [
     ["Wind from", "315"], ["Wind to", "45"], ["Swell from", "180"], ["Swell to", "270"],
   ]) {
@@ -81,6 +107,7 @@ try {
   assert.ok(csv.split("\n").length > 20_000);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+  await page.locator(".history-body").evaluate((element) => { element.scrollTop = 0; });
   await page.screenshot({ path: "/tmp/aer-history-mobile.png", fullPage: true });
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ months: 12, archiveRequests: archiveRequests.length, csvRows: csv.split("\n").length - 2, errors }));

@@ -167,7 +167,37 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-settings-head, .history-days-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .history-settings h3, .history-days-head h3 { font: 600 17px/1.2 "Outfit", sans-serif; }
 .history-settings-head span, .history-days-head span { color: #6a878c; font-size: 11px; }
-.history-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 15px; }
+.history-settings-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: start; gap: 16px; margin-top: 13px; }
+.history-settings-fields { min-width: 0; }
+.history-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.history-compass { min-width: 0; text-align: center; }
+.history-compass-stage { position: relative; width: min(280px, 100%); aspect-ratio: 1; margin: 0 auto; }
+.history-mini-map { position: absolute; z-index: 0; inset: 10%; overflow: hidden; isolation: isolate; border-radius: 50%; background: #cbdedb; box-shadow: inset 0 0 0 1px #b9cfcb; pointer-events: none; }
+.history-mini-map .leaflet-control-container { display: none; }
+.history-compass-overlay { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.compass-ring { fill: none; stroke: #688e90; stroke-width: 1; }
+.compass-inner-ring { fill: none; stroke: rgba(18,59,67,.75); stroke-width: 1.5; }
+.compass-sector.wind { fill: rgba(20,123,137,.68); stroke: #0c6473; stroke-width: 1.5; }
+.compass-sector.swell { fill: rgba(233,161,29,.7); stroke: #bb7310; stroke-width: 1.5; }
+.compass-handle { pointer-events: all; cursor: grab; stroke: #fff; stroke-width: 3; filter: drop-shadow(0 2px 3px rgba(10,43,49,.35)); touch-action: none; }
+.compass-handle:active { cursor: grabbing; }
+.compass-handle:focus-visible { outline: none; stroke: #102e3a; stroke-width: 4; }
+.compass-handle.wind { fill: #0d7587; }
+.compass-handle.swell { fill: #e89418; }
+.compass-spot-halo { fill: rgba(255,255,255,.94); stroke: #174a50; stroke-width: 2; }
+.compass-spot { fill: #e8a01d; }
+.compass-cardinal { position: absolute; z-index: 2; color: #173e49; font-size: 11px; font-weight: 800; line-height: 1; text-shadow: 0 1px 2px #fff; pointer-events: none; }
+.compass-cardinal.north { top: 1%; left: 50%; transform: translateX(-50%); }
+.compass-cardinal.east { right: 1%; top: 50%; transform: translateY(-50%); }
+.compass-cardinal.south { bottom: 1%; left: 50%; transform: translateX(-50%); }
+.compass-cardinal.west { left: 1%; top: 50%; transform: translateY(-50%); }
+.history-compass-key { display: flex; justify-content: center; gap: 14px; margin-top: 4px; color: #385a61; font-size: 11px; font-weight: 700; }
+.history-compass-key span { display: inline-flex; align-items: center; gap: 5px; }
+.history-compass-key i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid white; box-shadow: 0 0 0 1px #719195; }
+.history-compass-key i.wind { background: #0d7587; }
+.history-compass-key i.swell { background: #e89418; }
+.history-compass > p { margin-top: 6px; color: #638087; font-size: 10px; }
+.history-map-credit { display: inline-block; margin-top: 4px; color: #58767c; font-size: 10px; }
 .history-control { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: #4c6870; font-size: 11px; font-weight: 600; }
 .history-control input, .history-control select, .history-years select { width: 100%; height: 33px; padding: 5px 8px; border: 1px solid #bfd3d0; border-radius: 8px; background: white; color: #153d46; font-size: 12px; }
 .history-input-wrap { position: relative; }
@@ -222,7 +252,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .history-settings { padding: 12px; }
   .history-settings-head { display: block; }
   .history-settings-head span { display: block; margin-top: 4px; }
-  .history-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .history-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .history-controls { gap: 10px; }
   .history-years { flex-wrap: wrap; }
   .history-years > span { width: 100%; margin-left: 0; padding: 0; }
   .history-months { grid-template-columns: repeat(4, minmax(0, 1fr)); }
