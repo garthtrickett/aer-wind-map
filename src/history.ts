@@ -5,8 +5,10 @@ export type HistoryCriteria = Readonly<{
   maxSwellHeight: number;
   minSwellPeriod: number;
   maxWindSpeed: number;
-  windFrom: number;
-  windTolerance: number;
+  windFromStart: number;
+  windFromEnd: number;
+  swellFromStart: number;
+  swellFromEnd: number;
   minConsecutiveHours: number;
 }>;
 
@@ -15,8 +17,10 @@ export const defaultHistoryCriteria: HistoryCriteria = {
   maxSwellHeight: 3,
   minSwellPeriod: 10,
   maxWindSpeed: 5,
-  windFrom: 90,
-  windTolerance: 45,
+  windFromStart: 45,
+  windFromEnd: 135,
+  swellFromStart: 0,
+  swellFromEnd: 360,
   minConsecutiveHours: 2,
 };
 
@@ -25,6 +29,7 @@ export type HistoricalHour = Readonly<{
   day: string;
   swellHeight: number | null;
   swellPeriod: number | null;
+  swellDirection: number | null;
   windSpeed: number | null;
   windDirection: number | null;
 }>;
@@ -50,6 +55,7 @@ type Series = Readonly<{
   time: readonly number[];
   first: readonly (number | null)[];
   second: readonly (number | null)[];
+  third: readonly (number | null)[] | null;
 }>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -58,21 +64,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isNumberOrNull = (value: unknown): value is number | null =>
   value === null || (typeof value === "number" && Number.isFinite(value));
 
-const parseSeries = (raw: unknown, firstName: string, secondName: string): Series | null => {
+const parseSeries = (raw: unknown, firstName: string, secondName: string, thirdName?: string): Series | null => {
   if (!isRecord(raw) || !isRecord(raw.hourly)) return null;
   const hourly = raw.hourly;
   const time = hourly.time;
   const first = hourly[firstName];
   const second = hourly[secondName];
+  const third = thirdName ? hourly[thirdName] : null;
   if (typeof raw.latitude !== "number" || !Number.isFinite(raw.latitude) ||
     typeof raw.longitude !== "number" || !Number.isFinite(raw.longitude) ||
     typeof raw.timezone !== "string" || !Array.isArray(time) || !Array.isArray(first) || !Array.isArray(second) ||
     !time.length || time.length !== first.length || time.length !== second.length ||
     !time.every((value) => Number.isInteger(value)) ||
-    !first.every(isNumberOrNull) || !second.every(isNumberOrNull)) return null;
+    !first.every(isNumberOrNull) || !second.every(isNumberOrNull) ||
+    (thirdName && (!Array.isArray(third) || third.length !== time.length || !third.every(isNumberOrNull)))) return null;
   return {
     latitude: raw.latitude, longitude: raw.longitude, timezone: raw.timezone,
     time: time as number[], first: first as (number | null)[], second: second as (number | null)[],
+    third: thirdName ? third as (number | null)[] : null,
   };
 };
 
@@ -96,7 +105,7 @@ export const loadHistoricalSpot = async (
   { point, startYear, endYear, fetcher = fetch }: Readonly<{ point: Point; startYear: number; endYear: number; fetcher?: typeof fetch }>,
 ): Promise<HistoryResult> => {
   const waveUrl = historicalUrl("https://marine-api.open-meteo.com/v1/marine", point, startYear, endYear,
-    "swell_wave_height,swell_wave_period", "meteofrance_wave");
+    "swell_wave_height,swell_wave_period,swell_wave_direction", "meteofrance_wave");
   const windUrl = historicalUrl("https://archive-api.open-meteo.com/v1/archive", point, startYear, endYear,
     "wind_speed_10m,wind_direction_10m", "ecmwf_ifs");
   let waveRaw: unknown;
@@ -113,7 +122,7 @@ export const loadHistoricalSpot = async (
   } catch (cause) {
     return { ok: false, error: { kind: "network", detail: String(cause) } };
   }
-  const wave = parseSeries(waveRaw, "swell_wave_height", "swell_wave_period");
+  const wave = parseSeries(waveRaw, "swell_wave_height", "swell_wave_period", "swell_wave_direction");
   const wind = parseSeries(windRaw, "wind_speed_10m", "wind_direction_10m");
   if (!wave || !wind) return { ok: false, error: { kind: "invalid", detail: "Historical hourly data was incomplete." } };
 
@@ -129,6 +138,7 @@ export const loadHistoricalSpot = async (
     return {
       time, day: localDay(time, formatter),
       swellHeight: wave.first[index] ?? null, swellPeriod: wave.second[index] ?? null,
+      swellDirection: wave.third?.[index] ?? null,
       windSpeed: windIndex === undefined ? null : wind.first[windIndex] ?? null,
       windDirection: windIndex === undefined ? null : wind.second[windIndex] ?? null,
     };
@@ -160,22 +170,27 @@ export type MonthlyHistory = Readonly<{
 
 export type HistorySummary = Readonly<{ months: readonly MonthlyHistory[]; days: readonly DailyHistory[] }>;
 
-const directionMatches = (actual: number, expected: number, tolerance: number): boolean =>
-  Math.abs(((actual - expected + 540) % 360) - 180) <= tolerance;
+export const directionInClockwiseRange = (actual: number, start: number, end: number): boolean => {
+  const span = end >= start ? end - start : end - start + 360;
+  const offset = ((actual - start) % 360 + 360) % 360;
+  return span === 360 || offset <= span;
+};
 
 const matches = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
-  hour.swellHeight !== null && hour.swellPeriod !== null && hour.windSpeed !== null && hour.windDirection !== null &&
+  hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
+  hour.windSpeed !== null && hour.windDirection !== null &&
   hour.swellHeight >= criteria.minSwellHeight && hour.swellHeight <= criteria.maxSwellHeight &&
   hour.swellPeriod >= criteria.minSwellPeriod && hour.windSpeed <= criteria.maxWindSpeed &&
-  directionMatches(hour.windDirection, criteria.windFrom, criteria.windTolerance);
+  directionInClockwiseRange(hour.windDirection, criteria.windFromStart, criteria.windFromEnd) &&
+  directionInClockwiseRange(hour.swellDirection, criteria.swellFromStart, criteria.swellFromEnd);
 
 export const historyCsv = (data: HistoricalData, criteria: HistoryCriteria): string => {
   const value = (number: number | null): string => number === null ? "" : String(number);
-  const lines = ["time_utc,local_day,swell_height_m,swell_period_s,wind_speed_ms,wind_from_degrees,meets_conditions"];
+  const lines = ["time_utc,local_day,swell_height_m,swell_period_s,swell_from_degrees,wind_speed_ms,wind_from_degrees,meets_conditions"];
   for (const hour of data.hours) {
     lines.push([
       new Date(hour.time * 1000).toISOString(), hour.day, value(hour.swellHeight), value(hour.swellPeriod),
-      value(hour.windSpeed), value(hour.windDirection), matches(hour, criteria) ? "1" : "0",
+      value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection), matches(hour, criteria) ? "1" : "0",
     ].join(","));
   }
   return `${lines.join("\n")}\n`;
@@ -195,7 +210,8 @@ export const summarizeHistory = (data: HistoricalData, criteria: HistoryCriteria
   for (const hour of data.hours) {
     const day = days.get(hour.day);
     if (!day) continue;
-    const available = hour.swellHeight !== null && hour.swellPeriod !== null && hour.windSpeed !== null && hour.windDirection !== null;
+    const available = hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
+      hour.windSpeed !== null && hour.windDirection !== null;
     if (available) day.available++;
     if (!matches(hour, criteria)) { day.run = 0; day.runStart = null; day.lastTime = null; continue; }
     if (day.lastTime !== null && hour.time - day.lastTime === 3600) day.run++;

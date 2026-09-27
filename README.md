@@ -11,7 +11,7 @@ are not primary swell partition values. The timeline steps through the first
 
 Click a point, open its details, and choose **Explore historical swell and wind**
 to compare up to five complete years. Set a swell-height range, minimum swell
-period, maximum wind speed, preferred wind-from direction and tolerance, and
+period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
 minimum consecutive hours. Aer ranks months by the share of usable days with
 a matching window, shows qualifying dates, and exports the paired hourly data
 as CSV. Historical days use the selected spot's local timezone.

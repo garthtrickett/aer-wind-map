@@ -1,6 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
-import { compassDirection } from "./wind.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
@@ -54,7 +53,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
           <div class="history-intro">A day qualifies when the swell and wind meet every rule for at least
             ${criteria.minConsecutiveHours} consecutive hourly samples. Months rank by the share of days with usable data that qualify.</div>
           <div class="history-settings">
-            <div class="history-settings-head"><h3>Your conditions</h3><span>Wind and swell directions are where they come from</span></div>
+            <div class="history-settings-head"><h3>Your conditions</h3><span>Directions describe where wind and swell come from</span></div>
             <div class="history-controls">
               ${numberControl("Swell height from", criteria.minSwellHeight, 0, 15, .1,
                 (value) => setCriteria({ ...criteria, minSwellHeight: value,
@@ -66,15 +65,18 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 (value) => setCriteria({ ...criteria, minSwellPeriod: value }), "s")}
               ${numberControl("Wind speed at most", criteria.maxWindSpeed, 0, 40, .5,
                 (value) => setCriteria({ ...criteria, maxWindSpeed: value }), "m/s")}
-              <label class="history-control"><span>Wind from</span><select
-                  @change=${(event: Event) => setCriteria({ ...criteria, windFrom: numberValue(event) })}>
-                ${Array.from({ length: 8 }, (_, index) => html`<option value=${String(index * 45)} ?selected=${criteria.windFrom === index * 45}>${compassDirection(index * 45)} · ${index * 45}°</option>`)}
-              </select></label>
-              ${numberControl("Direction within", criteria.windTolerance, 0, 180, 5,
-                (value) => setCriteria({ ...criteria, windTolerance: value }), "°")}
+              ${numberControl("Wind from", criteria.windFromStart, 0, 359, 1,
+                (value) => setCriteria({ ...criteria, windFromStart: value }), "°")}
+              ${numberControl("Wind to", criteria.windFromEnd, 0, 360, 1,
+                (value) => setCriteria({ ...criteria, windFromEnd: value }), "°")}
+              ${numberControl("Swell from", criteria.swellFromStart, 0, 359, 1,
+                (value) => setCriteria({ ...criteria, swellFromStart: value }), "°")}
+              ${numberControl("Swell to", criteria.swellFromEnd, 0, 360, 1,
+                (value) => setCriteria({ ...criteria, swellFromEnd: value }), "°")}
               ${numberControl("Minimum window", criteria.minConsecutiveHours, 1, 12, 1,
                 (value) => setCriteria({ ...criteria, minConsecutiveHours: value }), "hours")}
             </div>
+            <p class="history-direction-note">Each “to” bearing is clockwise from its “from” bearing. For example, 315° to 45° crosses north; 0° to 360° includes every direction.</p>
             <div class="history-years">
               <label>From year <select
                 @change=${(event: Event) => propose({ kind: "historyYearsChanged", startYear: numberValue(event), endYear: history.endYear })}>

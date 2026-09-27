@@ -81,8 +81,10 @@ const validCriteria = (criteria: HistoryCriteria): boolean =>
   Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
   Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
   Number.isFinite(criteria.maxWindSpeed) && criteria.maxWindSpeed >= 0 && criteria.maxWindSpeed <= 40 &&
-  Number.isFinite(criteria.windFrom) && criteria.windFrom >= 0 && criteria.windFrom < 360 &&
-  Number.isFinite(criteria.windTolerance) && criteria.windTolerance >= 0 && criteria.windTolerance <= 180 &&
+  Number.isFinite(criteria.windFromStart) && criteria.windFromStart >= 0 && criteria.windFromStart < 360 &&
+  Number.isFinite(criteria.windFromEnd) && criteria.windFromEnd >= 0 && criteria.windFromEnd <= 360 &&
+  Number.isFinite(criteria.swellFromStart) && criteria.swellFromStart >= 0 && criteria.swellFromStart < 360 &&
+  Number.isFinite(criteria.swellFromEnd) && criteria.swellFromEnd >= 0 && criteria.swellFromEnd <= 360 &&
   Number.isInteger(criteria.minConsecutiveHours) && criteria.minConsecutiveHours >= 1 && criteria.minConsecutiveHours <= 12;
 
 const selectionChanged = (state: State, point: Point): State => ({

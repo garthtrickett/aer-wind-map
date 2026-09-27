@@ -18,8 +18,10 @@
   (`swh`) and mean wave period (`mwp`) from the `wave` stream. Wave map color
   shows height, while the flag and modal also show period. The free feed does
   not supply first swell partition (`swh1`/`mwp1`) fields.
-- A selected point's history panel compares swell-specific height and period
-  with wind speed and source direction. It ranks calendar months over up to
+- A selected point's history panel compares swell-specific height, period, and
+  source direction with wind speed and source direction. Each direction filter
+  runs clockwise from its first bearing to its second, including north-crossing
+  ranges. It ranks calendar months over up to
   five complete years by the fraction of usable days with a configurable
   consecutive-hour window, then lists matching dates and exports hourly CSV.
 
@@ -56,7 +58,7 @@
 - Keep forecast instants in UTC internally and format timeline, run, and point
   details times in the browser's local timezone.
 - Historical data is a separate on-demand browser effect. Open-Meteo Marine
-  supplies Météo-France MFWAM swell height/period from the selected sea cell;
+  supplies Météo-France MFWAM swell height/period/direction from the selected sea cell;
   Open-Meteo Archive supplies ECMWF IFS 10 m wind speed/direction from its sea
   cell. Join by Unix timestamp, assign days using the marine response's IANA
   timezone, and keep the returned cell coordinates visible. Every historical

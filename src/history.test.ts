@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { defaultHistoryCriteria, historyCsv, loadHistoricalSpot, summarizeHistory, type HistoricalData, type HistoricalHour } from "./history.ts";
+import { defaultHistoryCriteria, directionInClockwiseRange, historyCsv, loadHistoricalSpot, summarizeHistory, type HistoricalData, type HistoricalHour } from "./history.ts";
 
 const hoursFor = (date: string, matching: readonly number[], direction = 355, available = 24): HistoricalHour[] =>
   Array.from({ length: 24 }, (_, hour) => ({
@@ -8,6 +8,7 @@ const hoursFor = (date: string, matching: readonly number[], direction = 355, av
     day: date,
     swellHeight: hour < available ? matching.includes(hour) ? 2 : 0.5 : null,
     swellPeriod: hour < available ? 12 : null,
+    swellDirection: hour < available ? 220 : null,
     windSpeed: hour < available ? 3 : null,
     windDirection: hour < available ? direction : null,
   }));
@@ -23,13 +24,27 @@ test("monthly score requires consecutive matching hours and enough paired data",
       ...hoursFor("2025-02-01", [10, 11], 180),
     ],
   };
-  const summary = summarizeHistory(data, { ...defaultHistoryCriteria, windFrom: 0, windTolerance: 20 });
+  const criteria = { ...defaultHistoryCriteria, windFromStart: 315, windFromEnd: 45,
+    swellFromStart: 180, swellFromEnd: 270 };
+  const summary = summarizeHistory(data, criteria);
   assert.deepEqual(summary.months[0], { month: 0, qualifyingDays: 1, observedDays: 2, totalDays: 31, percent: 50 });
   assert.deepEqual(summary.months[1], { month: 1, qualifyingDays: 0, observedDays: 1, totalDays: 28, percent: 0 });
   assert.equal(summary.days.find((day) => day.day === "2025-01-01")?.longestWindow, 2);
   assert.equal(summary.days.find((day) => day.day === "2025-01-03")?.qualifies, false);
-  const csv = historyCsv(data, { ...defaultHistoryCriteria, windFrom: 0, windTolerance: 20 });
-  assert.ok(csv.includes("2025-01-01T10:00:00.000Z,2025-01-01,2,12,3,355,1"));
+  assert.equal(summarizeHistory(data, { ...criteria, swellFromStart: 280, swellFromEnd: 20 }).months[0]?.qualifyingDays, 0);
+  const csv = historyCsv(data, criteria);
+  assert.ok(csv.includes("2025-01-01T10:00:00.000Z,2025-01-01,2,12,220,3,355,1"));
+});
+
+test("clockwise bearing ranges cross north and can cover the long arc", () => {
+  assert.equal(directionInClockwiseRange(350, 315, 45), true);
+  assert.equal(directionInClockwiseRange(20, 315, 45), true);
+  assert.equal(directionInClockwiseRange(180, 315, 45), false);
+  assert.equal(directionInClockwiseRange(180, 45, 315), true);
+  assert.equal(directionInClockwiseRange(350, 45, 315), false);
+  assert.equal(directionInClockwiseRange(359, 0, 360), true);
+  assert.equal(directionInClockwiseRange(0, 90, 90), false);
+  assert.equal(directionInClockwiseRange(90, 90, 90), true);
 });
 
 test("historical fetch joins marine and wind by instant and uses the spot time zone", async () => {
@@ -41,7 +56,7 @@ test("historical fetch joins marine and wind by instant and uses the spot time z
     const marine = url.includes("marine-api");
     return new Response(JSON.stringify(marine ? {
       latitude: -8.875, longitude: 115.125, timezone: "Asia/Makassar",
-      hourly: { time: [first, first + 3600], swell_wave_height: [1.8, 2], swell_wave_period: [12, 13] },
+      hourly: { time: [first, first + 3600], swell_wave_height: [1.8, 2], swell_wave_period: [12, 13], swell_wave_direction: [220, 225] },
     } : {
       latitude: -8.82, longitude: 115.08, timezone: "Asia/Makassar",
       hourly: { time: [first + 3600, first + 7200], wind_speed_10m: [4, 5], wind_direction_10m: [90, 100] },
@@ -53,7 +68,8 @@ test("historical fetch joins marine and wind by instant and uses the spot time z
   assert.equal(result.value.hours[0]?.day, "2025-06-01");
   assert.equal(result.value.hours[0]?.windSpeed, null);
   assert.equal(result.value.hours[1]?.windSpeed, 4);
+  assert.equal(result.value.hours[1]?.swellDirection, 225);
   assert.equal(result.value.waveGrid.latitude, -8.875);
-  assert.ok(urls.some((url) => url.includes("models=meteofrance_wave") && url.includes("cell_selection=sea")));
+  assert.ok(urls.some((url) => url.includes("models=meteofrance_wave") && url.includes("cell_selection=sea") && url.includes("swell_wave_direction")));
   assert.ok(urls.some((url) => url.includes("models=ecmwf_ifs") && url.includes("wind_speed_unit=ms")));
 });

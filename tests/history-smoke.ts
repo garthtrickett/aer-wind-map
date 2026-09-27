@@ -50,18 +50,24 @@ try {
   }
   assert.equal(await page.locator(".history-month").count(), 12);
   assert.deepEqual(await page.locator(".history-settings select").evaluateAll((elements) => elements.map((element) => (element as HTMLSelectElement).value)),
-    ["90", String(new Date().getUTCFullYear() - 3), String(new Date().getUTCFullYear() - 1)]);
+    [String(new Date().getUTCFullYear() - 3), String(new Date().getUTCFullYear() - 1)]);
   assert.ok((await page.locator(".history-month").allInnerTexts()).some((text) => /\d+\/\d+ days/.test(text) && !text.includes("/0 days")));
   assert.ok((await page.locator(".history-coverage").innerText()).includes("Times are local to"));
   assert.equal(archiveRequests.length, 2);
   for (const [label, value] of [
-    ["Swell height from", "0"], ["Swell height to", "15"], ["Swell period at least", "0"],
-    ["Wind speed at most", "40"], ["Direction within", "180"],
+    ["Wind from", "315"], ["Wind to", "45"], ["Swell from", "180"], ["Swell to", "270"],
   ]) {
     await page.getByLabel(label).fill(value);
     await page.getByLabel(label).press("Tab");
   }
-  await page.getByLabel("Wind from").selectOption("180");
+  for (const [label, value] of [
+    ["Swell height from", "0"], ["Swell height to", "15"], ["Swell period at least", "0"],
+    ["Wind speed at most", "40"], ["Wind from", "0"], ["Wind to", "360"],
+    ["Swell from", "0"], ["Swell to", "360"],
+  ]) {
+    await page.getByLabel(label).fill(value);
+    await page.getByLabel(label).press("Tab");
+  }
   assert.match(await page.locator(".history-best").innerText(), /\d+ of \d+ usable days/);
   assert.equal(archiveRequests.length, 2, "changing conditions should reuse the downloaded history");
   const downloadEvent = page.waitForEvent("download");
@@ -71,7 +77,7 @@ try {
   const csvPath = await download.path();
   assert.ok(csvPath);
   const csv = await readFile(csvPath, "utf8");
-  assert.ok(csv.startsWith("time_utc,local_day,swell_height_m,swell_period_s,wind_speed_ms,wind_from_degrees,meets_conditions\n"));
+  assert.ok(csv.startsWith("time_utc,local_day,swell_height_m,swell_period_s,swell_from_degrees,wind_speed_ms,wind_from_degrees,meets_conditions\n"));
   assert.ok(csv.split("\n").length > 20_000);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
