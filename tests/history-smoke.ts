@@ -61,9 +61,9 @@ try {
   assert.equal(await zoomSlider.inputValue(), "11");
   await zoomSlider.focus();
   await zoomSlider.press("End");
-  assert.equal(await page.locator("#history-map-zoom-value").innerText(), "15");
+  assert.equal(await page.locator("#history-map-zoom-value").innerText(), "20");
   await page.waitForFunction(() => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
-    .some((image) => (image as HTMLImageElement).src.includes("tile.openstreetmap.org/15/")));
+    .some((image) => (image as HTMLImageElement).src.includes("tile.openstreetmap.org/19/") && (image as HTMLImageElement).naturalWidth > 0));
   await zoomSlider.evaluate((element) => {
     (element as HTMLInputElement).value = "11";
     element.dispatchEvent(new Event("input", { bubbles: true }));

@@ -1,7 +1,8 @@
 # Aer — global wind and wave forecast
 
 Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color covers
-the visible world, and arrows move toward the wind's destination. Click the map
+the visible world, and arrows move toward the wind's destination. The main map
+zooms to level 20 for close inspection of streets and coastlines. Click the map
 to place a wind flag, drag the flag to inspect another point, and click its card
 or amber button to open wind speed, source direction, gust, forecast time, and
 coordinates. The Wind/Waves switch shows ECMWF's combined wind waves and swell
@@ -13,12 +14,16 @@ Click a point, open its details, and choose **Explore historical swell and wind*
 to compare up to five complete years. Set a swell-height range, minimum swell
 period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
 minimum consecutive hours. Aer ranks months by the share of usable days with
-a matching window, shows qualifying dates, and exports the paired hourly data
+a matching window between 06:00 and 18:00 in the spot's local timezone, shows
+qualifying dates, and exports the paired hourly data
 as CSV. A circular map in the history panel centers the selected spot; drag the
 teal wind dots or amber swell dots around it to set each clockwise bearing
 range, or enter degrees directly. The preview starts at zoom level 11; its slider
-changes only the map scale. Historical days use the selected spot's local
-timezone.
+reaches level 20 and changes only the map scale. Raster maps use level-19 tiles
+at the closest zoom. Historical days use the selected spot's local
+timezone. Eligible hourly samples run from 06:00 through 17:00; 18:00 is
+excluded. This fixed surf window does not track seasonal sunrise and sunset.
+The CSV retains all hours, with nighttime rows marked as not meeting conditions.
 
 Name and save a point from **Find your season** to keep its location, years,
 and conditions. **Saved spots** on the map lists them; their markers reopen
@@ -49,6 +54,7 @@ npm test
 npm run build
 npm run smoke:live
 npm run smoke:history
+npm run smoke:zoom
 npm run smoke:saved
 BROWSER=firefox npm run smoke:live
 BROWSER=webkit npm run smoke:live

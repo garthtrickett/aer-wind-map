@@ -11,6 +11,7 @@ export const bearingFromPointer = (event: PointerEvent, svg: SVGSVGElement): num
 
 export type BearingHandle = "windFromStart" | "windFromEnd" | "swellFromStart" | "swellFromEnd";
 export const defaultHistoryMapZoom = 11;
+const maxHistoryMapZoom = 20;
 
 const handle = (kind: BearingHandle, bearing: number, radius: number, label: string, visualBearing = bearing): TemplateResult => {
   const point = bearingPoint(visualBearing, radius);
@@ -43,7 +44,7 @@ export const historyCompassView = (criteria: HistoryCriteria): TemplateResult =>
     <p>Drag a dot to change a bearing</p>
     <div class="history-map-zoom-head"><label for="history-map-zoom">Map zoom</label><output id="history-map-zoom-value" for="history-map-zoom">11</output></div>
     <div class="history-map-zoom-control"><span aria-hidden="true">−</span>
-      <input id="history-map-zoom" type="range" min="6" max="15" step="0.25" value="11" />
+      <input id="history-map-zoom" type="range" min="6" max=${String(maxHistoryMapZoom)} step="0.25" value="11" />
       <span aria-hidden="true">+</span></div>
     <a class="history-map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
   </div>`;
@@ -52,9 +53,11 @@ export const createHistoryMiniMap = (element: HTMLElement, point: Point, zoom: n
   const map = L.map(element, {
     zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,
     doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false,
-    zoomSnap: 0, minZoom: 6, maxZoom: 15,
+    zoomSnap: 0, minZoom: 6, maxZoom: maxHistoryMapZoom,
   }).setView([point.latitude, point.longitude], zoom);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { minZoom: 0, maxZoom: 19 }).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    minZoom: 0, maxZoom: maxHistoryMapZoom, maxNativeZoom: 19,
+  }).addTo(map);
   requestAnimationFrame(() => map.invalidateSize());
   return { remove: () => map.remove(), setZoom: (next) => map.setZoom(next, { animate: false }) };
 };

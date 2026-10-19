@@ -54,7 +54,9 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
         </div>
         <div class="history-body">
           <div class="history-intro">A day qualifies when the swell and wind meet every rule for at least
-            ${criteria.minConsecutiveHours} consecutive hourly samples. Months rank by the share of days with usable data that qualify.</div>
+            ${criteria.minConsecutiveHours} consecutive hourly samples between 06:00 and 18:00 at the spot's local time.
+            The same local hours apply every day.
+            Months rank by the share of days with usable data that qualify.</div>
           <div class="history-settings">
             <div class="history-settings-head"><h3>Your conditions</h3><span>Directions describe where wind and swell come from</span></div>
             <div class="history-settings-layout">

@@ -47,6 +47,50 @@ test("clockwise bearing ranges cross north and can cover the long arc", () => {
   assert.equal(directionInClockwiseRange(90, 90, 90), true);
 });
 
+test("historical windows only count 06:00 through 17:00 and retain full-day coverage", () => {
+  const data: HistoricalData = {
+    startYear: 2025, endYear: 2025, timezone: "UTC",
+    waveGrid: { latitude: 0, longitude: 0 }, windGrid: { latitude: 0, longitude: 0 },
+    hours: [
+      ...hoursFor("2025-01-01", [0, 1, 2]),
+      ...hoursFor("2025-01-02", [5, 6]),
+      ...hoursFor("2025-01-03", [6, 7]),
+      ...hoursFor("2025-01-04", [16, 17]),
+      ...hoursFor("2025-01-05", [17, 18]),
+      ...hoursFor("2025-01-06", [6, 7, 18, 19, 20, 21]),
+      ...hoursFor("2025-01-07", Array.from({ length: 24 }, (_, hour) => hour)),
+    ],
+  };
+  const criteria = { ...defaultHistoryCriteria, windFromStart: 315, windFromEnd: 45 };
+  const summary = summarizeHistory(data, criteria);
+  assert.deepEqual(summary.days.slice(0, 7).map((day) => day.qualifies), [false, false, true, true, false, true, true]);
+  assert.deepEqual(summary.days.slice(0, 7).map((day) => day.longestWindow), [0, 1, 2, 2, 1, 2, 12]);
+  assert.equal(summary.days[5]?.windowStart, Date.parse("2025-01-06T06:00:00Z") / 1000);
+  assert.equal(summary.days[6]?.availableHours, 24);
+  assert.equal(summary.months[0]?.observedDays, 7);
+});
+
+test("history scores and CSV match flags use the spot's timezone across UTC day boundaries", () => {
+  const criteria = { ...defaultHistoryCriteria, windFromStart: 315, windFromEnd: 45 };
+  for (const [timezone, offset] of [["Asia/Makassar", 8], ["Pacific/Honolulu", -10]] as const) {
+    const data: HistoricalData = {
+      startYear: 2025, endYear: 2025, timezone,
+      waveGrid: { latitude: 0, longitude: 0 }, windGrid: { latitude: 0, longitude: 0 },
+      hours: hoursFor("2025-01-01", Array.from({ length: 24 }, (_, hour) => hour))
+        .map((hour) => ({ ...hour, time: hour.time - offset * 3600 })),
+    };
+    const summary = summarizeHistory(data, criteria);
+    assert.equal(summary.days[0]?.qualifies, true, timezone);
+    assert.equal(summary.days[0]?.longestWindow, 12, timezone);
+    assert.equal(summary.days[0]?.windowStart, Date.parse("2025-01-01T06:00:00Z") / 1000 - offset * 3600, timezone);
+    const csvRows = historyCsv(data, criteria).trim().split("\n").slice(1).map((row) => row.split(","));
+    assert.equal(csvRows.length, 24);
+    assert.deepEqual(csvRows.map((row) => row[7]), [
+      ...Array(6).fill("0"), ...Array(12).fill("1"), ...Array(6).fill("0"),
+    ], timezone);
+  }
+});
+
 test("historical fetch joins marine and wind by instant and uses the spot time zone", async () => {
   const first = Date.parse("2025-06-01T00:00:00Z") / 1000;
   const urls: string[] = [];

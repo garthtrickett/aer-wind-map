@@ -28,7 +28,7 @@ export const createWindMap = (
   const map = L.map(element, {
     zoomControl: false,
     minZoom: 1,
-    maxZoom: 10,
+    maxZoom: 20,
     zoomSnap: 0,
     wheelDebounceTime: 0,
     worldCopyJump: true,
@@ -62,7 +62,8 @@ export const createWindMap = (
     maplibre = layer.getMaplibreMap();
   } else {
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 10,
+      maxZoom: 20,
+      maxNativeZoom: 19,
       updateWhenIdle: true,
       attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
     }).addTo(map);

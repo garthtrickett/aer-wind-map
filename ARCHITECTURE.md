@@ -23,13 +23,17 @@
   runs clockwise from its first bearing to its second, including north-crossing
   ranges. It ranks calendar months over up to
   five complete years by the fraction of usable days with a configurable
-  consecutive-hour window, then lists matching dates and exports hourly CSV.
+  consecutive-hour window between 06:00 (inclusive) and 18:00 (exclusive) in
+  the spot's local timezone, then lists matching dates and exports hourly CSV.
+  CSV match flags apply the same time restriction; full-day values remain
+  available in the export and for the 18-paired-hour coverage check.
   The history panel shows a separate noninteractive Leaflet map centered on
   the selected point. SVG sectors and draggable bearing handles update the
   same immutable criteria as the numeric controls; the local map is created
   and removed explicitly when the panel opens and closes. Its zoom slider
   controls Leaflet directly and does not change history criteria or trigger
-  archive requests.
+  archive requests. Both maps allow zoom level 20; raster layers enlarge native
+  level-19 tiles at the closest zoom.
 - Named spot presets store point, historical years, criteria, alert opt-in,
   and minimum matching days in browser local storage. Leaflet markers and a
   map list reopen the preset. Storage parsing and writes return typed errors.

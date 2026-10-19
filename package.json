@@ -10,6 +10,7 @@
     "test": "node --test src/wind.test.ts src/wave.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts src/history-compass.test.ts src/saved-spots.test.ts src/forecast-alerts.test.ts",
     "smoke:live": "node tests/live-smoke.ts",
     "smoke:history": "node tests/history-smoke.ts",
+    "smoke:zoom": "node tests/zoom-smoke.ts",
     "smoke:saved": "node tests/saved-spots-smoke.ts",
     "build": "npm run prepare:decoder && npm run check && vite build && node scripts/compress.ts",
     "preview": "vite preview --host 0.0.0.0"

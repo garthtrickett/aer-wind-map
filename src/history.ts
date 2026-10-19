@@ -184,19 +184,30 @@ export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCrite
   directionInClockwiseRange(hour.windDirection, criteria.windFromStart, criteria.windFromEnd) &&
   directionInClockwiseRange(hour.swellDirection, criteria.swellFromStart, criteria.swellFromEnd);
 
+const historyClock = (timezone: string): Intl.DateTimeFormat =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });
+
+const withinHistoryHours = (time: number, clock: Intl.DateTimeFormat): boolean => {
+  const hour = Number(clock.format(new Date(time * 1000)));
+  return hour >= 6 && hour < 18;
+};
+
 export const historyCsv = (data: HistoricalData, criteria: HistoryCriteria): string => {
   const value = (number: number | null): string => number === null ? "" : String(number);
+  const clock = historyClock(data.timezone);
   const lines = ["time_utc,local_day,swell_height_m,swell_period_s,swell_from_degrees,wind_speed_ms,wind_from_degrees,meets_conditions"];
   for (const hour of data.hours) {
     lines.push([
       new Date(hour.time * 1000).toISOString(), hour.day, value(hour.swellHeight), value(hour.swellPeriod),
-      value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection), hourMatchesCriteria(hour, criteria) ? "1" : "0",
+      value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection),
+      withinHistoryHours(hour.time, clock) && hourMatchesCriteria(hour, criteria) ? "1" : "0",
     ].join(","));
   }
   return `${lines.join("\n")}\n`;
 };
 
 export const summarizeHistory = (data: HistoricalData, criteria: HistoryCriteria): HistorySummary => {
+  const clock = historyClock(data.timezone);
   const days = new Map<string, { available: number; longest: number; bestStart: number | null; run: number; runStart: number | null; lastTime: number | null }>();
   for (let year = data.startYear; year <= data.endYear; year++) {
     for (let month = 1; month <= 12; month++) {
@@ -213,7 +224,9 @@ export const summarizeHistory = (data: HistoricalData, criteria: HistoryCriteria
     const available = hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
       hour.windSpeed !== null && hour.windDirection !== null;
     if (available) day.available++;
-    if (!hourMatchesCriteria(hour, criteria)) { day.run = 0; day.runStart = null; day.lastTime = null; continue; }
+    if (!withinHistoryHours(hour.time, clock) || !hourMatchesCriteria(hour, criteria)) {
+      day.run = 0; day.runStart = null; day.lastTime = null; continue;
+    }
     if (day.lastTime !== null && hour.time - day.lastTime === 3600) day.run++;
     else { day.run = 1; day.runStart = hour.time; }
     day.lastTime = hour.time;
