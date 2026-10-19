@@ -13,6 +13,8 @@ import { readSavedSpots, writeSavedSpots } from "./saved-spots.ts";
 import { forecastAlertKey, loadForecastAlerts } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
+import { loadObservations } from "./observations.ts";
+import { createObservationMarkers } from "./observations-map.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -40,7 +42,7 @@ let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
 let alertSignature = "";
 let nextAlertRefreshAt = 0;
 let alertGeneration = 0;
-let overlayKind: "details" | "history" | null = null;
+let overlayKind: "details" | "history" | "observation" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 let miniMapZoom = defaultHistoryMapZoom;
@@ -119,6 +121,17 @@ const windMap = createWindMap({ element: mapElement, flag,
   onSavedSpotSelect: (id) => dispatch({ kind: "savedSpotOpened", id }),
 });
 const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
+const observationMarkers = createObservationMarkers(windMap.map, (id) => dispatch({ kind: "observationSelected", id }));
+let displayedObservations = state.observations;
+const observationViewport = (): void => {
+  const bounds = windMap.map.getBounds();
+  const normalize = (longitude: number): number => ((longitude + 180) % 360 + 360) % 360 - 180;
+  dispatch({ kind: "observationViewportChanged", zoom: windMap.map.getZoom(), bounds: {
+    south: Math.max(-90, bounds.getSouth()), north: Math.min(90, bounds.getNorth()),
+    west: normalize(bounds.getWest()), east: normalize(bounds.getEast()),
+  } });
+};
+windMap.map.on("moveend", observationViewport);
 let drag: Readonly<{
   pointerId: number;
   handle: HTMLElement;
@@ -186,6 +199,13 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadObservations") {
+    dispatch({ kind: "observationsStarted", key: effect.key });
+    void loadObservations(effect.query).then((result) => dispatch(result.ok
+      ? { kind: "observationsLoaded", key: effect.key, data: result.value }
+      : { kind: "observationsFailed", key: effect.key, message: result.error.message }));
+    return;
+  }
   if (effect.kind === "downloadHistory") {
     const csv = historyCsv(effect.data, effect.criteria);
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -260,9 +280,16 @@ function dispatch(proposal: Proposal): void {
   }
   state = next;
   arrowsCanvas.hidden = state.layer === "waves";
-  render(view(state, dispatch, windMap.center), ui);
+  render(view(state, dispatch, windMap.center, Date.now()), ui);
   render(flagView(state, dispatch), flag);
   syncMiniMap();
+  if (displayedObservations !== state.observations) {
+    displayedObservations = state.observations;
+    if (previous.observations.data !== state.observations.data || previous.observations.buoys !== state.observations.buoys ||
+      previous.observations.wind !== state.observations.wind || (previous.observations.zoom >= 5) !== (state.observations.zoom >= 5)) {
+      observationMarkers.update(state.observations.zoom >= 5 ? state.observations.data?.stations ?? [] : [], state.observations.buoys, state.observations.wind);
+    }
+  }
 
   if (displayedField !== state.field) {
     displayedField = state.field;
@@ -280,7 +307,7 @@ function dispatch(proposal: Proposal): void {
   if (proposal.kind === "savedSpotOpened" && state.history.savedSpotId === proposal.id && state.history.point) {
     windMap.focus(state.history.point);
   }
-  const nextOverlay = state.history.open ? "history" : state.modalOpen ? "details" : null;
+  const nextOverlay = state.observations.selectedId ? "observation" : state.history.open ? "history" : state.modalOpen ? "details" : null;
   if (nextOverlay !== overlayKind) {
     if (overlayKind === null && nextOverlay !== null) previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     overlayKind = nextOverlay;
@@ -299,9 +326,10 @@ function dispatch(proposal: Proposal): void {
 }
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.history.open) dispatch({ kind: "historyClosed" });
+  if (event.key === "Escape" && state.observations.selectedId) dispatch({ kind: "observationClosed" });
+  else if (event.key === "Escape" && state.history.open) dispatch({ kind: "historyClosed" });
   else if (event.key === "Escape" && state.modalOpen) dispatch({ kind: "modalClosed" });
-  if (event.key !== "Tab" || (!state.modalOpen && !state.history.open)) return;
+  if (event.key !== "Tab" || (!state.modalOpen && !state.history.open && !state.observations.selectedId)) return;
   const dialog = ui.querySelector<HTMLElement>("[role=dialog]");
   if (!dialog) return;
   const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")];
@@ -313,7 +341,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 const alertTimer = window.setInterval(refreshForecastAlerts, 15 * 60 * 1000);
-window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); clearInterval(alertTimer); });
+const observationTimer = window.setInterval(() => { if (!document.hidden) dispatch({ kind: "observationsRefreshed" }); }, 5 * 60 * 1000);
+window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
@@ -321,7 +350,11 @@ state = present(state, savedSpotsResult.ok
 displayedSavedSpots = state.savedSpots;
 windMap.setSavedSpots(displayedSavedSpots);
 queueMicrotask(refreshForecastAlerts);
-render(view(state, dispatch, windMap.center), ui);
+const startingBounds = windMap.map.getBounds();
+state = present(state, { kind: "observationViewportChanged", zoom: windMap.map.getZoom(), bounds: {
+  south: Math.max(-90, startingBounds.getSouth()), north: Math.min(90, startingBounds.getNorth()), west: -180, east: 180,
+} });
+render(view(state, dispatch, windMap.center, Date.now()), ui);
 render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);
 if (firstEffect) runEffect(firstEffect);

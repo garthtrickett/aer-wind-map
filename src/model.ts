@@ -4,6 +4,7 @@ import type { ForecastField, Layer } from "./wave.ts";
 import { defaultHistoryCriteria, type HistoricalData, type HistoryCriteria, type HistoryError } from "./history.ts";
 import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
 import { forecastAlertKey, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
+import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
@@ -32,6 +33,7 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  observations: ObservationsState;
   phase: "idle" | "discovering" | "needsField" | "loading" | "ready" | "failed";
   layer: Layer;
   run: ForecastRun | null;
@@ -51,6 +53,7 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | ObservationProposal
   | { readonly kind: "discoverStarted" }
   | { readonly kind: "runFound"; readonly run: ForecastRun; readonly layer: Layer }
   | { readonly kind: "loadStarted"; readonly key: string }
@@ -93,6 +96,7 @@ export type Proposal =
   | { readonly kind: "forecastAlertsShown" };
 
 export const initialState: State = {
+  observations: initialObservations,
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
   selected: null, modalOpen: false, error: null, playing: false,
   savedSpots: [], savedSpotsOpen: false, savedSpotsError: null,
@@ -122,12 +126,28 @@ export const validCriteria = (criteria: HistoryCriteria): boolean =>
 
 const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
+  observations: { ...state.observations, selectedId: null },
   history: { ...state.history, open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
     downloadRequested: false, savedSpotId: null, saveName: "", alertEnabled: false, alertMinDays: 1, saveFeedback: null },
 });
 
 export const present = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "observationsToggled":
+    case "observationLayerToggled":
+    case "observationViewportChanged":
+    case "observationsStarted":
+    case "observationsLoaded":
+    case "observationsFailed":
+    case "observationsRefreshed":
+    case "observationSelected":
+    case "observationClosed": {
+      const observations = presentObservations(state.observations, proposal);
+      return observations === state.observations ? state : { ...state, observations,
+        ...(proposal.kind === "observationsToggled" ? { savedSpotsOpen: false } : {}),
+        ...(proposal.kind === "observationSelected" && observations.selectedId ? { modalOpen: false, history: { ...state.history, open: false } } : {}),
+      };
+    }
     case "discoverStarted": return { ...state, phase: "discovering", error: null };
     case "runFound": return proposal.layer === state.layer ? { ...state, phase: "needsField", run: proposal.run, error: null } : state;
     case "loadStarted": return { ...state, phase: "loading", requestedKey: proposal.key, error: null };
@@ -163,7 +183,7 @@ export const present = (state: State, proposal: Proposal): State => {
       } };
     case "savedSpotsLoaded": return { ...state, savedSpots: proposal.spots, savedSpotsError: null };
     case "savedSpotsLoadFailed": return { ...state, savedSpotsError: proposal.error };
-    case "savedSpotsToggled": return { ...state, savedSpotsOpen: !state.savedSpotsOpen };
+    case "savedSpotsToggled": return { ...state, savedSpotsOpen: !state.savedSpotsOpen, observations: { ...state.observations, open: false } };
     case "savedSpotOpened": {
       const spot = state.savedSpots.find((item) => item.id === proposal.id);
       if (!spot) return state;
@@ -263,6 +283,7 @@ export const present = (state: State, proposal: Proposal): State => {
 };
 
 export type Effect =
+  | ObservationEffect
   | { readonly kind: "discover"; readonly layer: Layer }
   | { readonly kind: "load"; readonly run: ForecastRun; readonly step: number; readonly key: string; readonly layer: Layer }
   | { readonly kind: "loadHistory"; readonly point: Point; readonly startYear: number; readonly endYear: number; readonly key: string }
@@ -280,5 +301,5 @@ export const nap = (state: State): Effect | null => {
   if (state.phase === "needsField" && state.run) {
     return { kind: "load", run: state.run, step: state.step, key: fieldKey(state.run, state.step, state.layer), layer: state.layer };
   }
-  return null;
+  return observationEffect(state.observations);
 };

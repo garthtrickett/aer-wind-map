@@ -5,6 +5,7 @@ import { sampleWave } from "./wave.ts";
 import { historyView } from "./history-view.ts";
 import { forecastAlertKey } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
+import { observationsView } from "./observations-view.ts";
 
 const dateLabel = (date: Date): string =>
   new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
@@ -43,7 +44,7 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
   `;
 };
 
-export const view = (state: State, propose: (proposal: Proposal) => void, center: () => Point): TemplateResult => {
+export const view = (state: State, propose: (proposal: Proposal) => void, center: () => Point, now: number): TemplateResult => {
   const forecastTime = state.run ? dateLabel(validTime({ run: state.run, step: state.step })) : "Finding forecast";
   const wind = state.field?.kind === "wind" && state.selected
     ? sampleWind(state.field, state.selected.latitude, state.selected.longitude) : null;
@@ -77,8 +78,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <button type="button" aria-pressed=${state.layer === "wind"} @click=${() => propose({ kind: "layerSelected", layer: "wind" })}>Wind</button>
         <button type="button" aria-pressed=${state.layer === "waves"} @click=${() => propose({ kind: "layerSelected", layer: "waves" })}>Waves</button>
       </div>
-      <button class="saved-spots-toggle" type="button" aria-expanded=${state.savedSpotsOpen}
+      <div class="map-tools"><button class="saved-spots-toggle" type="button" aria-expanded=${state.savedSpotsOpen}
         @click=${() => propose({ kind: "savedSpotsToggled" })}>Saved spots <span>${state.savedSpots.length}</span></button>
+        <button class="saved-spots-toggle observations-toggle" type="button" aria-expanded=${state.observations.open}
+          @click=${() => propose({ kind: "observationsToggled" })}>Observations</button></div>
     </header>
 
     ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
@@ -187,5 +190,6 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         </section>
       </div>` : nothing}
     ${historyView(state.history, propose)}
+    ${observationsView(state.observations, propose, now)}
   `;
 };

@@ -44,6 +44,21 @@
 
 ## Coding decisions
 
+- Observations are separate immutable SAM state and effects. Map move-end
+  events propose the visible bounds; enabled observation layers load only a
+  bounded area at zoom 5+. Late responses from an earlier view are rejected.
+  Leaflet markers follow map transforms; animation frames never request data.
+- The existing Node server provides a fixed-source observation endpoint with
+  a bounded in-memory cache and shared in-flight reads. NDBC supplies marine
+  reports, AviationWeather supplies airport METARs, and CWA supplies Taiwan
+  wave measurements, station metadata and public county wind reports. CWA's
+  county JavaScript data is parsed as quoted fields, never executed. Failures
+  remain visible per source. No forecast is substituted for an observation.
+- Observation cards distinguish UTC instants (Taiwan source timestamps carry
+  UTC+8), browser-local display time, old reports, calm/variable wind, reported
+  compass sectors, significant wave height and provider period definitions.
+  The forecast slider does not change observation times.
+
 - Authored code is TypeScript. Use functions and object arguments. Application
   code has no classes; classes internal to Leaflet or the decoder are external
   library implementation details.

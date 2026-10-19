@@ -38,6 +38,30 @@ corner, shows the matching-day count and next matching window, and opens the
 spot when clicked. Alerts refresh while the app is open; they are not push
 notifications.
 
+## Measured wave and wind stations
+
+Open **Observations**, select **Wave buoys** or **Wind stations**, and zoom into
+an area (zoom 5 or closer). Click a marker for measured height, reported wave
+period and direction, or wind speed, direction and gust where supplied. Times
+use the browser's timezone. Reports older than three hours are grey and labelled
+as older reports. These readings always show the latest available observations;
+moving the forecast slider does not change them.
+
+Sources are NDBC's reporting marine/coastal stations, Taiwan CWA's buoys and
+wave stations (including Chenggong), CWA land wind stations, and worldwide
+airport METAR reports (including Ngurah Rai). Availability varies by location;
+this does not provide a complete global buoy network or BMKG harbour AWS data.
+CWA land directions are compass sectors; METAR variable and calm winds retain
+their meaning. Wave heights describe significant sea-state height, not surf
+face height or a primary-swell partition.
+
+The existing Node server and Vite dev server expose `/api/observations` because
+the providers do not allow direct browser requests. It accepts bounded map
+coordinates and layer flags only, uses fixed public upstream URLs, caches
+reports for 5–10 minutes, and shares in-flight requests. No API key, database or
+new dependency is required. Station readings refresh every five minutes while
+the page is visible. A failed feed is labelled while other providers continue.
+
 ## Run locally
 
 Node 22.12 or newer is needed for Vite. The deployment image uses Node 24.
