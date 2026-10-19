@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { chromium } from "@playwright/test";
 import { defaultHistoryCriteria } from "../src/history.ts";
 import { withinObservationBounds, type Observation } from "../src/observations.ts";
+import { includeTaiwanWindStation } from "../src/taiwan-coast.ts";
 
 const availablePort = async (): Promise<number> => new Promise((resolve, reject) => {
   const server = createServer();
@@ -68,6 +69,8 @@ try {
         kind: "wind", source: "CWA", sourceUrl: "https://www.cwa.gov.tw/", observedAt: new Date().toISOString(), windSpeed: 1.2, windFrom: 337.5 },
       { ...common, id: "metar:WADD", name: "Ngurah Rai · WADD", latitude: -8.748, longitude: 115.167,
         kind: "wind", source: "METAR", sourceUrl: "https://aviationweather.gov/", observedAt: new Date().toISOString(), windSpeed: 0.514444, variableWind: true },
+      { ...common, id: "cwa-wind:inland", name: "Taiwan inland test station", latitude: 23.097486, longitude: 121.27,
+        kind: "wind", source: "CWA", sourceUrl: "https://www.cwa.gov.tw/", observedAt: new Date().toISOString(), windSpeed: 1.2, windFrom: 337.5 },
     ];
     let requests = 0;
     await page.route("**/api/observations?*", async (route) => {
@@ -75,7 +78,8 @@ try {
       const params = new URL(route.request().url()).searchParams;
       const bounds = Object.fromEntries(["south", "west", "north", "east"].map((key) => [key, Number(params.get(key))])) as { south: number; west: number; north: number; east: number };
       const stations = fixtures.filter((station) => withinObservationBounds(station, bounds) &&
-        (station.kind === "buoy" ? params.get("buoys") === "true" : params.get("wind") === "true"));
+        (station.kind === "buoy" ? params.get("buoys") === "true" : params.get("wind") === "true") &&
+        includeTaiwanWindStation(station, params.get("taiwanCoastalWind") !== "false"));
       await route.fulfill({ contentType: "application/json", body: JSON.stringify({ stations, issues: [], fetchedAt: new Date().toISOString() }) });
     });
     const focusSpot = async (name: string): Promise<void> => {
@@ -113,6 +117,14 @@ try {
     await page.getByRole("button", { name: "Observations", exact: true }).click();
     await page.getByRole("checkbox", { name: /Wind stations/ }).check();
     await page.locator('.wind-marker[title="Chengkung · 成功"]').waitFor();
+    const coastalFilter = page.getByRole("checkbox", { name: "Taiwan coastal wind only" });
+    assert.equal(await coastalFilter.isChecked(), true);
+    assert.equal(await page.locator('.wind-marker[title="Taiwan inland test station"]').count(), 0);
+    await coastalFilter.uncheck();
+    await page.locator('.wind-marker[title="Taiwan inland test station"]').waitFor();
+    await coastalFilter.check();
+    await page.locator('.wind-marker[title="Taiwan inland test station"]').waitFor({ state: "hidden" });
+    await page.locator('.wind-marker[title="Chengkung · 成功"]').waitFor();
     await page.getByRole("button", { name: "Close observations", exact: true }).click();
     await page.locator('.wind-marker[title="Chengkung · 成功"]').click();
     assert.match(await dialog.innerText(), /NNW sector/);
@@ -129,7 +141,7 @@ try {
     await page.getByRole("checkbox", { name: /Wind stations/ }).uncheck();
     await page.locator(".wind-marker").waitFor({ state: "hidden" });
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ mode, stage: "markers, wave/wind details, timezones, stale, variable wind and layer toggles passed", requests, errors }));
+    console.log(JSON.stringify({ mode, stage: "markers, coastal filter and inland restoration, wave/wind details, timezones, stale, variable wind and layer toggles passed", requests, errors }));
     await context.close();
   }
 } finally {

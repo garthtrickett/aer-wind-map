@@ -48,6 +48,14 @@ as older reports. Moving the forecast slider does not change station readings.
 Japan NOWPHAS wave gauges and offshore GPS buoys are also included. Grey ↶
 markers identify archive stations without a current report.
 
+With **Wind stations** enabled, **Taiwan coastal wind only** is on by default.
+It keeps Taiwan land stations and airports within approximately 5 km of the
+ocean shoreline. Uncheck it to restore inland Taiwan stations. Offshore buoy
+winds and stations in other countries remain available. Distance uses bundled
+Natural Earth 1:10m coastline data (public domain), including offshore islands;
+it does not treat lake shores or county boundaries as the coast. The cutoff is
+approximate and describes location, not how sheltered or exposed a sensor is.
+
 For Japan NOWPHAS and Taiwan CWA archive stations, choose **Wave history** in
 the station popup, select a date, and press **Load date**. A wave-height chart,
 measurement table and CSV export show the measured record. Historical times

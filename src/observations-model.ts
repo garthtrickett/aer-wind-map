@@ -5,7 +5,7 @@ const emptyHistory = { open: false, date: "", phase: "idle" as "idle" | "needsDa
   key: null as string | null, data: null as BuoyHistory | null, error: null as string | null, downloadRequested: false };
 
 export type ObservationsState = Readonly<{
-  open: boolean; buoys: boolean; wind: boolean; zoom: number; bounds: ObservationBounds | null;
+  open: boolean; buoys: boolean; wind: boolean; taiwanCoastalWind: boolean; zoom: number; bounds: ObservationBounds | null;
   phase: "idle" | "needsData" | "loading" | "ready" | "failed";
   key: string | null; data: ObservationBatch | null; error: string | null; selectedId: string | null;
   history: Readonly<typeof emptyHistory>;
@@ -13,6 +13,7 @@ export type ObservationsState = Readonly<{
 export type ObservationProposal =
   | Readonly<{ kind: "observationsToggled" }>
   | Readonly<{ kind: "observationLayerToggled"; layer: "buoys" | "wind" }>
+  | Readonly<{ kind: "taiwanCoastalWindToggled" }>
   | Readonly<{ kind: "observationViewportChanged"; bounds: ObservationBounds; zoom: number }>
   | Readonly<{ kind: "observationsStarted"; key: string }>
   | Readonly<{ kind: "observationsLoaded"; key: string; data: ObservationBatch }>
@@ -34,14 +35,14 @@ export type ObservationEffect = Readonly<{ kind: "loadObservations"; query: Obse
   | Readonly<{ kind: "downloadBuoyHistory"; data: BuoyHistory }>;
 export const initialObservations: ObservationsState = {
   open: false, buoys: false, wind: false, zoom: 0, bounds: null, phase: "idle", key: null, data: null, error: null, selectedId: null,
-  history: emptyHistory,
+  history: emptyHistory, taiwanCoastalWind: true,
 };
 export const observationQuery = (state: ObservationsState): ObservationQuery | null => {
   const bounds = state.bounds;
   if (!(state.buoys || state.wind) || state.zoom < 5 || !bounds) return null;
   const width = bounds.east >= bounds.west ? bounds.east - bounds.west : bounds.east - bounds.west + 360;
   return width > 0 && width <= 60 && bounds.north - bounds.south <= 40
-    ? { bounds, buoys: state.buoys, wind: state.wind } : null;
+    ? { bounds, buoys: state.buoys, wind: state.wind, taiwanCoastalWind: state.taiwanCoastalWind } : null;
 };
 const queryKey = (state: ObservationsState): string | null => {
   const query = observationQuery(state);
@@ -56,6 +57,7 @@ export const presentObservations = (state: ObservationsState, proposal: Observat
   switch (proposal.kind) {
     case "observationsToggled": return { ...state, open: !state.open };
     case "observationLayerToggled": return changed({ ...state, [proposal.layer]: !state[proposal.layer] });
+    case "taiwanCoastalWindToggled": return changed({ ...state, taiwanCoastalWind: !state.taiwanCoastalWind, data: null });
     case "observationViewportChanged": {
       const next = { ...state, bounds: proposal.bounds, zoom: proposal.zoom };
       return queryKey(next) === queryKey(state) ? next : changed(next);

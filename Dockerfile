@@ -17,5 +17,7 @@ COPY --from=build /app/src/observations.ts ./src/observations.ts
 COPY --from=build /app/src/nowphas.ts ./src/nowphas.ts
 COPY --from=build /app/src/cwa-wave-history.ts ./src/cwa-wave-history.ts
 COPY --from=build /app/src/buoy-history.ts ./src/buoy-history.ts
+COPY --from=build /app/src/taiwan-coast.ts ./src/taiwan-coast.ts
+COPY --from=build /app/src/taiwan-shoreline.ts ./src/taiwan-shoreline.ts
 EXPOSE 3000
 CMD ["node", "scripts/serve.ts"]

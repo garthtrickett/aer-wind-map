@@ -135,6 +135,7 @@ export const present = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
     case "observationsToggled":
     case "observationLayerToggled":
+    case "taiwanCoastalWindToggled":
     case "observationViewportChanged":
     case "observationsStarted":
     case "observationsLoaded":

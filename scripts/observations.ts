@@ -5,6 +5,7 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseNowphasCurrent, parseNowphasSites } from "../src/nowphas.ts";
 import { cwaArchiveMarkers, parseCwaArchiveSites } from "../src/cwa-wave-history.ts";
+import { includeTaiwanWindStation, nearTaiwanCoast } from "../src/taiwan-coast.ts";
 
 export const parseObservationQuery = (parameters: URLSearchParams): ObservationQuery | null => {
   const values = ["south", "west", "north", "east"].map((key) => parameters.has(key) ? Number(parameters.get(key)) : NaN);
@@ -14,7 +15,9 @@ export const parseObservationQuery = (parameters: URLSearchParams): ObservationQ
     Math.abs(west) > 180 || Math.abs(east) > 180 || width <= 0 || width > 60 || north - south > 40) return null;
   if (!["true", "false"].includes(parameters.get("buoys") ?? "") || !["true", "false"].includes(parameters.get("wind") ?? "")) return null;
   if (parameters.get("buoys") !== "true" && parameters.get("wind") !== "true") return null;
-  return { bounds: { south, west, north, east }, buoys: parameters.get("buoys") === "true", wind: parameters.get("wind") === "true" };
+  if (parameters.has("taiwanCoastalWind") && !["true", "false"].includes(parameters.get("taiwanCoastalWind")!)) return null;
+  return { bounds: { south, west, north, east }, buoys: parameters.get("buoys") === "true", wind: parameters.get("wind") === "true",
+    taiwanCoastalWind: parameters.get("taiwanCoastalWind") !== "false" };
 };
 
 export const serveObservationRequest = async (
@@ -112,7 +115,8 @@ export const createObservationFeed = (fetcher: typeof fetch = fetch, clock: () =
     }) : Promise.resolve([]);
     const cwaWind = query.wind && inTaiwan ? source("CWA wind stations", async () => {
       const value: unknown = JSON.parse(await read("https://www.cwa.gov.tw/Data/js/Observe/OSM/C/STMap.json", 24 * 3600_000));
-      const sites = parseCwaWindSites(value).filter((site) => withinObservationBounds(site, query.bounds));
+      const sites = parseCwaWindSites(value).filter((site) => withinObservationBounds(site, query.bounds) &&
+        (query.taiwanCoastalWind === false || nearTaiwanCoast(site)));
       if (!Array.isArray(value)) throw new Error("Unexpected CWA station format");
       const counties = [...new Set(sites.map((site) => site.county))].filter((county) => /^\d{2,5}$/.test(county));
       const batches: (readonly Observation[])[] = [];
@@ -133,7 +137,8 @@ export const createObservationFeed = (fetcher: typeof fetch = fetch, clock: () =
       return batches.flat();
     }) : Promise.resolve([]);
     const results = (await Promise.all([ndbc, buoys, metars, cwaWind, cwaArchive, nowphas])).flat();
-    return { stations: [...new Map(results.filter((station) => withinObservationBounds(station, query.bounds)).map((station) => [station.id, station])).values()],
+    return { stations: [...new Map(results.filter((station) => withinObservationBounds(station, query.bounds) &&
+      includeTaiwanWindStation(station, query.taiwanCoastalWind !== false)).map((station) => [station.id, station])).values()],
       issues, fetchedAt: new Date(now).toISOString() };
   };
 };

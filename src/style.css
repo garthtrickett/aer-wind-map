@@ -99,6 +99,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .wind-key { background: #8ce4d2; }
 .observations-panel > .observation-warning { color: #ffd0a0; }
 .observations-panel > .observation-note { font-size: 10px; }
+.observations-panel .coastal-wind-filter { margin-left: 18px; font-size: 12px; }
+.observations-panel .coastal-wind-note { margin: 3px 0 10px 18px; }
 .observations-panel a { color: #c7eee5; }
 .observations-refresh { margin-top: 12px; padding: 7px 10px; border: 1px solid #56857f; border-radius: 8px; background: #174b54; color: #edfff6; font-size: 11px; }
 .observation-marker { display: grid !important; place-items: center; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 2px 9px #062a3e80; color: #062d39; background: #f3c968; font: 800 12px/1 "DM Sans", sans-serif; }

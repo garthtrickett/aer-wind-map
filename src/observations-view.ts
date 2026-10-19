@@ -18,6 +18,9 @@ export const observationsView = (state: ObservationsState, propose: (proposal: O
       <p>Measured conditions and wave station archives.</p>
       <label><input type="checkbox" .checked=${state.buoys} @change=${() => propose({ kind: "observationLayerToggled", layer: "buoys" })} /> <span class="observation-key buoy-key">≈</span> Wave buoys / stations</label>
       <label><input type="checkbox" .checked=${state.wind} @change=${() => propose({ kind: "observationLayerToggled", layer: "wind" })} /> <span class="observation-key wind-key">↑</span> Wind stations</label>
+      ${state.wind ? html`<label class="coastal-wind-filter"><input type="checkbox" .checked=${state.taiwanCoastalWind}
+        @change=${() => propose({ kind: "taiwanCoastalWindToggled" })} /> Taiwan coastal wind only</label>
+        <p class="observation-note coastal-wind-note">Within roughly 5 km of the shoreline. Uncheck to include inland Taiwan stations.</p>` : nothing}
       <div class="observation-status" role="status">${!active ? "Choose a layer, then zoom into an area."
         : !observationQuery(state) ? "Zoom closer to see stations (zoom 5+)."
         : state.phase === "loading" || state.phase === "needsData" ? "Loading station observations…"

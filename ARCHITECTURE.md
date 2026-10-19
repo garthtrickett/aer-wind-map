@@ -48,6 +48,13 @@
   events propose the visible bounds; enabled observation layers load only a
   bounded area at zoom 5+. Late responses from an earlier view are rejected.
   Leaflet markers follow map transforms; animation frames never request data.
+- Taiwan wind stations default to a coastal-only selection (roughly 5 km from
+  the ocean). A SAM proposal changes the checkbox and request key, rejecting
+  older responses from a different selection. CWA sites are filtered before
+  county requests; Taiwan airport observations are filtered after decoding.
+  Buoy winds and other countries' stations are unaffected. Distance is computed
+  on the server against bundled Natural Earth 1:10m shoreline segments, with
+  islands included and no additional runtime request or dependency.
 - The existing Node server provides a fixed-source observation endpoint with
   a bounded in-memory cache and shared in-flight reads. NDBC supplies marine
   reports, AviationWeather supplies airport METARs, and CWA supplies Taiwan

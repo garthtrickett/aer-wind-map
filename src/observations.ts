@@ -8,7 +8,7 @@ export type Observation = Readonly<{
 }>;
 export type ObservationIssue = Readonly<{ source: string; message: string }>;
 export type ObservationBatch = Readonly<{ stations: readonly Observation[]; issues: readonly ObservationIssue[]; fetchedAt: string }>;
-export type ObservationQuery = Readonly<{ bounds: ObservationBounds; buoys: boolean; wind: boolean }>;
+export type ObservationQuery = Readonly<{ bounds: ObservationBounds; buoys: boolean; wind: boolean; taiwanCoastalWind?: boolean }>;
 export type ObservationResult =
   | Readonly<{ ok: true; value: ObservationBatch }>
   | Readonly<{ ok: false; error: Readonly<{ kind: "network" | "invalid"; message: string }> }>;
@@ -164,7 +164,7 @@ export const parseNdbcObservations = (text: string, names: ReadonlyMap<string, s
 
 export const loadObservations = async (query: ObservationQuery): Promise<ObservationResult> => {
   const parameters = new URLSearchParams({ ...Object.fromEntries(Object.entries(query.bounds).map(([key, value]) => [key, String(value)])),
-    buoys: String(query.buoys), wind: String(query.wind) });
+    buoys: String(query.buoys), wind: String(query.wind), taiwanCoastalWind: String(query.taiwanCoastalWind !== false) });
   try {
     const response = await fetch(`/api/observations?${parameters}`, { signal: AbortSignal.timeout(45_000) });
     if (!response.ok) return { ok: false, error: { kind: "network", message: `Observation request failed (${response.status}).` } };
