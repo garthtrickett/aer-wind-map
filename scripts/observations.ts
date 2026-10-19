@@ -3,6 +3,8 @@ import {
   withinObservationBounds, type Observation, type ObservationBatch, type ObservationIssue, type ObservationQuery,
 } from "../src/observations.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { parseNowphasCurrent, parseNowphasSites } from "../src/nowphas.ts";
+import { cwaArchiveMarkers, parseCwaArchiveSites } from "../src/cwa-wave-history.ts";
 
 export const parseObservationQuery = (parameters: URLSearchParams): ObservationQuery | null => {
   const values = ["south", "west", "north", "east"].map((key) => parameters.has(key) ? Number(parameters.get(key)) : NaN);
@@ -57,6 +59,7 @@ export const createObservationFeed = (fetcher: typeof fetch = fetch, clock: () =
       catch { issues.push({ source: name, message: "This observation feed is temporarily unavailable." }); return []; }
     };
     const inTaiwan = query.bounds.north >= 20 && query.bounds.south <= 27 && query.bounds.west <= query.bounds.east && query.bounds.west <= 123 && query.bounds.east >= 118;
+    const inJapan = query.bounds.north >= 20 && query.bounds.south <= 50 && query.bounds.west <= query.bounds.east && query.bounds.west <= 155 && query.bounds.east >= 123;
     const ndbc = source("NDBC", async () => {
       const [text, names] = await Promise.all([
         read("https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"),
@@ -74,6 +77,23 @@ export const createObservationFeed = (fetcher: typeof fetch = fetch, clock: () =
       const value: unknown = JSON.parse(text);
       if (!Array.isArray(value) || !value.length) throw new Error("Unexpected CWA wave format");
       return parseCwaBuoys(value);
+    }) : Promise.resolve([]);
+    const cwaArchive = query.buoys && inTaiwan ? source("CWA wave archive", async () => {
+      const value: unknown = JSON.parse(await read("https://ocean.cwa.gov.tw/V2/data_interface/download/get_station", 24 * 3600_000, {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" }, body: "dataset_type=Buoy&factor=w",
+      }));
+      const sites = parseCwaArchiveSites(value);
+      if (!sites.length) throw new Error("Unexpected CWA archive station list");
+      return cwaArchiveMarkers(sites, await buoys);
+    }) : Promise.resolve([]);
+    const nowphas = query.buoys && inJapan ? source("Japan NOWPHAS", async () => {
+      const [setup, current] = await Promise.all([
+        read("https://nowphas.mlit.go.jp/PROG/xml/POINT_SETUP.xml", 24 * 3600_000),
+        read("https://nowphas.mlit.go.jp/mapxml/").catch(() => ""),
+      ]);
+      const sites = parseNowphasSites(setup);
+      if (!sites.length) throw new Error("Unexpected NOWPHAS station list");
+      return parseNowphasCurrent(current, sites);
     }) : Promise.resolve([]);
     const metars = query.wind ? source("Airport METAR", async () => {
       // A bounded, slightly padded box makes neighbouring pans share a cache
@@ -112,7 +132,7 @@ export const createObservationFeed = (fetcher: typeof fetch = fetch, clock: () =
       }));
       return batches.flat();
     }) : Promise.resolve([]);
-    const results = (await Promise.all([ndbc, buoys, metars, cwaWind])).flat();
+    const results = (await Promise.all([ndbc, buoys, metars, cwaWind, cwaArchive, nowphas])).flat();
     return { stations: [...new Map(results.filter((station) => withinObservationBounds(station, query.bounds)).map((station) => [station.id, station])).values()],
       issues, fetchedAt: new Date(now).toISOString() };
   };

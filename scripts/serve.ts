@@ -3,10 +3,12 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { createObservationFeed, serveObservationRequest } from "./observations.ts";
+import { createBuoyHistoryFeed, serveBuoyHistoryRequest } from "./buoy-history.ts";
 
 const root = resolve(import.meta.dirname, "../dist");
 const port = Number(process.env.PORT || "3000");
 const observations = createObservationFeed();
+const buoyHistory = createBuoyHistoryFeed();
 const types: Readonly<Record<string, string>> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -35,6 +37,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (pathname === "/api/buoy-history") {
+    await serveBuoyHistoryRequest(request, response, buoyHistory);
+    return;
+  }
   if (pathname === "/api/observations") {
     await serveObservationRequest(request, response, observations);
     return;

@@ -14,13 +14,13 @@ export const createObservationMarkers = (map: L.Map, onSelect: (id: string) => v
       if (!buoy && !(showingWind && station.windSpeed !== null)) continue;
       const longitude = station.longitude + Math.round((map.getCenter().lng - station.longitude) / 360) * 360;
       if (!bounds.contains([station.latitude, longitude])) continue;
-      const old = now - Date.parse(station.observedAt) > 3 * 3600_000;
+      const old = station.observedAt === null || now - Date.parse(station.observedAt) > 3 * 3600_000;
       const label = document.createElement("span");
       label.className = "observation-marker-reading";
-      label.textContent = buoy ? station.waveHeight === null ? "≈" : station.waveHeight.toFixed(1)
+      label.textContent = buoy ? station.observedAt === null ? "↶" : station.waveHeight === null ? "≈" : station.waveHeight.toFixed(1)
         : station.windSpeed === null ? "↑" : String(Math.round(station.windSpeed * 3.6));
       const tooltip = document.createElement("span");
-      tooltip.textContent = `${station.name} · ${buoy ? "wave height (m)" : "wind (km/h)"}${old ? " · older report" : ""}`;
+      tooltip.textContent = `${station.name} · ${station.observedAt === null ? "wave archive" : buoy ? "wave height (m)" : "wind (km/h)"}${old && station.observedAt ? " · older report" : ""}`;
       L.marker([station.latitude, longitude], {
         icon: L.divIcon({ className: `observation-marker ${buoy ? "buoy-marker" : "wind-marker"}${old ? " observation-stale" : ""}`,
           html: label, iconSize: [36, 36], iconAnchor: [18, 18] }),

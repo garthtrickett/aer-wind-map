@@ -14,6 +14,7 @@ import { forecastAlertKey, loadForecastAlerts } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
 import { loadObservations } from "./observations.ts";
+import { loadBuoyHistory, buoyHistoryCsv } from "./buoy-history.ts";
 import { createObservationMarkers } from "./observations-map.ts";
 
 const requireElement = (id: string): HTMLElement => {
@@ -199,6 +200,21 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadBuoyHistory") {
+    dispatch({ kind: "observationHistoryStarted", key: effect.key });
+    void loadBuoyHistory(effect.station, effect.date).then((result) => dispatch(result.ok
+      ? { kind: "observationHistoryLoaded", key: effect.key, data: result.value }
+      : { kind: "observationHistoryFailed", key: effect.key, message: result.error.message }));
+    return;
+  }
+  if (effect.kind === "downloadBuoyHistory") {
+    dispatch({ kind: "observationHistoryDownloaded" });
+    const url = URL.createObjectURL(new Blob([buoyHistoryCsv(effect.data)], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = `aer-wave-observations-${effect.data.station.code}-${effect.data.date}.csv`; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return;
+  }
   if (effect.kind === "loadObservations") {
     dispatch({ kind: "observationsStarted", key: effect.key });
     void loadObservations(effect.query).then((result) => dispatch(result.ok

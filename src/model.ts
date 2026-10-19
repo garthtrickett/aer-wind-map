@@ -141,6 +141,15 @@ export const present = (state: State, proposal: Proposal): State => {
     case "observationsFailed":
     case "observationsRefreshed":
     case "observationSelected":
+    case "observationHistoryOpened":
+    case "observationHistoryClosed":
+    case "observationHistoryDateChanged":
+    case "observationHistoryRequested":
+    case "observationHistoryStarted":
+    case "observationHistoryLoaded":
+    case "observationHistoryFailed":
+    case "observationHistoryDownloadRequested":
+    case "observationHistoryDownloaded":
     case "observationClosed": {
       const observations = presentObservations(state.observations, proposal);
       return observations === state.observations ? state : { ...state, observations,

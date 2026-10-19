@@ -1,10 +1,10 @@
 export type ObservationBounds = Readonly<{ south: number; west: number; north: number; east: number }>;
 export type Observation = Readonly<{
   id: string; name: string; latitude: number; longitude: number;
-  kind: "buoy" | "wind"; source: "CWA" | "NDBC" | "METAR"; sourceUrl: string;
-  observedAt: string; windSpeed: number | null; windFrom: number | null; variableWind: boolean;
+  kind: "buoy" | "wind"; source: "CWA" | "NDBC" | "METAR" | "NOWPHAS"; sourceUrl: string; historyCode?: string;
+  observedAt: string | null; windSpeed: number | null; windFrom: number | null; variableWind: boolean;
   gust: number | null; waveHeight: number | null; wavePeriod: number | null;
-  meanPeriod: number | null; waveFrom: number | null; periodLabel: "Dominant period" | "Wave period";
+  meanPeriod: number | null; waveFrom: number | null; periodLabel: "Dominant period" | "Wave period" | "Significant wave period";
 }>;
 export type ObservationIssue = Readonly<{ source: string; message: string }>;
 export type ObservationBatch = Readonly<{ stations: readonly Observation[]; issues: readonly ObservationIssue[]; fetchedAt: string }>;

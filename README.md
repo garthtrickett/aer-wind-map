@@ -44,8 +44,26 @@ Open **Observations**, select **Wave buoys** or **Wind stations**, and zoom into
 an area (zoom 5 or closer). Click a marker for measured height, reported wave
 period and direction, or wind speed, direction and gust where supplied. Times
 use the browser's timezone. Reports older than three hours are grey and labelled
-as older reports. These readings always show the latest available observations;
-moving the forecast slider does not change them.
+as older reports. Moving the forecast slider does not change station readings.
+Japan NOWPHAS wave gauges and offshore GPS buoys are also included. Grey ↶
+markers identify archive stations without a current report.
+
+For Japan NOWPHAS and Taiwan CWA archive stations, choose **Wave history** in
+the station popup, select a date, and press **Load date**. A wave-height chart,
+measurement table and CSV export show the measured record. Historical times
+use the station's local timezone (Japan UTC+9, Taiwan UTC+8), explicitly
+labelled above the table. All hours of the day are included, independently
+of the 06–18 model-based seasonal score.
+
+NOWPHAS supplies significant wave height and significant wave period at
+20-minute intervals, with a two-hour fallback for older records. CWA's archive
+supplies significant height, **peak period** and **mean period** hourly.
+These period definitions are kept separate; neither archive is labelled as
+primary swell. Gaps stay missing. NOWPHAS marks confirmed versus provisional
+records, and its downloadable archive can lag several months behind today.
+The app reads its current publication limit rather than inventing newer data.
+Coverage varies by station and year; the CWA history integration uses stations
+listed in CWA's own accessible archive, not every buoy shown by other agencies.
 
 Sources are NDBC's reporting marine/coastal stations, Taiwan CWA's buoys and
 wave stations (including Chenggong), CWA land wind stations, and worldwide
@@ -59,7 +77,12 @@ The existing Node server and Vite dev server expose `/api/observations` because
 the providers do not allow direct browser requests. It accepts bounded map
 coordinates and layer flags only, uses fixed public upstream URLs, caches
 reports for 5–10 minutes, and shares in-flight requests. No API key, database or
-new dependency is required. Station readings refresh every five minutes while
+new dependency is required. `/api/buoy-history` validates station/date inputs
+against provider station catalogues, uses fixed archive URLs and keeps up to
+eight station/year or station/month datasets in memory for six hours. Only
+three concurrent archive requests are allowed. ZIP entries are read in memory
+with compressed and expanded size limits; no provider paths are written to
+disk. Station readings refresh every five minutes while
 the page is visible. A failed feed is labelled while other providers continue.
 
 ## Run locally

@@ -58,6 +58,28 @@
   UTC+8), browser-local display time, old reports, calm/variable wind, reported
   compass sectors, significant wave height and provider period definitions.
   The forecast slider does not change observation times.
+- NOWPHAS supplies Japanese wave-gauge and GPS-buoy metadata/current readings.
+  Only its wave-enabled sites are shown; tide-only sensors are excluded.
+  CWA's accessible archive station list adds historical sites even when a
+  current observation is unavailable. Such markers have no observation time
+  and show an archive symbol, never a synthetic current reading.
+- A station's Wave history tab has its own immutable proposals and explicit
+  fetch/download effects, separate from model history. Request keys include
+  station identity and local date; late results cannot replace a newer choice.
+  The Node/Vite endpoint downloads official measured archives on demand.
+  NOWPHAS fixed-width data preserves its quality flags, JST instants and
+  significant-wave period; CWA CSV converts centimetres and tenths of seconds
+  and retains peak versus mean periods in UTC+8. Missing or calm direction
+  values are not interpreted as north. CSV records both UTC and station-local
+  time. No interpolation, forecast fallback or monthly seasonal score is
+  applied to measured records.
+- Archive ZIPs (including NOWPHAS's nested regional monthly ZIPs) are parsed
+  in memory using Node's built-in deflate reader and bounded member sizes.
+  CWA station/year and NOWPHAS station/year or provisional station/month reads
+  share in-flight requests and use an eight-entry, six-hour cache. Fixed source
+  destinations and catalogue validation prevent arbitrary upstream URLs.
+  NOWPHAS's publication limit is extracted as data from its navigation script,
+  never executed; unpublished dates return an explicit unavailable result.
 
 - Authored code is TypeScript. Use functions and object arguments. Application
   code has no classes; classes internal to Leaflet or the decoder are external
