@@ -76,6 +76,16 @@ test("expired tokens do not link and tokens/cookies are not stored in plaintext"
   } finally { f.clean(); }
 });
 
+test("the first test message is allowed immediately after linking, with a cooldown on subsequent tests", () => {
+  const f = fixture();
+  try {
+    const { owner } = connect(f.store);
+    assert.equal(f.store.test(owner, now), true);
+    assert.equal(f.store.test(owner, now + 1000), false);
+    assert.equal(f.store.test(owner, now + 60_001), true);
+  } finally { f.clean(); }
+});
+
 test("background checking sends once, survives restart, ignores unavailable forecasts and confirms closer dates", async () => {
   const f = fixture();
   try {

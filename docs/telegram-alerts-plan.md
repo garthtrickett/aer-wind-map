@@ -133,7 +133,7 @@ so an operator can re-arm after reconciling the Telegram chat.
 - Implemented the shared daylight scorer and windows; persistent owner/link,
   snapshot, revision, scheduling, lease and delivery modules; Telegram transport,
   commands, HTTP routes, SAM controls and read-only phone links.
-- `npm test`: **62 passed**, including timezone/daylight, optional period maximum,
+- `npm test`: **63 passed**, including timezone/daylight, optional period maximum,
   actual SQLite reopen, notification deduplication, genuine loss/recovery,
   ambiguous delivery/worker recovery, rate-limit backoff, blocked bot, expired
   one-use links, cross-origin/ownership rejection and scoped view access.
@@ -151,3 +151,9 @@ so an operator can re-arm after reconciling the Telegram chat.
   server-only variables; the existing service has one replica and sleeping off.
 - Deployment and live connection/phone-delivery evidence are recorded below once
   verified. Automated tests deliberately use a fake recipient and transport.
+
+### Final usability check
+
+The first requested test notification now works immediately after connection;
+only earlier test requests consume its one-minute cooldown. Connection replies
+do not block it. The regression test passes.

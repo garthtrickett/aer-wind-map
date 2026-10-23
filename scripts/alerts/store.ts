@@ -227,9 +227,9 @@ export const openAlertStore = (path: string) => {
     test(owner: string, now: number): boolean {
       const row = ownerAt(owner);
       if (!row?.chat_id) return false;
-      const recent = db.prepare("SELECT 1 FROM deliveries WHERE owner=? AND spot_id IS NULL AND created_at>?").get(owner, now - 60_000);
+      const recent = db.prepare("SELECT 1 FROM deliveries WHERE owner=? AND id LIKE 'test-%' AND created_at>?").get(owner, now - 60_000);
       if (recent) return false;
-      enqueue({ id: secret(), owner, chatId: row.chat_id, text: "Aer test notification. Your Telegram connection works; forecast checks continue with the app closed." }, now);
+      enqueue({ id: `test-${secret()}`, owner, chatId: row.chat_id, text: "Aer test notification. Your Telegram connection works; forecast checks continue with the app closed." }, now);
       return true;
     },
     pending(now: number): readonly Delivery[] {
