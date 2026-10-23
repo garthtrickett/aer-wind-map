@@ -242,3 +242,36 @@ test("HTTP requires the owner cookie and same origin, rejects invalid rules, nev
     assert.equal(f.store.due(now).length, 0);
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())); f.clean(); }
 });
+
+
+test("Telegram monitoring uses any satisfied day rule, persists them, and ignores distant-only matches", () => {
+  const f = fixture();
+  try {
+    const { owner } = connect(f.store);
+    const configured = { ...spot, alertRules: [{ minDays: 2, withinDays: 4 }, { minDays: 4, withinDays: 7 }] };
+    f.store.sync(owner, [configured], 0);
+    assert.deepEqual(f.store.spot(owner, spot.id)?.alertRules, configured.alertRules);
+    const watch = f.store.due(now)[0];
+    const distant = summary(["2026-10-28", "2026-10-29", "2026-11-01", "2026-11-02"]);
+    assert.equal(notificationFor(watch, distant, now, "https://aer.example/"), null);
+    const fourOnly = summary(["2026-10-24", "2026-10-25", "2026-11-01"]);
+    const notification = notificationFor(watch, fourOnly, now, "https://aer.example/");
+    assert.ok(notification);
+    assert.match(notification.text, /Met: 2 of the next 4 days match; need 2/);
+    assert.match(notification.text, /Not met: 2 of the next 7 days match; need 4/);
+    assert.deepEqual(notification.dates, ["2026-10-24", "2026-10-25"]);
+    const sevenOnly = notificationFor(watch, summary(["2026-10-24", "2026-10-27", "2026-10-28", "2026-10-29"]), now, "https://aer.example/");
+    assert.ok(sevenOnly);
+    assert.match(sevenOnly.text, /Met: 4 of the next 7 days match; need 4/);
+    // Mark an actual alert as delivered, then verify that losing the short-window match re-arms it.
+    const welcome = f.store.pending(now)[0];
+    f.store.beginDelivery(welcome, now); f.store.delivered(welcome, { kind: "sent", messageId: 1 }, now);
+    f.store.checked(watch, fourOnly, now, notification);
+    const delivery = f.store.pending(now)[0];
+    f.store.beginDelivery(delivery, now); f.store.delivered(delivery, { kind: "sent", messageId: 2 }, now);
+    const qualified = f.store.due(now + 21_600_001)[0];
+    assert.equal(qualified.qualified, true);
+    f.store.checked(qualified, distant, now + 21_600_001);
+    assert.equal(f.store.due(now + 43_200_002)[0].qualified, false, "distant matches do not keep a shorter rule armed");
+  } finally { f.clean(); }
+});

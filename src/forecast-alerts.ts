@@ -1,3 +1,4 @@
+import { alertRulesFor, type AlertDayRule } from "./alert-rules.ts";
 import { historyClock, withinHistoryHours, hourMatchesCriteria, type HistoricalHour } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
@@ -7,6 +8,7 @@ export type ForecastAlertSummary = Readonly<{
   windows: readonly ForecastWindow[];
   matchingDays: number;
   availableDays: number;
+  availableDates?: readonly string[];
   horizonDays: number;
   requiredHours: number;
   nextWindowStart: number | null;
@@ -58,7 +60,7 @@ const dayAt = (time: number, formatter: Intl.DateTimeFormat): string => {
 };
 
 export const forecastAlertKey = (spot: SavedSpot): string =>
-  JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, spot.alertMinDays]);
+  JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, alertRulesFor(spot)]);
 
 export const scoreForecastAlert = (
   spot: Pick<SavedSpot, "criteria">, wave: ForecastSeries, wind: ForecastSeries, now: Date,
@@ -93,14 +95,31 @@ export const scoreForecastAlert = (
     if (day.run >= requiredHours && day.firstWindow === null) day.firstWindow = day.runStart;
     if (day.firstWindow !== null && day.firstWindow === day.runStart) day.windowEnd = time + 3600;
   }
-  const availableDays = [...days.values()].filter((day) => day.available >= requiredHours).length;
+  const availableDates = [...days].filter(([, day]) => day.available >= requiredHours).map(([date]) => date);
+  const availableDays = availableDates.length;
   if (!availableDays) return null;
   const matching = [...days.values()].filter((day) => day.firstWindow !== null);
   const windows = [...days].flatMap(([date, day]) => day.firstWindow === null ? []
     : [{ day: date, start: day.firstWindow, end: day.windowEnd! }]);
-  return { windows, matchingDays: matching.length, availableDays, horizonDays: forecastAlertDays,
+  return { windows, availableDates, matchingDays: matching.length, availableDays, horizonDays: forecastAlertDays,
     requiredHours, nextWindowStart: matching[0]?.firstWindow ?? null,
     timezone: wave.timezone, checkedAt: now.getTime() };
+};
+
+/** Each row counts only today through its own last local calendar day. Any row can trigger. */
+export const evaluateForecastRules = (summary: ForecastAlertSummary, dayRules: readonly AlertDayRule[]) => {
+  const today = dayAt(summary.checkedAt / 1000, localDayFormatter(summary.timezone));
+  const start = Date.parse(`${today}T00:00:00Z`);
+  const rules = dayRules.map((rule) => {
+    const end = new Date(start + rule.withinDays * 86_400_000).toISOString().slice(0, 10);
+    const inside = (day: string): boolean => day >= today && day < end;
+    const windows = summary.windows.filter((window) => inside(window.day));
+    return { ...rule, matchingDays: windows.length, met: windows.length >= rule.minDays, windows,
+      availableDays: summary.availableDates ? summary.availableDates.filter(inside).length : null };
+  });
+  const matchingDates = new Set(rules.filter((rule) => rule.met).flatMap((rule) => rule.windows.map((window) => window.day)));
+  return { matched: rules.some((rule) => rule.met), rules,
+    windows: summary.windows.filter((window) => matchingDates.has(window.day)) };
 };
 
 const urlsFor = (points: readonly SavedSpot["point"][]): readonly [string, string] => {

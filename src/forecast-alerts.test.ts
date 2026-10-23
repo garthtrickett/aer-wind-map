@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { loadForecastPoint, loadForecastAlerts, scoreForecastAlert } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastAlertKey, loadForecastPoint, loadForecastAlerts, scoreForecastAlert, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { defaultHistoryCriteria } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
@@ -94,4 +94,46 @@ test("draft forecasts report network and malformed-data failures", async () => {
     wind_speed_10m: wind.first, wind_direction_10m: wind.second,
   } });
   assert.deepEqual(await loadForecastPoint(spot.point, invalid), { ok: false, error: { kind: "invalid" } });
+});
+
+
+test("each alert row counts only its own next N days and any row can trigger", () => {
+  const at = Date.parse("2026-10-23T00:00:00Z");
+  const dates = Array.from({ length: 14 }, (_, offset) => new Date(at + offset * 86_400_000).toISOString().slice(0, 10));
+  const forecast = (offsets: number[]): ForecastAlertSummary => ({
+    windows: offsets.map((offset) => ({ day: dates[offset], start: at / 1000 + offset * 86_400 + 21_600, end: at / 1000 + offset * 86_400 + 28_800 })),
+    matchingDays: offsets.length, availableDays: 14, availableDates: dates, horizonDays: 14,
+    requiredHours: 2, nextWindowStart: null, timezone: "UTC", checkedAt: at,
+  });
+  const rules = [{ minDays: 2, withinDays: 4 }, { minDays: 4, withinDays: 7 }];
+  const sevenOnly = evaluateForecastRules(forecast([1, 4, 5, 6]), rules);
+  assert.deepEqual(sevenOnly.rules.map((rule) => rule.met), [false, true]);
+  assert.equal(sevenOnly.matched, true);
+  const fourOnly = evaluateForecastRules(forecast([1, 2, 8, 9]), rules);
+  assert.deepEqual(fourOnly.rules.map((rule) => rule.met), [true, false]);
+  assert.equal(fourOnly.matched, true);
+  assert.deepEqual(fourOnly.windows.map((window) => window.day), [dates[1], dates[2]], "notifications include only windows from satisfied rules");
+  assert.equal(evaluateForecastRules(forecast([1, 4, 8, 9]), rules).matched, false, "four good days across 14 do not satisfy either shorter rule");
+  const boundary = evaluateForecastRules(forecast([0, 3, 4]), [{ minDays: 2, withinDays: 4 }]);
+  assert.equal(boundary.rules[0].matchingDays, 2, "today and day four count; day five does not");
+  const partial = evaluateForecastRules({ ...forecast([1]), availableDates: [dates[1]], availableDays: 1 }, rules);
+  assert.equal(partial.rules[0].availableDays, 1);
+  assert.equal(partial.matched, false);
+});
+
+test("alert periods start on the forecast's local date, including across a month boundary", () => {
+  const summary: ForecastAlertSummary = {
+    windows: ["2026-10-31", "2026-11-01", "2026-11-04", "2026-11-05"].map((day) => ({ day,
+      start: Date.parse(`${day}T00:00:00Z`) / 1000, end: Date.parse(`${day}T02:00:00Z`) / 1000 })),
+    matchingDays: 4, availableDays: 14, horizonDays: 14, requiredHours: 2, nextWindowStart: null,
+    timezone: "Asia/Taipei", checkedAt: Date.parse("2026-10-31T17:00:00Z"),
+  };
+  const result = evaluateForecastRules(summary, [{ minDays: 2, withinDays: 4 }]);
+  assert.deepEqual(result.windows.map((window) => window.day), ["2026-11-01", "2026-11-04"]);
+  assert.equal(result.rules[0].availableDays, null, "older stored summaries have unknown per-period coverage");
+});
+
+test("alert identity includes every period rule and treats legacy single thresholds equivalently", () => {
+  assert.equal(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertRules: [{ minDays: spot.alertMinDays, withinDays: 14 }] }));
+  assert.notEqual(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertRules: [{ minDays: 2, withinDays: 4 }] }));
 });

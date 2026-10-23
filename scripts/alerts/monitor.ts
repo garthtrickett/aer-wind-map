@@ -1,4 +1,5 @@
-import { loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { alertRulesFor } from "../../src/alert-rules.ts";
+import { evaluateForecastRules, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { secret, type AlertStore, type WatchedSpot } from "./store.ts";
 import type { Telegram } from "./telegram.ts";
@@ -13,20 +14,22 @@ const clockText = (time: number, timezone: string): string => new Intl.DateTimeF
 }).format(new Date(time * 1000));
 
 export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummary, now: number, publicUrl: string) => {
-  if (summary.matchingDays < watch.spot.alertMinDays || !summary.windows.length) return null;
+  const evaluation = evaluateForecastRules(summary, alertRulesFor(watch.spot));
+  if (!evaluation.matched || !evaluation.windows.length) return null;
   if (watch.notifiedAt !== null && now - watch.notifiedAt < 21_600_000) return null;
-  const dates = summary.windows.map((window) => window.day);
+  const dates = evaluation.windows.map((window) => window.day);
   const newDates = dates.some((date) => !watch.notifiedDates.includes(date));
-  const near = summary.windows.filter((window) => window.start * 1000 <= now + 72 * 3_600_000).map((window) => window.day);
+  const near = evaluation.windows.filter((window) => window.start * 1000 <= now + 72 * 3_600_000).map((window) => window.day);
   const confirmation = watch.qualified && !newDates && near.some((day) => !watch.confirmedDates.includes(day));
   if (watch.qualified && !newDates && !confirmation) return null;
   const spot = watch.spot;
   const title = confirmation ? "Closer-range forecast confirmation" : near.length ? "Forecast matches" : "Early forecast heads-up";
   const text = [
     `${spot.name} — ${title}`,
-    `${summary.matchingDays} of the next 14 local days match (threshold ${spot.alertMinDays}).`,
+    "Alert when any rule matches:",
+    ...evaluation.rules.map((rule) => `${rule.met ? "Met" : "Not met"}: ${rule.matchingDays} of the next ${rule.withinDays} days match; need ${rule.minDays}.`),
     `At least ${summary.requiredHours} consecutive hourly samples, between 06:00 and 18:00.`,
-    ...summary.windows.map((window) => `${dateText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
+    ...evaluation.windows.map((window) => `${dateText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
     `Local time: ${summary.timezone}.`,
     `Swell ${spot.criteria.minSwellHeight}–${spot.criteria.maxSwellHeight} m; period ${spot.criteria.minSwellPeriod}–${spot.criteria.maxSwellPeriod ?? "unlimited"} s.`,
     `Swell from ${spot.criteria.swellFromStart}° → ${spot.criteria.swellFromEnd}° clockwise.`,

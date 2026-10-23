@@ -43,8 +43,11 @@ const monitor = createMonitor({ store, telegram, publicUrl: base, report: () => 
   id: saved.id, key: forecastAlertKey(saved), ok: true, summary: {
     matchingDays: 2, availableDays: 13, horizonDays: 14, requiredHours: 2,
     nextWindowStart: Date.now() / 1000 + 86_400, timezone: "Asia/Makassar", checkedAt: Date.now(),
-    windows: [1, 2].map((day) => ({ day: `2026-10-${23 + day}`, start: Math.floor(Date.now() / 1000) + day * 86_400,
-      end: Math.floor(Date.now() / 1000) + day * 86_400 + 7200 })),
+    windows: [1, 2].map((offset) => {
+      const start = Math.floor(Date.now() / 1000) + offset * 86_400;
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Makassar", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(start * 1000));
+      return { day, start, end: start + 7200 };
+    }),
   },
 })) });
 
@@ -97,8 +100,16 @@ try {
   await expect(page.getByLabel("Swell period at most")).toHaveValue("15");
   await page.getByLabel("Swell period at most").fill("14");
   await page.getByLabel("Swell period at most").press("Tab");
+  await page.getByLabel("Total days for rule 1").fill("4");
+  await page.getByLabel("Total days for rule 1").press("Tab");
+  await page.getByRole("button", { name: "Add rule", exact: true }).click();
+  await page.getByLabel("Total days for rule 2").fill("7");
+  await page.getByLabel("Total days for rule 2").press("Tab");
   await page.getByRole("button", { name: "Update saved spot" }).click();
   await expect.poll(() => store.due(Date.now())[0]?.spot.criteria.maxSwellPeriod).toBe(14);
+  await expect.poll(() => store.due(Date.now())[0]?.spot.alertRules).toEqual([
+    { minDays: 2, withinDays: 4 }, { minDays: 2, withinDays: 7 },
+  ]);
   await page.getByRole("button", { name: "Close history" }).click();
   await page.getByRole("button", { name: /Saved spots 1/ }).click();
   await expect(page.getByText(/Connected · 1 enabled spot/)).toBeVisible();

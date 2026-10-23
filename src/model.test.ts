@@ -76,7 +76,7 @@ test("named spot presets save, reopen, update, and remove independently", () => 
   const criteria = { ...named.history.criteria, windFromStart: 315, windFromEnd: 45,
     swellFromStart: 180, swellFromEnd: 270, maxSwellPeriod: 14 };
   const configured = present(present(present(named, { kind: "historyCriteriaChanged", criteria }),
-    { kind: "savedSpotAlertChanged", enabled: true }), { kind: "savedSpotAlertMinDaysChanged", days: 3 });
+    { kind: "savedSpotAlertChanged", enabled: true }), { kind: "savedSpotAlertRulesChanged", rules: [{ minDays: 3, withinDays: 7 }, { minDays: 2, withinDays: 4 }] });
   const saved = present(configured, { kind: "savedSpotSaved", id: "spot-1" });
   assert.equal(saved.savedSpots.length, 1);
   assert.deepEqual(saved.savedSpots[0]?.criteria, criteria);
@@ -90,7 +90,7 @@ test("named spot presets save, reopen, update, and remove independently", () => 
   assert.equal(reopened.history.open, true);
   assert.equal(reopened.history.saveName, "Wet season Bukit");
   assert.deepEqual(reopened.history.criteria, criteria);
-  assert.equal(reopened.history.alertMinDays, 3);
+  assert.deepEqual(reopened.history.alertRules, [{ minDays: 3, withinDays: 7 }, { minDays: 2, withinDays: 4 }]);
   assert.deepEqual(reopened.selected, point);
   const updated = present(present(reopened, { kind: "savedSpotNameChanged", name: "Storm season Bukit" }),
     { kind: "savedSpotSaved", id: "spot-1" });
@@ -111,7 +111,7 @@ test("a late forecast alert cannot replace changed spot rules", () => {
   const spot = saved.savedSpots[0]!;
   const key = forecastAlertKey(spot);
   const loading = present(saved, { kind: "forecastAlertsStarted", generation: 1, entries: [{ id: spot.id, key }] });
-  const changed = present(present(loading, { kind: "savedSpotAlertMinDaysChanged", days: 3 }),
+  const changed = present(present(loading, { kind: "savedSpotAlertRulesChanged", rules: [{ minDays: 3, withinDays: 7 }, { minDays: 2, withinDays: 4 }] }),
     { kind: "savedSpotSaved", id: spot.id });
   const summary = { matchingDays: 2, availableDays: 14, horizonDays: 14,
     requiredHours: 2, nextWindowStart: null, timezone: "UTC", checkedAt: 0 };
@@ -144,7 +144,7 @@ test("enabling draft alerts checks immediately before saving and rescores edits 
   const edited = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxSwellPeriod: 11 } });
   assert.equal(edited.history.forecastPreview, ready.history.forecastPreview);
   assert.notEqual(nap(edited)?.kind, "loadForecastPreview");
-  const threshold = present(edited, { kind: "savedSpotAlertMinDaysChanged", days: 3 });
+  const threshold = present(edited, { kind: "savedSpotAlertRulesChanged", rules: [{ minDays: 3, withinDays: 7 }, { minDays: 2, withinDays: 4 }] });
   assert.equal(threshold.history.forecastPreview, ready.history.forecastPreview);
   const reopened = present(present(threshold, { kind: "historyClosed" }), { kind: "historyOpened" });
   assert.equal(nap(reopened)?.kind, "loadHistory");
@@ -169,4 +169,18 @@ test("preview retries, disabling alerts, and switching spots reject obsolete com
   assert.equal(present(moved, completion), moved);
   const closed = present(loading, { kind: "historyClosed" });
   assert.equal(present(closed, completion), closed);
+});
+
+
+test("legacy alert thresholds reopen as one 14-day row and invalid day rules are rejected", () => {
+  const legacy = { id: "legacy", name: "Legacy", point: { latitude: 23, longitude: 121 }, startYear: 2023, endYear: 2025,
+    criteria: initialState.history.criteria, alertEnabled: true, alertMinDays: 2 };
+  const opened = present(present(initialState, { kind: "savedSpotsLoaded", spots: [legacy] }), { kind: "savedSpotOpened", id: legacy.id });
+  assert.deepEqual(opened.history.alertRules, [{ minDays: 2, withinDays: 14 }]);
+  assert.equal(present(opened, { kind: "savedSpotAlertRulesChanged", rules: [{ minDays: 5, withinDays: 4 }] }), opened);
+  assert.equal(present(opened, { kind: "savedSpotAlertRulesChanged", rules: [] }), opened);
+  const updated = present(opened, { kind: "savedSpotAlertRulesChanged", rules: [{ minDays: 2, withinDays: 4 }] });
+  const saved = present(updated, { kind: "savedSpotSaved", id: legacy.id });
+  assert.deepEqual(saved.savedSpots[0].alertRules, [{ minDays: 2, withinDays: 4 }]);
+  assert.equal(saved.savedSpots[0].alertMinDays, 2);
 });

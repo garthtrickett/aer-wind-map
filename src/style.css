@@ -132,8 +132,6 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .saved-spot-icon { position: relative; }
 .saved-spot-icon span { position: absolute; left: 4px; top: 1px; width: 20px; height: 20px; border: 3px solid #fff; border-radius: 50%; background: #e4a322; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .saved-spot-icon::after { content: ""; position: absolute; left: 12px; top: 19px; border: 2px solid transparent; border-top: 6px solid #fff; }
-.history-save > .history-alert-days { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.history-alert-days input { width: 60px; padding: 6px; border: 1px solid #b7ccca; border-radius: 7px; background: #fff; color: #143b45; font: inherit; }
 .forecast-alert-card, .forecast-alert-chip { position: absolute; z-index: 5; top: 118px; right: 24px; width: min(330px, calc(100vw - 48px)); border: 1px solid rgba(255,255,255,.2); border-radius: 16px; background: #0d3542; color: #eaf8f3; box-shadow: 0 14px 40px rgba(3,29,40,.3); }
 .forecast-alert-card { max-height: min(55vh, 470px); overflow-y: auto; padding: 14px; }
 .forecast-alert-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
@@ -403,3 +401,17 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-forecast-windows { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 18px; list-style: none; padding: 0; margin: 2px 0 10px; }
 .history-forecast-windows li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 7px 0; border-bottom: 1px solid #e3efea; }
 .history-forecast-preview small { display: block; color: #627d83; line-height: 1.5; }
+
+.history-alert-rules { min-width: 0; margin: 12px 0 0; padding: 10px 0 0; border: 0; }
+.history-alert-rules legend { padding: 0; color: #3b6067; font-size: 11px; font-weight: 700; }
+.history-alert-rule { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; color: #416a70; font-size: 12px; }
+.history-alert-rule input { width: 60px; padding: 7px; border: 1px solid #b7ccca; border-radius: 7px; background: #fff; color: #143b45; font: inherit; }
+.history-alert-rule-remove { width: 30px; height: 30px; margin-left: auto; border: 0; border-radius: 6px; background: #dff1eb; color: #174b53; font-size: 18px; }
+.history-alert-rules button:disabled { opacity: .45; cursor: default; }
+.history-alert-rules p { margin: 6px 0 0; color: #627d83; font-size: 11px; line-height: 1.5; }
+.history-forecast-rules { list-style: none; padding: 0; margin: 2px 0 12px; }
+.history-forecast-rules li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid #e3efea; }
+.history-forecast-rules li.met > strong { color: #226e57; }
+.history-forecast-rules li.unmet > strong { color: #627d83; }
+.history-forecast-rules small { flex-basis: 100%; }
+.history-forecast-preview .history-forecast-caption { font-weight: 600; margin-bottom: 0; }

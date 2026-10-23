@@ -1,6 +1,7 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
-import { scoreForecastAlert } from "./forecast-alerts.ts";
+import { maxAlertRules, type AlertDayRule } from "./alert-rules.ts";
+import { evaluateForecastRules, scoreForecastAlert } from "./forecast-alerts.ts";
 import { historyCompassView } from "./history-compass.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
@@ -40,15 +41,24 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
   if (!summary) return html`
     <div class="history-forecast-preview"><p role="status">No usable paired swell and wind forecast is available for this spot.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
+  const evaluation = evaluateForecastRules(summary, history.alertRules);
   const date = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, weekday: "short", day: "numeric", month: "short" });
   const clock = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return html`<div class="history-forecast-preview">
     <div class="history-forecast-heading">
       <p role="status"><strong>${summary.matchingDays} of 14 days match</strong><br />
-        ${summary.matchingDays >= history.alertMinDays ? "Your alert threshold is met." : "Your alert threshold is not met yet."}</p>
+        ${evaluation.matched ? "Your alert threshold is met." : "Your alert threshold is not met yet."}</p>
       <button type="button" class="secondary-button" @click=${refresh}>Refresh forecast</button>
     </div>
-    ${summary.windows.length ? html`<ul class="history-forecast-windows" aria-label="Matching forecast days">
+    <ul class="history-forecast-rules" aria-label="Forecast rule results">
+      ${evaluation.rules.map((rule, index) => html`<li class=${rule.met ? "met" : "unmet"}>
+        <span>Rule ${index + 1}: ${rule.matchingDays} of the next ${rule.withinDays} days match (need ${rule.minDays})</span>
+        <strong>${rule.met ? "Met" : "Not met"}</strong>
+        ${rule.availableDays !== null && rule.availableDays < rule.withinDays
+          ? html`<small>Usable forecast for ${rule.availableDays}/${rule.withinDays} days; the rest are unknown.</small>` : nothing}
+      </li>`)}
+    </ul>
+    ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next 14 days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
       ${summary.windows.map((window) => html`<li>
         <span>${date.format(new Date(window.start * 1000))}</span>
         <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong>
@@ -58,6 +68,34 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
     <small>Times are local to the spot (${summary.timezone}). Swell: GFS Wave · Wind: ECMWF.
       Checked ${clock.format(new Date(summary.checkedAt))}.</small>
   </div>`;
+};
+
+const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Proposal) => void): TemplateResult => {
+  const change = (next: readonly AlertDayRule[]): void => propose({ kind: "savedSpotAlertRulesChanged", rules: next });
+  const update = (index: number, field: "minDays" | "withinDays", event: Event): void => {
+    const input = event.target as HTMLInputElement;
+    const parsed = Number(input.value);
+    const value = Number.isFinite(parsed) ? Math.max(1, Math.min(14, Math.round(parsed))) : rules[index][field];
+    const rule = field === "minDays" ? { ...rules[index], minDays: Math.min(value, rules[index].withinDays) }
+      : { minDays: Math.min(rules[index].minDays, value), withinDays: value };
+    input.value = String(rule[field]);
+    change(rules.map((previous, at) => at === index ? rule : previous));
+  };
+  return html`<fieldset class="history-alert-rules"><legend>Alert when any rule matches</legend>
+    ${rules.map((rule, index) => html`<div class="history-alert-rule">
+      <span>At least</span><input type="number" min="1" max=${String(rule.withinDays)} step="1"
+        aria-label=${`Matching days for rule ${index + 1}`} .value=${String(rule.minDays)}
+        @change=${(event: Event) => update(index, "minDays", event)} />
+      <span>matching days out of the next</span><input type="number" min="1" max="14" step="1"
+        aria-label=${`Total days for rule ${index + 1}`} .value=${String(rule.withinDays)}
+        @change=${(event: Event) => update(index, "withinDays", event)} />
+      <span>days</span><button type="button" class="history-alert-rule-remove" aria-label=${`Remove alert rule ${index + 1}`}
+        ?disabled=${rules.length === 1} @click=${() => change(rules.filter((_, at) => at !== index))}>×</button>
+    </div>`)}
+    <button type="button" class="secondary-button" ?disabled=${rules.length >= maxAlertRules}
+      @click=${() => change([...rules, { minDays: 2, withinDays: 4 }])}>Add rule</button>
+    <p>Each period starts today at the spot. A matching day needs the consecutive hours above.</p>
+  </fieldset>`;
 };
 
 export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
@@ -154,16 +192,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 Check the next 14 days when these conditions last at least
                 ${Math.max(2, criteria.minConsecutiveHours)} consecutive hourly samples, 06:00–18:00 local.
                 Connect Telegram in Saved spots for phone alerts.</label>
-              ${history.alertEnabled ? html`<label class="history-alert-days" for="history-alert-days">Alert when at least
-                <input id="history-alert-days" type="number" min="1" max="14" step="1" .value=${String(history.alertMinDays)}
-                  @change=${(event: Event) => {
-                    const input = event.target as HTMLInputElement;
-                    const parsed = Number(input.value);
-                    const days = Number.isFinite(parsed) ? Math.min(14, Math.max(1, Math.round(parsed))) : history.alertMinDays;
-                    input.value = String(days);
-                    propose({ kind: "savedSpotAlertMinDaysChanged", days });
-                  }} />
-                of the next 14 days match</label>
+              ${history.alertEnabled ? html`${alertRulesView(history.alertRules, propose)}
                 ${forecastPreviewView(history, propose)}` : nothing}
               ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
                 role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."

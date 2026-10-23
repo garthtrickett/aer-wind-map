@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSavedSpots, writeSavedSpots, type SavedSpot } from "./saved-spots.ts";
+import { isSavedSpot, readSavedSpots, writeSavedSpots, type SavedSpot } from "./saved-spots.ts";
 import { defaultHistoryCriteria } from "./history.ts";
 
 const spot: SavedSpot = {
@@ -43,4 +43,17 @@ test("older saved spots retain their rules with no maximum swell period", () => 
       spots: [{ ...spot, criteria: { ...spot.criteria, maxSwellPeriod: maximum } }] }) };
     assert.deepEqual(readSavedSpots(() => invalid), { ok: false, error: { kind: "invalid" } });
   }
+});
+
+
+test("multiple alert rows round-trip and invalid counts are rejected at browser/server validation", () => {
+  const multiple = { ...spot, alertRules: [{ minDays: 2, withinDays: 4 }, { minDays: 4, withinDays: 7 }] };
+  const storage = { getItem: () => JSON.stringify({ version: 1, spots: [multiple] }), setItem: () => undefined };
+  assert.deepEqual(readSavedSpots(() => storage), { ok: true, value: [multiple] });
+  for (const rules of [[], [{ minDays: 0, withinDays: 4 }], [{ minDays: 5, withinDays: 4 }],
+    [{ minDays: 2, withinDays: 15 }], [{ minDays: 1.5, withinDays: 4 }], [{ minDays: 2, withinDays: "4" }],
+    Array.from({ length: 15 }, () => ({ minDays: 1, withinDays: 4 }))]) {
+    assert.equal(isSavedSpot({ ...spot, alertRules: rules }), false);
+  }
+  assert.equal(isSavedSpot(spot), true, "existing single-threshold snapshots remain valid");
 });

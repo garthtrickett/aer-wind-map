@@ -4,7 +4,8 @@ import { describeWeatherError } from "./ecmwf.ts";
 import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import { sampleWave } from "./wave.ts";
 import { historyView } from "./history-view.ts";
-import { forecastAlertKey } from "./forecast-alerts.ts";
+import { alertRulesFor, alertRulesLabel } from "./alert-rules.ts";
+import { evaluateForecastRules, forecastAlertKey } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
 import { observationsView } from "./observations-view.ts";
 
@@ -58,7 +59,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
   const forecastMatches = state.savedSpots.flatMap((spot) => {
     const alert = state.forecastAlerts[spot.id];
     return spot.alertEnabled && alert?.kind === "ready" && alert.key === forecastAlertKey(spot) &&
-      alert.summary.matchingDays >= spot.alertMinDays
+      evaluateForecastRules(alert.summary, alertRulesFor(spot)).matched
       ? [{ spot, summary: alert.summary }] : [];
   });
 
@@ -97,7 +98,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <button type="button" class="saved-spot-open" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong><span>${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
             ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot) && alert.kind === "ready"
-              ? `${alert.summary.matchingDays} of 14 forecast days match · alert at ${spot.alertMinDays}`
+              ? `${alert.summary.matchingDays} of 14 forecast days match · alert at ${alertRulesLabel(spot)}`
               : alert?.key === forecastAlertKey(spot) && alert.kind === "failed" ? "Alert check unavailable" : "Checking forecast…"}</small>` : nothing}
           </button>
           <button type="button" class="saved-spot-remove" aria-label=${`Remove ${spot.name}`}
@@ -117,7 +118,9 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <div class="forecast-alert-list">${forecastMatches.map(({ spot, summary }) => html`
           <button type="button" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong>
-            <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hourly samples, 06:00–18:00 local (alert threshold ${spot.alertMinDays})</span>
+            <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hourly samples, 06:00–18:00 local (alert at ${alertRulesLabel(spot)})</span>
+            <small>${evaluateForecastRules(summary, alertRulesFor(spot)).rules.filter((rule) => rule.met)
+              .map((rule) => `${rule.matchingDays} of the next ${rule.withinDays} days match (needs ${rule.minDays})`).join(" · ")}</small>
             ${summary.nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
               timeZone: summary.timezone, weekday: "short", month: "short", day: "numeric",
               hour: "numeric", minute: "2-digit", timeZoneName: "short",

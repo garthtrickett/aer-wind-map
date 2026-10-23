@@ -2,7 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { forecastAlertKey, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { alertRulesFor } from "../../src/alert-rules.ts";
+import { evaluateForecastRules, forecastAlertKey, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { disconnectedTelegram, type TelegramStatus } from "../../src/telegram-types.ts";
 import type { TelegramSend, TelegramUpdate } from "./telegram.ts";
@@ -207,7 +208,7 @@ export const openAlertStore = (path: string) => {
         if (ownerAt(watch.owner)?.chat_id !== watch.chatId) return;
         const row = db.prepare("SELECT config FROM spots WHERE owner=? AND id=?").get(watch.owner, watch.spot.id) as { config: string } | undefined;
         if (row?.config !== watch.config) return;
-        const matching = summary !== null && summary.matchingDays >= watch.spot.alertMinDays;
+        const matching = summary !== null && evaluateForecastRules(summary, alertRulesFor(watch.spot)).matched;
         // Null = unavailable. It must not re-arm a previously qualifying alert.
         db.prepare(`UPDATE spots SET checked_at=?,next_check=?,error=?,summary=?,
           qualified=CASE WHEN ? THEN qualified ELSE 0 END WHERE owner=? AND id=?`).run(now,
