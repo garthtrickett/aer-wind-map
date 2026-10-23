@@ -127,6 +127,7 @@ npm run smoke:live
 npm run smoke:history
 npm run smoke:zoom
 npm run smoke:saved
+npm run smoke:forecast
 BROWSER=firefox npm run smoke:live
 BROWSER=webkit npm run smoke:live
 ```
@@ -148,9 +149,14 @@ Historical swell uses Météo-France MFWAM through Open-Meteo Marine; historical
 10 m wind uses ECMWF IFS through Open-Meteo Archive. Both are requested directly
 by the browser for sea grid cells near the selected point. Source links and
 the returned model-cell coordinates appear in the history panel.
-The 14-day alert uses GFS Wave swell and ECMWF IFS wind forecasts through
-Open-Meteo. These are requested directly by the browser and differ from the
-historical MFWAM swell source and the live ECMWF GRIB map layer.
+Forecast previews and browser/Telegram alerts use Météo-France MFWAM primary
+swell and ECMWF IFS wind through Open-Meteo. MFWAM supplies up to 10 forecast
+days at a native three-hour cadence, interpolated to hourly values by Open-Meteo;
+wind remains hourly. Saved look-ahead settings still support 1–14 days. Dates
+beyond the available swell forecast remain unknown, with paired coverage shown
+in results and notifications. No GFS fallback or extrapolated swell is used.
+This uses the same swell model as historical scoring, and differs from the
+live ECMWF combined-wave GRIB map layer.
 MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
 Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
 stay visible on the map.

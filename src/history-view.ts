@@ -1,7 +1,7 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
 import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
-import { evaluateForecastRules, forecastPeriodLabel, scoreForecastAlert } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastSwell, forecastSwellCoverage, scoreForecastAlert } from "./forecast-alerts.ts";
 import { historyCompassView } from "./history-compass.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
@@ -70,8 +70,8 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
       </li>`)}
     </ul>` : html`<p>No days match your current conditions.</p>`}
     ${summary.availableDays < summary.horizonDays ? html`<p>Usable forecast for ${summary.availableDays} of ${summary.horizonDays} days. The remaining days are unknown.</p>` : nothing}
-    <small>Times are local to the spot (${summary.timezone}). Swell: GFS Wave · Wind: ECMWF.
-      Checked ${clock.format(new Date(summary.checkedAt))}.</small>
+    <small>Times are local to the spot (${summary.timezone}). Swell: ${forecastSwell.label} · Wind: ECMWF.
+      ${forecastSwellCoverage} Checked ${clock.format(new Date(summary.checkedAt))}.</small>
   </div>`;
 };
 

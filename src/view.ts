@@ -5,7 +5,7 @@ import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import { sampleWave } from "./wave.ts";
 import { historyView } from "./history-view.ts";
 import { alertRulesFor, alertRulesLabel } from "./alert-rules.ts";
-import { evaluateForecastRules, forecastPeriodLabel, forecastAlertKey } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastAlertKey, forecastSwell, forecastSwellCoverage } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
 import { observationsView } from "./observations-view.ts";
 
@@ -128,8 +128,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             }).format(new Date(nextWindowStart * 1000))}</small>`}
             ${summary.availableDays < summary.horizonDays ? html`<small>Paired data on ${summary.availableDays} of ${summary.horizonDays} days</small>` : nothing}
           </button>`)}</div>
-        <p>Forecast estimates: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">GFS Wave swell</a>
-          and <a href="https://open-meteo.com/en/docs/ecmwf-api" target="_blank" rel="noopener noreferrer">ECMWF IFS wind</a> via Open-Meteo.</p>
+        <p>Forecast estimates: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">${forecastSwell.label} primary swell</a>
+          and <a href="https://open-meteo.com/en/docs/ecmwf-api" target="_blank" rel="noopener noreferrer">ECMWF IFS wind</a> via Open-Meteo. ${forecastSwellCoverage}</p>
       </section>` : nothing}
 
     ${state.phase === "failed" ? html`

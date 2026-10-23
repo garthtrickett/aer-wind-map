@@ -44,20 +44,25 @@ try {
   const historicalTime = Array.from({ length: 24 }, (_, index) => Date.parse("2025-01-01T00:00:00Z") / 1000 + index * 3600);
   const archiveRequests: string[] = [];
   let forecastRequests = 0;
-  let responseMode: "normal" | "network" | "empty" = "normal";
+  let responseMode: "normal" | "network" | "empty" | "short" = "normal";
   let releasePreview!: () => void;
   let holdPreview = true;
   const previewGate = new Promise<void>((resolve) => { releasePreview = resolve; });
   await page.route("**/v1/**", async (route) => {
     const url = route.request().url();
-    if (url.includes("forecast_days=15")) {
+    if (new URL(url).searchParams.has("forecast_days")) {
       forecastRequests++;
       if (holdPreview) await previewGate;
-      const marine = url.includes("models=ncep_gfswave025");
+      const marine = url.includes("models=meteofrance_wave");
+      assert.equal(new URL(url).searchParams.get("forecast_days"), marine ? "10" : "15");
       if (responseMode === "network") await route.fulfill({ status: 503, body: "Unavailable" });
       else await route.fulfill({ contentType: "application/json", body: JSON.stringify(marine
         ? responseMode === "empty" ? hourly({ swell_wave_height: time.map(() => null),
-          swell_wave_period: time.map(() => 12), swell_wave_direction: time.map(() => 220) }) : wave : wind) });
+          swell_wave_period: time.map(() => 12), swell_wave_direction: time.map(() => 220) })
+          : responseMode === "short" ? { timezone: "UTC", hourly: {
+            time: time.slice(0, 240), swell_wave_height: time.slice(0, 240).map(() => 2),
+            swell_wave_period: time.slice(0, 240).map(() => 12), swell_wave_direction: time.slice(0, 240).map(() => 220),
+          } } : wave : wind) });
     } else if (url.includes("models=meteofrance_wave") || url.includes("archive-api.open-meteo.com")) {
       archiveRequests.push(url);
       const marine = url.includes("marine-api");
@@ -99,6 +104,8 @@ try {
   holdPreview = false;
   releasePreview();
   await expect(preview).toContainText("4 of 14 days match");
+  await expect(preview).toContainText("Swell: Météo-France MFWAM");
+  await expect(preview).toContainText("up to 10 days; later days are unknown");
   await expect(preview).toContainText("Your alert threshold is met");
   await expect(preview.locator(".history-forecast-windows li")).toHaveCount(4);
   await expect(preview.locator(".history-forecast-windows li").first()).toContainText("06:00–18:00");
@@ -157,8 +164,13 @@ try {
   responseMode = "empty";
   await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
   await expect(preview).toContainText("No usable paired swell and wind forecast");
-  responseMode = "normal";
+  responseMode = "short";
   await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
+  await expect(preview).toContainText("1 of 14 days match");
+  await expect(preview).toContainText("The remaining days are unknown");
+  await expect(preview).toContainText("Your alert threshold is not met yet");
+  responseMode = "normal";
+  await page.getByRole("button", { name: "Refresh forecast", exact: true }).click();
   await expect(preview).toContainText("4 of 14 days match");
   await preview.screenshot({ path: "/tmp/aer-sliding-alerts-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });

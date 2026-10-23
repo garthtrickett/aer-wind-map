@@ -101,6 +101,8 @@ test("background checking sends once, survives restart, ignores unavailable fore
     at += 1000; await monitor.tick();
     assert.equal(messages.filter((text) => text.includes("forecast heads-up")).length, 1);
     assert.match(messages.at(-1)!, /12\/14/);
+    assert.match(messages.at(-1)!, /Météo-France MFWAM primary swell \+ ECMWF IFS wind/);
+    assert.match(messages.at(-1)!, /up to 10 days; later days are unknown/);
     at += 21_600_000; await monitor.tick();
     assert.equal(messages.length, 2);
     unavailable = true; at += 21_600_000; await monitor.tick();

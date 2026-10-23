@@ -1,5 +1,5 @@
 import { alertRulesFor } from "../../src/alert-rules.ts";
-import { evaluateForecastRules, forecastPeriodLabel, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastSwell, forecastSwellCoverage, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { secret, type AlertStore, type WatchedSpot } from "./store.ts";
 import type { Telegram } from "./telegram.ts";
@@ -35,7 +35,7 @@ export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummar
     `Swell from ${spot.criteria.swellFromStart}° → ${spot.criteria.swellFromEnd}° clockwise.`,
     `Wind ≤${spot.criteria.maxWindSpeed} m/s (${(spot.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${spot.criteria.windFromStart}° → ${spot.criteria.windFromEnd}° clockwise.`,
     `Paired daylight data available on ${summary.availableDays}/${summary.horizonDays} days.`,
-    "Model estimates: GFS Wave swell + ECMWF IFS wind via Open-Meteo. Distant forecasts can change; this is not a surf observation.",
+    `Model estimates: ${forecastSwell.label} primary swell + ECMWF IFS wind via Open-Meteo. ${forecastSwellCoverage} Distant forecasts can change; this is not a surf observation.`,
   ].join("\n");
   const url = new URL(publicUrl);
   url.searchParams.set("alert", spot.id);

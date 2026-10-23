@@ -41,7 +41,7 @@
   and minimum matching days in browser local storage. Leaflet markers and a
   map list reopen the preset. Storage parsing and writes return typed errors.
   Older presets without a maximum swell period load with no upper limit.
-- The 14-day alert requests GFS Wave swell and ECMWF IFS 10 m wind through
+- The forecast alert requests Météo-France MFWAM primary swell and ECMWF IFS 10 m wind through
   Open-Meteo for opted-in spots. It joins hourly instants, scores consecutive
   matches by each spot's local calendar day, and shows an on-screen alert
   when the number of matching days reaches the saved threshold.
@@ -142,6 +142,11 @@
 It joins wind/swell instants, filters 06:00–18:00 local and returns qualifying
 dates and first windows. Validation lives with shared history criteria rather
 than importing the browser state/view graph.
+MFWAM requests cover 10 days; wind requests retain 15 days. Both return hourly
+samples (MFWAM's native three-hour outputs are interpolated upstream). A saved
+look-ahead may remain 14 days, but later unpaired dates are unknown, never
+filled from GFS or extrapolated. Source identity and the swell forecast limit
+are shared by the preview, alert card and Telegram message.
 
 `scripts/alerts/store.ts` owns SQLite transactions for hashed browser sessions,
 one-use connection links, enabled snapshots, revisions, scheduling, Telegram's

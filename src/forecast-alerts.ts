@@ -3,6 +3,8 @@ import { historyClock, withinHistoryHours, hourMatchesCriteria, type HistoricalH
 import type { SavedSpot } from "./saved-spots.ts";
 
 export const forecastAlertDays = maxForecastDays;
+export const forecastSwell = { model: "meteofrance_wave", label: "Météo-France MFWAM", days: 10 } as const;
+export const forecastSwellCoverage = `Swell forecasts extend up to ${forecastSwell.days} days; later days are unknown.`;
 export type ForecastWindow = Readonly<{ day: string; start: number; end: number }>;
 export type ForecastAlertSummary = Readonly<{
   windows: readonly ForecastWindow[];
@@ -146,7 +148,8 @@ const urlsFor = (points: readonly SavedSpot["point"][]): readonly [string, strin
   const common = { ...coordinates, forecast_days: "15", timezone: "auto", timeformat: "unixtime", cell_selection: "sea" };
   return [
     `https://marine-api.open-meteo.com/v1/marine?${new URLSearchParams({ ...common,
-      models: "ncep_gfswave025", hourly: "swell_wave_height,swell_wave_period,swell_wave_direction" })}`,
+      forecast_days: String(forecastSwell.days), models: forecastSwell.model,
+      hourly: "swell_wave_height,swell_wave_period,swell_wave_direction" })}`,
     `https://api.open-meteo.com/v1/ecmwf?${new URLSearchParams({ ...common,
       models: "ecmwf_ifs", hourly: "wind_speed_10m,wind_direction_10m", wind_speed_unit: "ms" })}`,
   ];

@@ -70,9 +70,12 @@ server mounts the same routes and background implementation as production.
   Incidental changes to the first hourly window or the rolling denominator do not
   generate repeated messages. A further confirmation is sent as announced dates
   come within 72 hours and still qualify.
-- Models remain **GFS Wave swell + ECMWF IFS wind via Open-Meteo**, matching the
-  existing forecast alerts. The ECMWF combined-wave map and MFWAM historical
-  source are different. Long-range forecasts are labelled estimates.
+- Models are **Météo-France MFWAM primary swell + ECMWF IFS wind via Open-Meteo**,
+  matching the browser forecast preview and alerts. MFWAM supplies up to 10
+  forecast days; searches beyond that retain unknown dates rather than a GFS
+  fallback. Swell's native three-hour output is interpolated to hourly samples
+  by Open-Meteo; hourly wind still governs each matching window. The ECMWF
+  combined-wave map is separate. Long-range forecasts are labelled estimates.
 - New forecasts use the configured point's sea grid cell; these alerts do not
   claim to resolve a reef's exact wind shadow, refraction or breaking wave height.
 - Multiple browsers can connect to the same chat. Each controls its own snapshot;

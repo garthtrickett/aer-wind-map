@@ -83,7 +83,37 @@ test("draft forecasts and batched saved alerts share downloads and scoring", asy
   const alerts = await loadForecastAlerts([spot, { ...spot, id: "second" }], now, fetcher);
   assert.equal(requests.length, 4, "saved checks retain multi-location batching");
   for (const check of alerts) { assert.ok(check.ok); assert.deepEqual(check.summary, draft); }
-  assert.ok(requests.every((url) => url.searchParams.get("forecast_days") === "15"));
+  for (const url of requests) {
+    const marine = url.hostname.startsWith("marine-");
+    assert.equal(url.searchParams.get("models"), marine ? "meteofrance_wave" : "ecmwf_ifs");
+    assert.equal(url.searchParams.get("forecast_days"), marine ? "10" : "15");
+    assert.equal(url.searchParams.get("cell_selection"), "sea");
+    assert.equal(url.searchParams.get("timeformat"), "unixtime");
+    assert.equal(url.searchParams.get("timezone"), "auto");
+    if (!marine) assert.equal(url.searchParams.get("wind_speed_unit"), "ms");
+  }
+});
+
+test("MFWAM's shorter coverage leaves later days unknown without extending swell or losing hourly wind", () => {
+  const shortWave = { ...wave, time: time.slice(0, 240), first: wave.first.slice(0, 240),
+    second: wave.second.slice(0, 240), third: wave.third.slice(0, 240) };
+  const hourlyWind = { ...wind, second: time.map(() => 355) };
+  const now = new Date("2026-09-27T00:00:00Z");
+  const summary = scoreForecastAlert(spot, shortWave, hourlyWind, now)!;
+  assert.equal(summary.horizonDays, 14);
+  assert.equal(summary.availableDays, 10);
+  assert.equal(summary.matchingDays, 10);
+  assert.equal(summary.availableDates?.at(-1), "2026-10-06");
+  assert.equal(summary.windows.at(-1)?.day, "2026-10-06");
+  assert.equal(evaluateForecastRules(summary, [{ minDays: 11, withinDays: 14 }]).matched, false);
+  assert.equal(evaluateForecastRules(summary, [{ minDays: 4, withinDays: 7 }]).matched, true);
+  const missingTail = { ...shortWave, time, first: time.map((_, i) => shortWave.first[i] ?? null),
+    second: time.map((_, i) => shortWave.second[i] ?? null), third: time.map((_, i) => shortWave.third[i] ?? null) };
+  assert.deepEqual(scoreForecastAlert(spot, missingTail, hourlyWind, now), summary);
+  const gusty = { ...hourlyWind, second: time.map((_, i) => i % 24 === 7 ? 180 : 355) };
+  const threeHours = { ...spot, criteria: { ...spot.criteria, minConsecutiveHours: 3 } };
+  const withHourlyWind = scoreForecastAlert(threeHours, shortWave, gusty, now)!;
+  assert.equal(withHourlyWind.windows[0].start, time[8], "the 07:00 wind change interrupts a matching run");
 });
 
 test("draft forecasts report network and malformed-data failures", async () => {
