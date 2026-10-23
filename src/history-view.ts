@@ -1,7 +1,7 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
-import { maxAlertRules, type AlertDayRule } from "./alert-rules.ts";
-import { evaluateForecastRules, scoreForecastAlert } from "./forecast-alerts.ts";
+import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
+import { evaluateForecastRules, forecastPeriodLabel, scoreForecastAlert } from "./forecast-alerts.ts";
 import { historyCompassView } from "./history-compass.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
@@ -32,7 +32,7 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
   const preview = history.forecastPreview;
   const refresh = (): void => propose({ kind: "forecastPreviewRefresh" });
   if (preview.phase === "idle" || preview.phase === "loading") return html`
-    <div class="history-forecast-preview" aria-busy="true"><p role="status">Checking the next 14 days…</p></div>`;
+    <div class="history-forecast-preview" aria-busy="true"><p role="status">Checking the next ${history.alertLookAheadDays} days…</p></div>`;
   if (preview.phase === "failed") return html`
     <div class="history-forecast-preview"><p role="status">The forecast could not be loaded. Try again.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
@@ -46,25 +46,30 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
   const clock = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return html`<div class="history-forecast-preview">
     <div class="history-forecast-heading">
-      <p role="status"><strong>${summary.matchingDays} of 14 days match</strong><br />
+      <p role="status"><strong>${summary.matchingDays} of ${summary.horizonDays} days match</strong><br />
         ${evaluation.matched ? "Your alert threshold is met." : "Your alert threshold is not met yet."}</p>
       <button type="button" class="secondary-button" @click=${refresh}>Refresh forecast</button>
     </div>
     <ul class="history-forecast-rules" aria-label="Forecast rule results">
       ${evaluation.rules.map((rule, index) => html`<li class=${rule.met ? "met" : "unmet"}>
-        <span>Rule ${index + 1}: ${rule.matchingDays} of the next ${rule.withinDays} days match (need ${rule.minDays})</span>
+        <span>Rule ${index + 1}: ${rule.matchingDays} matching days in a ${rule.withinDays}-day period (need ${rule.minDays})</span>
         <strong>${rule.met ? "Met" : "Not met"}</strong>
+        ${rule.bestPeriod ? html`<small>${rule.met ? "Matching period" : "Best period"}: ${forecastPeriodLabel(rule.bestPeriod)}</small>`
+          : html`<small>A ${rule.withinDays}-day period does not fit inside this ${summary.horizonDays}-day look-ahead.</small>`}
+        ${rule.matchingPeriods.length > 1 ? html`<details><summary>All ${rule.matchingPeriods.length} qualifying periods</summary>
+          <ul>${rule.matchingPeriods.map((period) => html`<li>${forecastPeriodLabel(period)} · ${period.matchingDays} matching days</li>`)}</ul>
+        </details>` : nothing}
         ${rule.availableDays !== null && rule.availableDays < rule.withinDays
           ? html`<small>Usable forecast for ${rule.availableDays}/${rule.withinDays} days; the rest are unknown.</small>` : nothing}
       </li>`)}
     </ul>
-    ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next 14 days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
+    ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next ${summary.horizonDays} days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
       ${summary.windows.map((window) => html`<li>
         <span>${date.format(new Date(window.start * 1000))}</span>
         <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong>
       </li>`)}
     </ul>` : html`<p>No days match your current conditions.</p>`}
-    ${summary.availableDays < 14 ? html`<p>Usable forecast for ${summary.availableDays} of 14 days. The remaining days are unknown.</p>` : nothing}
+    ${summary.availableDays < summary.horizonDays ? html`<p>Usable forecast for ${summary.availableDays} of ${summary.horizonDays} days. The remaining days are unknown.</p>` : nothing}
     <small>Times are local to the spot (${summary.timezone}). Swell: GFS Wave · Wind: ECMWF.
       Checked ${clock.format(new Date(summary.checkedAt))}.</small>
   </div>`;
@@ -86,15 +91,15 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
       <span>At least</span><input type="number" min="1" max=${String(rule.withinDays)} step="1"
         aria-label=${`Matching days for rule ${index + 1}`} .value=${String(rule.minDays)}
         @change=${(event: Event) => update(index, "minDays", event)} />
-      <span>matching days out of the next</span><input type="number" min="1" max="14" step="1"
+      <span>matching days in any</span><input type="number" min="1" max="14" step="1"
         aria-label=${`Total days for rule ${index + 1}`} .value=${String(rule.withinDays)}
         @change=${(event: Event) => update(index, "withinDays", event)} />
-      <span>days</span><button type="button" class="history-alert-rule-remove" aria-label=${`Remove alert rule ${index + 1}`}
+      <span>day period</span><button type="button" class="history-alert-rule-remove" aria-label=${`Remove alert rule ${index + 1}`}
         ?disabled=${rules.length === 1} @click=${() => change(rules.filter((_, at) => at !== index))}>×</button>
     </div>`)}
     <button type="button" class="secondary-button" ?disabled=${rules.length >= maxAlertRules}
       @click=${() => change([...rules, { minDays: 2, withinDays: 4 }])}>Add rule</button>
-    <p>Each period starts today at the spot. A matching day needs the consecutive hours above.</p>
+    <p>Searches every complete period within the look-ahead. Any rule can trigger; matching days need the consecutive hours above.</p>
   </fieldset>`;
 };
 
@@ -189,10 +194,20 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               </div>
               <label class="history-alert-option"><input type="checkbox" .checked=${history.alertEnabled}
                 @change=${(event: Event) => propose({ kind: "savedSpotAlertChanged", enabled: (event.target as HTMLInputElement).checked })} />
-                Check the next 14 days when these conditions last at least
+                Check the forecast when these conditions last at least
                 ${Math.max(2, criteria.minConsecutiveHours)} consecutive hourly samples, 06:00–18:00 local.
                 Connect Telegram in Saved spots for phone alerts.</label>
-              ${history.alertEnabled ? html`${alertRulesView(history.alertRules, propose)}
+              ${history.alertEnabled ? html`<label class="history-alert-lookahead">Search the next
+                <input type="number" min="1" max=${String(maxForecastDays)} step="1" aria-label="Forecast look-ahead days"
+                  .value=${String(history.alertLookAheadDays)} @change=${(event: Event) => {
+                    const input = event.target as HTMLInputElement;
+                    const number = Number(input.value);
+                    const days = Number.isFinite(number) ? Math.max(1, Math.min(maxForecastDays, Math.round(number))) : history.alertLookAheadDays;
+                    input.value = String(days);
+                    propose({ kind: "savedSpotAlertLookAheadChanged", days });
+                  }} />days for a qualifying period
+              </label><p class="history-alert-lookahead-help">Look-ahead starts today at the spot; up to ${maxForecastDays} forecast days are available.</p>
+                ${alertRulesView(history.alertRules, propose)}
                 ${forecastPreviewView(history, propose)}` : nothing}
               ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
                 role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."

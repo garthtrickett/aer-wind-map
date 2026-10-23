@@ -415,3 +415,11 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-forecast-rules li.unmet > strong { color: #627d83; }
 .history-forecast-rules small { flex-basis: 100%; }
 .history-forecast-preview .history-forecast-caption { font-weight: 600; margin-bottom: 0; }
+
+.history-save > .history-alert-lookahead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.history-alert-lookahead input { width: 60px; padding: 7px; border: 1px solid #b7ccca; border-radius: 7px; background: #fff; color: #143b45; font: inherit; }
+.history-alert-lookahead-help { margin: 0 0 10px; color: #627d83; font-size: 11px; line-height: 1.5; }
+.history-forecast-rules details { flex-basis: 100%; font-size: 11px; }
+.history-forecast-rules summary { cursor: pointer; }
+.history-forecast-rules details ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.history-forecast-rules details li { display: block; padding: 3px 0; border: 0; }

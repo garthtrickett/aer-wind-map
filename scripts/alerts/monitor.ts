@@ -1,5 +1,5 @@
 import { alertRulesFor } from "../../src/alert-rules.ts";
-import { evaluateForecastRules, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { secret, type AlertStore, type WatchedSpot } from "./store.ts";
 import type { Telegram } from "./telegram.ts";
@@ -26,15 +26,15 @@ export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummar
   const title = confirmation ? "Closer-range forecast confirmation" : near.length ? "Forecast matches" : "Early forecast heads-up";
   const text = [
     `${spot.name} — ${title}`,
-    "Alert when any rule matches:",
-    ...evaluation.rules.map((rule) => `${rule.met ? "Met" : "Not met"}: ${rule.matchingDays} of the next ${rule.withinDays} days match; need ${rule.minDays}.`),
+    `Searching the next ${summary.horizonDays} local days; any rule can trigger:`,
+    ...evaluation.rules.map((rule) => `${rule.met ? "Met" : "Not met"}: ${rule.matchingDays} matching days in a ${rule.withinDays}-day period; need ${rule.minDays}.${rule.bestPeriod ? ` ${forecastPeriodLabel(rule.bestPeriod)}.` : " No complete period fits the look-ahead."}`),
     `At least ${summary.requiredHours} consecutive hourly samples, between 06:00 and 18:00.`,
     ...evaluation.windows.map((window) => `${dateText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
     `Local time: ${summary.timezone}.`,
     `Swell ${spot.criteria.minSwellHeight}–${spot.criteria.maxSwellHeight} m; period ${spot.criteria.minSwellPeriod}–${spot.criteria.maxSwellPeriod ?? "unlimited"} s.`,
     `Swell from ${spot.criteria.swellFromStart}° → ${spot.criteria.swellFromEnd}° clockwise.`,
     `Wind ≤${spot.criteria.maxWindSpeed} m/s (${(spot.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${spot.criteria.windFromStart}° → ${spot.criteria.windFromEnd}° clockwise.`,
-    `Paired daylight data available on ${summary.availableDays}/14 days.`,
+    `Paired daylight data available on ${summary.availableDays}/${summary.horizonDays} days.`,
     "Model estimates: GFS Wave swell + ECMWF IFS wind via Open-Meteo. Distant forecasts can change; this is not a surf observation.",
   ].join("\n");
   const url = new URL(publicUrl);

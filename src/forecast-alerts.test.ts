@@ -97,26 +97,49 @@ test("draft forecasts report network and malformed-data failures", async () => {
 });
 
 
-test("each alert row counts only its own next N days and any row can trigger", () => {
+const forecastForDays = (offsets: number[], horizonDays = 14): ForecastAlertSummary => {
   const at = Date.parse("2026-10-23T00:00:00Z");
   const dates = Array.from({ length: 14 }, (_, offset) => new Date(at + offset * 86_400_000).toISOString().slice(0, 10));
-  const forecast = (offsets: number[]): ForecastAlertSummary => ({
-    windows: offsets.map((offset) => ({ day: dates[offset], start: at / 1000 + offset * 86_400 + 21_600, end: at / 1000 + offset * 86_400 + 28_800 })),
-    matchingDays: offsets.length, availableDays: 14, availableDates: dates, horizonDays: 14,
-    requiredHours: 2, nextWindowStart: null, timezone: "UTC", checkedAt: at,
-  });
+  return { windows: offsets.map((offset) => ({ day: dates[offset], start: at / 1000 + offset * 86_400 + 21_600, end: at / 1000 + offset * 86_400 + 28_800 })),
+    matchingDays: offsets.length, availableDays: horizonDays, availableDates: dates.slice(0, horizonDays), horizonDays,
+    requiredHours: 2, nextWindowStart: null, timezone: "UTC", checkedAt: at };
+};
+
+test("screenshot regression: later matching days satisfy sliding 4-day and 7-day rules", () => {
+  const summary = forecastForDays([7, 10, 12, 13]); // Oct 30, Nov 2, Nov 4, Nov 5
   const rules = [{ minDays: 2, withinDays: 4 }, { minDays: 4, withinDays: 7 }];
-  const sevenOnly = evaluateForecastRules(forecast([1, 4, 5, 6]), rules);
-  assert.deepEqual(sevenOnly.rules.map((rule) => rule.met), [false, true]);
-  assert.equal(sevenOnly.matched, true);
-  const fourOnly = evaluateForecastRules(forecast([1, 2, 8, 9]), rules);
-  assert.deepEqual(fourOnly.rules.map((rule) => rule.met), [true, false]);
-  assert.equal(fourOnly.matched, true);
-  assert.deepEqual(fourOnly.windows.map((window) => window.day), [dates[1], dates[2]], "notifications include only windows from satisfied rules");
-  assert.equal(evaluateForecastRules(forecast([1, 4, 8, 9]), rules).matched, false, "four good days across 14 do not satisfy either shorter rule");
-  const boundary = evaluateForecastRules(forecast([0, 3, 4]), [{ minDays: 2, withinDays: 4 }]);
-  assert.equal(boundary.rules[0].matchingDays, 2, "today and day four count; day five does not");
-  const partial = evaluateForecastRules({ ...forecast([1]), availableDates: [dates[1]], availableDays: 1 }, rules);
+  const result = evaluateForecastRules(summary, rules);
+  assert.equal(result.matched, true);
+  assert.deepEqual(result.rules.map((rule) => rule.met), [true, true]);
+  assert.equal(result.rules[0].matchingDays, 3);
+  assert.equal(result.rules[0].bestPeriod?.startDay, "2026-11-02");
+  assert.equal(result.rules[1].matchingDays, 4);
+  assert.equal(result.rules[1].bestPeriod?.startDay, "2026-10-30");
+  assert.equal(result.rules[1].bestPeriod?.endDay, "2026-11-05");
+  assert.deepEqual(result.windows.map((window) => window.day), summary.windows.map((window) => window.day));
+  assert.equal(evaluateForecastRules({ ...summary, horizonDays: 7 }, rules).matched, false, "shorter look-ahead excludes later matches");
+});
+
+test("any sliding rule can trigger; widely spaced days do not become a qualifying period", () => {
+  const rules = [{ minDays: 3, withinDays: 4 }, { minDays: 4, withinDays: 7 }];
+  assert.deepEqual(evaluateForecastRules(forecastForDays([0, 1, 2]), rules).rules.map((rule) => rule.met), [true, false]);
+  assert.deepEqual(evaluateForecastRules(forecastForDays([7, 9, 11, 13]), rules).rules.map((rule) => rule.met), [false, true]);
+  assert.equal(evaluateForecastRules(forecastForDays([0, 4, 8, 12]), [{ minDays: 2, withinDays: 4 }, { minDays: 4, withinDays: 7 }]).matched, false);
+});
+
+test("sliding periods must fit wholly inside the look-ahead and include their end date", () => {
+  const rules = [{ minDays: 2, withinDays: 4 }];
+  const final = evaluateForecastRules(forecastForDays([10, 13]), rules);
+  assert.equal(final.rules[0].matchingPeriods.length, 1);
+  assert.equal(final.rules[0].bestPeriod?.endDay, "2026-11-05");
+  assert.equal(evaluateForecastRules(forecastForDays([0, 4]), rules).matched, false, "five calendar days do not count as four");
+  assert.deepEqual(evaluateForecastRules(forecastForDays([0, 10, 13]), rules).windows.map((window) => window.day),
+    ["2026-11-02", "2026-11-05"], "unrelated single days are excluded from alert dates and the next qualifying window");
+  assert.equal(evaluateForecastRules(forecastForDays([6, 7], 7), rules).matched, false, "day eight is outside a seven-day look-ahead");
+  const tooLong = evaluateForecastRules(forecastForDays([1], 4), [{ minDays: 1, withinDays: 7 }]);
+  assert.equal(tooLong.matched, false);
+  assert.equal(tooLong.rules[0].bestPeriod, null);
+  const partial = evaluateForecastRules({ ...forecastForDays([12]), availableDates: ["2026-11-04"], availableDays: 1 }, rules);
   assert.equal(partial.rules[0].availableDays, 1);
   assert.equal(partial.matched, false);
 });
@@ -129,11 +152,24 @@ test("alert periods start on the forecast's local date, including across a month
     timezone: "Asia/Taipei", checkedAt: Date.parse("2026-10-31T17:00:00Z"),
   };
   const result = evaluateForecastRules(summary, [{ minDays: 2, withinDays: 4 }]);
-  assert.deepEqual(result.windows.map((window) => window.day), ["2026-11-01", "2026-11-04"]);
+  assert.deepEqual(result.windows.map((window) => window.day), ["2026-11-01", "2026-11-04", "2026-11-05"]);
   assert.equal(result.rules[0].availableDays, null, "older stored summaries have unknown per-period coverage");
 });
 
 test("alert identity includes every period rule and treats legacy single thresholds equivalently", () => {
   assert.equal(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertRules: [{ minDays: spot.alertMinDays, withinDays: 14 }] }));
   assert.notEqual(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertRules: [{ minDays: 2, withinDays: 4 }] }));
+  assert.equal(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertLookAheadDays: 14 }));
+  assert.notEqual(forecastAlertKey(spot), forecastAlertKey({ ...spot, alertLookAheadDays: 7 }));
+});
+
+
+test("look-ahead changes score the cached hours without changing the conditions or sliding rule", () => {
+  const now = new Date("2026-09-27T00:00:00Z");
+  const short = scoreForecastAlert({ ...spot, alertLookAheadDays: 3 }, wave, wind, now)!;
+  assert.equal(short.horizonDays, 3);
+  assert.equal(short.availableDates?.length, 3);
+  assert.equal(short.matchingDays, 1);
+  assert.equal(scoreForecastAlert(spot, wave, wind, now)?.matchingDays, 2);
+  assert.equal(evaluateForecastRules(short, [{ minDays: 2, withinDays: 3 }]).matched, false);
 });

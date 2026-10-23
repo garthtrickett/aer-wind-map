@@ -27,7 +27,7 @@
    map and browser-only alerts usable; the Telegram panel says it is unavailable.
 5. In **Saved spots → Telegram alerts → Connect Telegram**, open the bot and press
    **Start**. Return to Aer; the panel automatically syncs enabled saved-spot alerts.
-   Save any edits to conditions, the day-count rules, or alert opt-in. Successful
+   Save any edits to conditions, the day-count rules, look-ahead, or alert opt-in. Successful
    local saves/deletions sync automatically while connected. A failed sync is
    visible and can be retried with **Sync saved alerts**.
 6. Request **Send test notification** and inspect Telegram on the actual phone.
@@ -49,11 +49,13 @@ server mounts the same routes and background implementation as production.
   evaluate forecasts. Telegram delivery still requires connectivity.
 - Every rule must match: height range, minimum/optional maximum swell period,
   clockwise wind/swell source-direction ranges, maximum wind speed, consecutive
-  samples. Each day-count rule specifies minimum qualifying days within its own
-  next 1–14 local calendar days, starting today. **Any** satisfied row triggers
-  the alert (for example, 2 of the next 4 days **or** 4 of the next 7). Preview,
-  on-screen alerts and Telegram use the same evaluator. Existing saved thresholds
-  without rows retain their original count out of 14.
+  samples. Day-count rules slide across the chosen look-ahead: for example,
+  **2 matching days in any 4-day period**, or **4 in any 7-day period**. Any
+  satisfied row triggers. Every period must fit wholly inside the look-ahead,
+  which starts today in local time and defaults to 14 days (supported range 1–14).
+  Preview, on-screen alerts and Telegram use the same evaluator. Messages identify
+  the qualifying period dates and include matching days only from qualifying
+  periods. Older snapshots without a look-ahead default to 14 days.
 - Matches use 06:00 inclusive–18:00 exclusive at each spot. “Two hours” follows
   the existing scorer: two consecutive hourly samples. These are interpolated
   model outputs, not a guarantee of two hours of actual beach conditions.

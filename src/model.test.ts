@@ -184,3 +184,18 @@ test("legacy alert thresholds reopen as one 14-day row and invalid day rules are
   assert.deepEqual(saved.savedSpots[0].alertRules, [{ minDays: 2, withinDays: 4 }]);
   assert.equal(saved.savedSpots[0].alertMinDays, 2);
 });
+
+
+test("look-ahead defaults to two weeks, saves and reopens, and preserves cached hours", () => {
+  let state = present(present(initialState, { kind: "locationSelected", point: { latitude: 23, longitude: 121 } }), { kind: "historyOpened" });
+  assert.equal(state.history.alertLookAheadDays, 14);
+  const preview = state.history.forecastPreview;
+  state = present(state, { kind: "savedSpotAlertLookAheadChanged", days: 7 });
+  assert.equal(state.history.forecastPreview, preview, "look-ahead edits rescore the cached forecast");
+  for (const days of [0, 15, 3.5, NaN]) assert.equal(present(state, { kind: "savedSpotAlertLookAheadChanged", days }), state);
+  state = present(state, { kind: "savedSpotNameChanged", name: "Sliding" });
+  state = present(state, { kind: "savedSpotSaved", id: "sliding" });
+  assert.equal(state.savedSpots[0].alertLookAheadDays, 7);
+  state = present(present(state, { kind: "historyClosed" }), { kind: "savedSpotOpened", id: "sliding" });
+  assert.equal(state.history.alertLookAheadDays, 7);
+});

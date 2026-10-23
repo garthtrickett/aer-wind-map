@@ -1,8 +1,8 @@
-import { alertRulesFor, type AlertDayRule } from "./alert-rules.ts";
+import { alertRulesFor, forecastLookAhead, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
 import { historyClock, withinHistoryHours, hourMatchesCriteria, type HistoricalHour } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
-export const forecastAlertDays = 14;
+export const forecastAlertDays = maxForecastDays;
 export type ForecastWindow = Readonly<{ day: string; start: number; end: number }>;
 export type ForecastAlertSummary = Readonly<{
   windows: readonly ForecastWindow[];
@@ -60,16 +60,17 @@ const dayAt = (time: number, formatter: Intl.DateTimeFormat): string => {
 };
 
 export const forecastAlertKey = (spot: SavedSpot): string =>
-  JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, alertRulesFor(spot)]);
+  JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, alertRulesFor(spot), forecastLookAhead(spot)]);
 
 export const scoreForecastAlert = (
-  spot: Pick<SavedSpot, "criteria">, wave: ForecastSeries, wind: ForecastSeries, now: Date,
+  spot: Pick<SavedSpot, "criteria" | "alertLookAheadDays">, wave: ForecastSeries, wind: ForecastSeries, now: Date,
 ): ForecastAlertSummary | null => {
   const formatter = localDayFormatter(wave.timezone);
   const clock = historyClock(wave.timezone);
   const today = dayAt(now.getTime() / 1000, formatter);
   const firstDay = Date.parse(`${today}T00:00:00Z`);
-  const dates = Array.from({ length: forecastAlertDays }, (_, index) =>
+  const horizonDays = forecastLookAhead(spot);
+  const dates = Array.from({ length: horizonDays }, (_, index) =>
     new Date(firstDay + index * 86_400_000).toISOString().slice(0, 10));
   const days = new Map(dates.map((date) => [date, { available: 0, run: 0, lastTime: null as number | null,
     runStart: null as number | null, firstWindow: null as number | null, windowEnd: null as number | null }]));
@@ -101,23 +102,38 @@ export const scoreForecastAlert = (
   const matching = [...days.values()].filter((day) => day.firstWindow !== null);
   const windows = [...days].flatMap(([date, day]) => day.firstWindow === null ? []
     : [{ day: date, start: day.firstWindow, end: day.windowEnd! }]);
-  return { windows, availableDates, matchingDays: matching.length, availableDays, horizonDays: forecastAlertDays,
+  return { windows, availableDates, matchingDays: matching.length, availableDays, horizonDays,
     requiredHours, nextWindowStart: matching[0]?.firstWindow ?? null,
     timezone: wave.timezone, checkedAt: now.getTime() };
 };
 
-/** Each row counts only today through its own last local calendar day. Any row can trigger. */
+export const forecastPeriodLabel = (period: Readonly<{ startDay: string; endDay: string }>): string => {
+  const format = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
+  return `${format.format(new Date(`${period.startDay}T00:00:00Z`))}–${format.format(new Date(`${period.endDay}T00:00:00Z`))}`;
+};
+
+/** Scan every complete N-day period wholly inside the look-ahead horizon. Any rule can trigger. */
 export const evaluateForecastRules = (summary: ForecastAlertSummary, dayRules: readonly AlertDayRule[]) => {
   const today = dayAt(summary.checkedAt / 1000, localDayFormatter(summary.timezone));
   const start = Date.parse(`${today}T00:00:00Z`);
+  const dateAt = (offset: number): string => new Date(start + offset * 86_400_000).toISOString().slice(0, 10);
   const rules = dayRules.map((rule) => {
-    const end = new Date(start + rule.withinDays * 86_400_000).toISOString().slice(0, 10);
-    const inside = (day: string): boolean => day >= today && day < end;
-    const windows = summary.windows.filter((window) => inside(window.day));
-    return { ...rule, matchingDays: windows.length, met: windows.length >= rule.minDays, windows,
-      availableDays: summary.availableDates ? summary.availableDates.filter(inside).length : null };
+    const periods = Array.from({ length: Math.max(0, summary.horizonDays - rule.withinDays + 1) }, (_, offset) => {
+      const startDay = dateAt(offset), endDay = dateAt(offset + rule.withinDays - 1);
+      const inside = (day: string): boolean => day >= startDay && day <= endDay;
+      const windows = summary.windows.filter((window) => inside(window.day));
+      return { startDay, endDay, matchingDays: windows.length, met: windows.length >= rule.minDays, windows,
+        availableDays: summary.availableDates ? summary.availableDates.filter(inside).length : null };
+    });
+    const best = periods.reduce<(typeof periods)[number] | null>((previous, period) =>
+      !previous || period.matchingDays > previous.matchingDays ? period : previous, null);
+    const matchingPeriods = periods.filter((period) => period.met);
+    const dates = new Set(matchingPeriods.flatMap((period) => period.windows.map((window) => window.day)));
+    return { ...rule, matchingDays: best?.matchingDays ?? 0, met: matchingPeriods.length > 0,
+      bestPeriod: best, matchingPeriods, availableDays: best?.availableDays ?? null,
+      windows: summary.windows.filter((window) => dates.has(window.day)) };
   });
-  const matchingDates = new Set(rules.filter((rule) => rule.met).flatMap((rule) => rule.windows.map((window) => window.day)));
+  const matchingDates = new Set(rules.flatMap((rule) => rule.windows.map((window) => window.day)));
   return { matched: rules.some((rule) => rule.met), rules,
     windows: summary.windows.filter((window) => matchingDates.has(window.day)) };
 };

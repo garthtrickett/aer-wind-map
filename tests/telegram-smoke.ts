@@ -8,6 +8,7 @@ import { chromium, expect } from "@playwright/test";
 import { createAlertHttp } from "../scripts/alerts/http.ts";
 import { openAlertStore } from "../scripts/alerts/store.ts";
 import { createMonitor } from "../scripts/alerts/monitor.ts";
+import { forecastLookAhead } from "../src/alert-rules.ts";
 import { forecastAlertKey } from "../src/forecast-alerts.ts";
 import { defaultHistoryCriteria } from "../src/history.ts";
 import type { SavedSpot } from "../src/saved-spots.ts";
@@ -41,7 +42,7 @@ const telegram: Telegram = { identity: async () => "aer_test_bot", updates: asyn
   send: async (_id, text, url) => { messages.push(text); if (url) links.push(url); return { kind: "sent", messageId: messages.length }; } };
 const monitor = createMonitor({ store, telegram, publicUrl: base, report: () => {}, load: async (spots) => spots.map((saved) => ({
   id: saved.id, key: forecastAlertKey(saved), ok: true, summary: {
-    matchingDays: 2, availableDays: 13, horizonDays: 14, requiredHours: 2,
+    matchingDays: 2, availableDays: Math.min(13, forecastLookAhead(saved)), horizonDays: forecastLookAhead(saved), requiredHours: 2,
     nextWindowStart: Date.now() / 1000 + 86_400, timezone: "Asia/Makassar", checkedAt: Date.now(),
     windows: [1, 2].map((offset) => {
       const start = Math.floor(Date.now() / 1000) + offset * 86_400;
@@ -100,6 +101,9 @@ try {
   await expect(page.getByLabel("Swell period at most")).toHaveValue("15");
   await page.getByLabel("Swell period at most").fill("14");
   await page.getByLabel("Swell period at most").press("Tab");
+  await expect(page.getByLabel("Forecast look-ahead days")).toHaveValue("14");
+  await page.getByLabel("Forecast look-ahead days").fill("7");
+  await page.getByLabel("Forecast look-ahead days").press("Tab");
   await page.getByLabel("Total days for rule 1").fill("4");
   await page.getByLabel("Total days for rule 1").press("Tab");
   await page.getByRole("button", { name: "Add rule", exact: true }).click();
@@ -107,6 +111,7 @@ try {
   await page.getByLabel("Total days for rule 2").press("Tab");
   await page.getByRole("button", { name: "Update saved spot" }).click();
   await expect.poll(() => store.due(Date.now())[0]?.spot.criteria.maxSwellPeriod).toBe(14);
+  await expect.poll(() => store.due(Date.now())[0]?.spot.alertLookAheadDays).toBe(7);
   await expect.poll(() => store.due(Date.now())[0]?.spot.alertRules).toEqual([
     { minDays: 2, withinDays: 4 }, { minDays: 2, withinDays: 7 },
   ]);

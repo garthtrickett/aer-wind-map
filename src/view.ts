@@ -5,7 +5,7 @@ import { compassDirection, sampleWind, validTime } from "./wind.ts";
 import { sampleWave } from "./wave.ts";
 import { historyView } from "./history-view.ts";
 import { alertRulesFor, alertRulesLabel } from "./alert-rules.ts";
-import { evaluateForecastRules, forecastAlertKey } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastAlertKey } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
 import { observationsView } from "./observations-view.ts";
 
@@ -58,9 +58,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
     : busy ? "Loading forecast" : "Live forecast";
   const forecastMatches = state.savedSpots.flatMap((spot) => {
     const alert = state.forecastAlerts[spot.id];
-    return spot.alertEnabled && alert?.kind === "ready" && alert.key === forecastAlertKey(spot) &&
-      evaluateForecastRules(alert.summary, alertRulesFor(spot)).matched
-      ? [{ spot, summary: alert.summary }] : [];
+    if (!spot.alertEnabled || alert?.kind !== "ready" || alert.key !== forecastAlertKey(spot)) return [];
+    const evaluation = evaluateForecastRules(alert.summary, alertRulesFor(spot));
+    return evaluation.matched ? [{ spot, summary: alert.summary, evaluation,
+      nextWindowStart: evaluation.windows[0]?.start ?? null }] : [];
   });
 
   return html`
@@ -98,7 +99,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <button type="button" class="saved-spot-open" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong><span>${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
             ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot) && alert.kind === "ready"
-              ? `${alert.summary.matchingDays} of 14 forecast days match · alert at ${alertRulesLabel(spot)}`
+              ? `${alert.summary.matchingDays} of ${alert.summary.horizonDays} forecast days match · alert at ${alertRulesLabel(spot)}`
               : alert?.key === forecastAlertKey(spot) && alert.kind === "failed" ? "Alert check unavailable" : "Checking forecast…"}</small>` : nothing}
           </button>
           <button type="button" class="saved-spot-remove" aria-label=${`Remove ${spot.name}`}
@@ -113,19 +114,19 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
       <button class="forecast-alert-chip" type="button" @click=${() => propose({ kind: "forecastAlertsShown" })}>
         ${forecastMatches.length} forecast ${forecastMatches.length === 1 ? "match" : "matches"} ↗</button>` : html`
       <section class="forecast-alert-card" role="status" aria-label="Saved spot forecast matches">
-        <div class="forecast-alert-head"><div><span>FORECAST MATCH</span><strong>Next 14 days</strong></div>
+        <div class="forecast-alert-head"><div><span>FORECAST MATCH</span><strong>Saved spot alerts</strong></div>
           <button type="button" aria-label="Dismiss forecast alerts" @click=${() => propose({ kind: "forecastAlertsDismissed" })}>×</button></div>
-        <div class="forecast-alert-list">${forecastMatches.map(({ spot, summary }) => html`
+        <div class="forecast-alert-list">${forecastMatches.map(({ spot, summary, evaluation, nextWindowStart }) => html`
           <button type="button" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong>
             <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hourly samples, 06:00–18:00 local (alert at ${alertRulesLabel(spot)})</span>
-            <small>${evaluateForecastRules(summary, alertRulesFor(spot)).rules.filter((rule) => rule.met)
-              .map((rule) => `${rule.matchingDays} of the next ${rule.withinDays} days match (needs ${rule.minDays})`).join(" · ")}</small>
-            ${summary.nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
+            <small>${evaluation.rules.filter((rule) => rule.met)
+              .map((rule) => `${rule.matchingDays} matching days in a ${rule.withinDays}-day period${rule.bestPeriod ? ` (${forecastPeriodLabel(rule.bestPeriod)})` : ""} (needs ${rule.minDays})`).join(" · ")}</small>
+            ${nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
               timeZone: summary.timezone, weekday: "short", month: "short", day: "numeric",
               hour: "numeric", minute: "2-digit", timeZoneName: "short",
-            }).format(new Date(summary.nextWindowStart * 1000))}</small>`}
-            ${summary.availableDays < summary.horizonDays ? html`<small>Paired data on ${summary.availableDays} of 14 days</small>` : nothing}
+            }).format(new Date(nextWindowStart * 1000))}</small>`}
+            ${summary.availableDays < summary.horizonDays ? html`<small>Paired data on ${summary.availableDays} of ${summary.horizonDays} days</small>` : nothing}
           </button>`)}</div>
         <p>Forecast estimates: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">GFS Wave swell</a>
           and <a href="https://open-meteo.com/en/docs/ecmwf-api" target="_blank" rel="noopener noreferrer">ECMWF IFS wind</a> via Open-Meteo.</p>

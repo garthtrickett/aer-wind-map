@@ -1,4 +1,4 @@
-import { alertRulesFor, validAlertRules, type AlertDayRule } from "./alert-rules.ts";
+import { alertRulesFor, forecastLookAhead, validForecastLookAhead, validAlertRules, type AlertDayRule } from "./alert-rules.ts";
 import { initialTelegram, presentTelegram, type TelegramPanel, type TelegramProposal } from "./telegram-model.ts";
 import type { WeatherError } from "./ecmwf.ts";
 import type { ForecastRun } from "./wind.ts";
@@ -38,6 +38,7 @@ export type HistoryPanel = Readonly<{
   saveName: string;
   alertEnabled: boolean;
   alertRules: readonly AlertDayRule[];
+  alertLookAheadDays: number;
   forecastPreview: ForecastPreview;
   saveFeedback: "saved" | "nameRequired" | "storageFailed" | null;
 }>;
@@ -99,6 +100,7 @@ export type Proposal =
   | { readonly kind: "savedSpotOpened"; readonly id: string }
   | { readonly kind: "savedSpotNameChanged"; readonly name: string }
   | { readonly kind: "savedSpotAlertChanged"; readonly enabled: boolean }
+  | { readonly kind: "savedSpotAlertLookAheadChanged"; readonly days: number }
   | { readonly kind: "savedSpotAlertRulesChanged"; readonly rules: readonly AlertDayRule[] }
   | { readonly kind: "savedSpotSaved"; readonly id: string }
   | { readonly kind: "savedSpotRemoved"; readonly id: string }
@@ -122,7 +124,7 @@ export const initialState: State = {
     open: false, phase: "needsData", point: null,
     startYear: Math.max(2022, lastCompleteHistoryYear - 2), endYear: lastCompleteHistoryYear,
     criteria: defaultHistoryCriteria, requestedKey: null, data: null, error: null, selectedMonth: null, downloadRequested: false,
-    savedSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], saveFeedback: null,
+    savedSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null,
     forecastPreview: { phase: "idle", request: 0 },
   },
 };
@@ -137,7 +139,7 @@ const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
   observations: { ...state.observations, selectedId: null },
   history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview), open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
-    downloadRequested: false, savedSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], saveFeedback: null },
+    downloadRequested: false, savedSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
 });
 
 export const present = (state: State, proposal: Proposal): State => {
@@ -157,7 +159,7 @@ export const present = (state: State, proposal: Proposal): State => {
         history: { ...state.history, open: true, point: proposal.spot.point, phase: "needsData", data: null,
           startYear: proposal.spot.startYear, endYear: proposal.spot.endYear, criteria: proposal.spot.criteria,
           requestedKey: null, error: null, selectedMonth: null, savedSpotId: null,
-          saveName: proposal.spot.name, alertEnabled: false, alertRules: alertRulesFor(proposal.spot), saveFeedback: null } };
+          saveName: proposal.spot.name, alertEnabled: false, alertRules: alertRulesFor(proposal.spot), alertLookAheadDays: forecastLookAhead(proposal.spot), saveFeedback: null } };
       return present({ ...state, savedSpots: [proposal.spot, ...state.savedSpots.filter((spot) => spot.id !== proposal.spot.id)] },
         { kind: "savedSpotOpened", id: proposal.spot.id });
     }
@@ -232,13 +234,16 @@ export const present = (state: State, proposal: Proposal): State => {
         ...state.history, open: true, point: spot.point, forecastPreview: resetForecastPreview(state.history.forecastPreview), startYear: spot.startYear, endYear: spot.endYear,
         criteria: spot.criteria, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
         requestedKey: null, error: null, selectedMonth: null, downloadRequested: false,
-        savedSpotId: spot.id, saveName: spot.name, alertEnabled: spot.alertEnabled, alertRules: alertRulesFor(spot), saveFeedback: null,
+        savedSpotId: spot.id, saveName: spot.name, alertEnabled: spot.alertEnabled, alertRules: alertRulesFor(spot), alertLookAheadDays: forecastLookAhead(spot), saveFeedback: null,
       } };
     }
     case "savedSpotNameChanged":
       return state.history.open ? { ...state, history: { ...state.history, saveName: proposal.name, saveFeedback: null } } : state;
     case "savedSpotAlertChanged":
       return state.history.open ? { ...state, history: { ...state.history, alertEnabled: proposal.enabled, forecastPreview: resetForecastPreview(state.history.forecastPreview), saveFeedback: null } } : state;
+    case "savedSpotAlertLookAheadChanged":
+      return state.history.open && validForecastLookAhead(proposal.days)
+        ? { ...state, history: { ...state.history, alertLookAheadDays: proposal.days, saveFeedback: null } } : state;
     case "savedSpotAlertRulesChanged":
       return state.history.open && validAlertRules(proposal.rules)
         ? { ...state, history: { ...state.history, alertRules: proposal.rules, saveFeedback: null } } : state;
@@ -249,7 +254,7 @@ export const present = (state: State, proposal: Proposal): State => {
       if (!name || name.length > 80) return { ...state, history: { ...history, saveFeedback: "nameRequired" } };
       const spot: SavedSpot = { id: proposal.id, name, point: history.point,
         startYear: history.startYear, endYear: history.endYear, criteria: history.criteria,
-        alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays, alertRules: history.alertRules };
+        alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays, alertRules: history.alertRules, alertLookAheadDays: history.alertLookAheadDays };
       const exists = state.savedSpots.some((item) => item.id === proposal.id);
       return { ...state, savedSpots: exists ? state.savedSpots.map((item) => item.id === proposal.id ? spot : item) : [spot, ...state.savedSpots],
         savedSpotsError: null, history: { ...history, savedSpotId: proposal.id, saveName: name, saveFeedback: "saved" } };

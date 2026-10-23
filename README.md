@@ -30,20 +30,22 @@ and conditions. **Saved spots** on the map lists them; their markers reopen
 the same settings. You can update a spot, save a copy, or remove one. These
 saves stay in this browser's local storage.
 
-Checking the alert checkbox in **Find your season** immediately previews the next
-14 local calendar days, before saving. Results show the matching days and local
-time windows, which alert rules are met, and any gaps in forecast
-coverage. Editing conditions or the rules updates the preview using the
-downloaded hours; **Refresh forecast** fetches new data.
+Checking the alert checkbox in **Find your season** immediately previews the
+forecast before saving. **Search the next … days** controls the look-ahead,
+defaulting to 14 days (the supported maximum). Editing conditions, rules or
+look-ahead rescores the downloaded hours; **Refresh forecast** fetches new data.
 
-Each saved spot can also check its conditions against the next 14 local
-calendar days. Add one or more day-count rules, such as **2 matching days out of
-the next 4**, or **4 out of the next 7**. Each period starts today in the spot’s
-local timezone and can cover 1–14 calendar days. Any one satisfied rule triggers
-the alert; the preview shows each row’s count and result. Existing single
-thresholds reopen as one row out of 14 days. A matching day needs at least two
-consecutive hours (or the larger minimum window set in the conditions). The alert appears in the top-right
-corner, shows the matching-day count and next matching window, and opens the
+Add one or more rules such as **2 matching days in any 4-day period**, or
+**4 in any 7-day period**. Aer slides each period across the look-ahead and
+triggers if **any** row qualifies. A complete period must fit inside the chosen
+horizon; later matching days can qualify even when the first few days do not.
+Results show the best period, its dates, all qualifying periods, and any gaps
+in data coverage. A matching day needs at least two consecutive hours (or the
+larger minimum window set in the conditions). The look-ahead starts today in
+the spot's local timezone. Existing saved spots default to 14 days.
+
+The on-screen alert appears in the top-right corner, shows the matching-day
+count and next window belonging to a qualifying period, and opens the
 spot when clicked. **Saved spots → Telegram alerts** can also connect a private
 Telegram chat. Enabled spots sync to durable server storage and are checked about
 every six hours with the app closed. Messages list qualifying dates/windows,

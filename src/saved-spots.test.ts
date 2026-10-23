@@ -57,3 +57,10 @@ test("multiple alert rows round-trip and invalid counts are rejected at browser/
   }
   assert.equal(isSavedSpot(spot), true, "existing single-threshold snapshots remain valid");
 });
+
+
+test("saved look-ahead round-trips and invalid horizons are rejected", () => {
+  const saved = { ...spot, alertLookAheadDays: 7 };
+  assert.deepEqual(readSavedSpots(() => ({ getItem: () => JSON.stringify({ version: 1, spots: [saved] }), setItem: () => undefined })), { ok: true, value: [saved] });
+  for (const alertLookAheadDays of [0, 15, 2.5, "7", null]) assert.equal(isSavedSpot({ ...spot, alertLookAheadDays }), false);
+});
