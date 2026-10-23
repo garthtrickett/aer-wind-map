@@ -46,11 +46,17 @@ export const readSavedSpots = (storage: StorageAccess): SavedSpotsResult => {
   if (text === null) return { ok: true, value: [] };
   try {
     const raw: unknown = JSON.parse(text);
-    if (!isRecord(raw) || raw.version !== 1 || !Array.isArray(raw.spots) || !raw.spots.every(isSavedSpot) ||
-      new Set(raw.spots.map((spot: SavedSpot) => spot.id)).size !== raw.spots.length) {
+    if (!isRecord(raw) || raw.version !== 1 || !Array.isArray(raw.spots)) {
       return { ok: false, error: { kind: "invalid" } };
     }
-    return { ok: true, value: raw.spots };
+    const spots = raw.spots.map((spot: unknown) => {
+      if (!isRecord(spot) || !isRecord(spot.criteria) || "maxSwellPeriod" in spot.criteria) return spot;
+      return { ...spot, criteria: { ...spot.criteria, maxSwellPeriod: null } };
+    });
+    if (!spots.every(isSavedSpot) || new Set(spots.map((spot) => spot.id)).size !== spots.length) {
+      return { ok: false, error: { kind: "invalid" } };
+    }
+    return { ok: true, value: spots };
   } catch { return { ok: false, error: { kind: "invalid" } }; }
 };
 

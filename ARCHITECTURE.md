@@ -19,7 +19,10 @@
   shows height, while the flag and modal also show period. The free feed does
   not supply first swell partition (`swh1`/`mwp1`) fields.
 - A selected point's history panel compares swell-specific height, period, and
-  source direction with wind speed and source direction. Each direction filter
+  source direction with wind speed and source direction. Swell period has an
+  inclusive minimum and optional inclusive maximum; a blank maximum has no
+  upper limit. The same matcher serves history, CSV exports, and forecast alerts.
+  Each direction filter
   runs clockwise from its first bearing to its second, including north-crossing
   ranges. It ranks calendar months over up to
   five complete years by the fraction of usable days with a configurable
@@ -37,6 +40,7 @@
 - Named spot presets store point, historical years, criteria, alert opt-in,
   and minimum matching days in browser local storage. Leaflet markers and a
   map list reopen the preset. Storage parsing and writes return typed errors.
+  Older presets without a maximum swell period load with no upper limit.
 - The 14-day alert requests GFS Wave swell and ECMWF IFS 10 m wind through
   Open-Meteo for opted-in spots. It joins hourly instants, scores consecutive
   matches by each spot's local calendar day, and shows an on-screen alert

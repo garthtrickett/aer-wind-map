@@ -6,7 +6,7 @@ import { defaultHistoryCriteria } from "./history.ts";
 const spot: SavedSpot = {
   id: "spot-1", name: "Wet season Bukit", point: { latitude: -8.78, longitude: 115.07 },
   startYear: 2023, endYear: 2025,
-  criteria: { ...defaultHistoryCriteria, windFromStart: 315, windFromEnd: 45,
+  criteria: { ...defaultHistoryCriteria, maxSwellPeriod: 14, windFromStart: 315, windFromEnd: 45,
     swellFromStart: 180, swellFromEnd: 270 },
   alertEnabled: true, alertMinDays: 3,
 };
@@ -28,4 +28,19 @@ test("malformed storage and denied storage return typed errors", () => {
   const denied = () => { throw new Error("Storage blocked"); };
   assert.deepEqual(readSavedSpots(denied), { ok: false, error: { kind: "unavailable" } });
   assert.deepEqual(writeSavedSpots(denied, [spot]), { ok: false, error: { kind: "unavailable" } });
+});
+
+test("older saved spots retain their rules with no maximum swell period", () => {
+  const { maxSwellPeriod, ...legacyCriteria } = spot.criteria;
+  const legacy = { ...spot, criteria: legacyCriteria };
+  const text = JSON.stringify({ version: 1, spots: [legacy] });
+  const storage = { getItem: () => text, setItem: () => undefined };
+  assert.deepEqual(readSavedSpots(() => storage), {
+    ok: true, value: [{ ...spot, criteria: { ...legacyCriteria, maxSwellPeriod: null } }],
+  });
+  for (const maximum of [9, -1, 31, "14"]) {
+    const invalid = { ...storage, getItem: () => JSON.stringify({ version: 1,
+      spots: [{ ...spot, criteria: { ...spot.criteria, maxSwellPeriod: maximum } }] }) };
+    assert.deepEqual(readSavedSpots(() => invalid), { ok: false, error: { kind: "invalid" } });
+  }
 });

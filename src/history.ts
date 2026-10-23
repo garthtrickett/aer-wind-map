@@ -4,6 +4,7 @@ export type HistoryCriteria = Readonly<{
   minSwellHeight: number;
   maxSwellHeight: number;
   minSwellPeriod: number;
+  maxSwellPeriod: number | null;
   maxWindSpeed: number;
   windFromStart: number;
   windFromEnd: number;
@@ -16,6 +17,7 @@ export const defaultHistoryCriteria: HistoryCriteria = {
   minSwellHeight: 1,
   maxSwellHeight: 3,
   minSwellPeriod: 10,
+  maxSwellPeriod: null,
   maxWindSpeed: 5,
   windFromStart: 45,
   windFromEnd: 135,
@@ -180,7 +182,9 @@ export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCrite
   hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
   hour.windSpeed !== null && hour.windDirection !== null &&
   hour.swellHeight >= criteria.minSwellHeight && hour.swellHeight <= criteria.maxSwellHeight &&
-  hour.swellPeriod >= criteria.minSwellPeriod && hour.windSpeed <= criteria.maxWindSpeed &&
+  hour.swellPeriod >= criteria.minSwellPeriod &&
+  (criteria.maxSwellPeriod === null || hour.swellPeriod <= criteria.maxSwellPeriod) &&
+  hour.windSpeed <= criteria.maxWindSpeed &&
   directionInClockwiseRange(hour.windDirection, criteria.windFromStart, criteria.windFromEnd) &&
   directionInClockwiseRange(hour.swellDirection, criteria.swellFromStart, criteria.swellFromEnd);
 

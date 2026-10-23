@@ -11,8 +11,8 @@ are not primary swell partition values. The timeline steps through the first
 72 forecast hours. Displayed times use the browser's local timezone.
 
 Click a point, open its details, and choose **Explore historical swell and wind**
-to compare up to five complete years. Set a swell-height range, minimum swell
-period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
+to compare up to five complete years. Set a swell-height range, minimum and optional
+maximum swell period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
 minimum consecutive hours. Aer ranks months by the share of usable days with
 a matching window between 06:00 and 18:00 in the spot's local timezone, shows
 qualifying dates, and exports the paired hourly data

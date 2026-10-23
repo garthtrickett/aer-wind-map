@@ -74,7 +74,7 @@ test("named spot presets save, reopen, update, and remove independently", () => 
   const opened = present(present(initialState, { kind: "locationSelected", point }), { kind: "historyOpened" });
   const named = present(opened, { kind: "savedSpotNameChanged", name: "Wet season Bukit" });
   const criteria = { ...named.history.criteria, windFromStart: 315, windFromEnd: 45,
-    swellFromStart: 180, swellFromEnd: 270 };
+    swellFromStart: 180, swellFromEnd: 270, maxSwellPeriod: 14 };
   const configured = present(present(present(named, { kind: "historyCriteriaChanged", criteria }),
     { kind: "savedSpotAlertChanged", enabled: true }), { kind: "savedSpotAlertMinDaysChanged", days: 3 });
   const saved = present(configured, { kind: "savedSpotSaved", id: "spot-1" });

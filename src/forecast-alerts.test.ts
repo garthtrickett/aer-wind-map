@@ -37,3 +37,12 @@ test("expired hours and missing paired wave data do not become alert days", () =
   const noWave = { ...wave, first: time.map(() => null) };
   assert.equal(scoreForecastAlert(spot, noWave, wind, now), null);
 });
+
+test("forecast alerts reject swell periods above the saved maximum", () => {
+  const capped = { ...spot, criteria: { ...spot.criteria, maxSwellPeriod: 12 } };
+  const now = new Date("2026-09-27T00:00:00Z");
+  assert.equal(scoreForecastAlert(capped, wave, wind, now)?.matchingDays, 2);
+  const longer = { ...wave, second: time.map(() => 12.5) };
+  assert.equal(scoreForecastAlert(capped, longer, wind, now)?.matchingDays, 0);
+  assert.equal(scoreForecastAlert(spot, longer, wind, now)?.matchingDays, 2);
+});

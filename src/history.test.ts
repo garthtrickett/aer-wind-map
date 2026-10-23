@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { defaultHistoryCriteria, directionInClockwiseRange, historyCsv, loadHistoricalSpot, summarizeHistory, type HistoricalData, type HistoricalHour } from "./history.ts";
+import { defaultHistoryCriteria, directionInClockwiseRange, historyCsv, hourMatchesCriteria, loadHistoricalSpot, summarizeHistory, type HistoricalData, type HistoricalHour } from "./history.ts";
 
 const hoursFor = (date: string, matching: readonly number[], direction = 355, available = 24): HistoricalHour[] =>
   Array.from({ length: 24 }, (_, hour) => ({
@@ -12,6 +12,29 @@ const hoursFor = (date: string, matching: readonly number[], direction = 355, av
     windSpeed: hour < available ? 3 : null,
     windDirection: hour < available ? direction : null,
   }));
+
+test("swell period bounds are inclusive and an over-limit hour breaks the matching window", () => {
+  const criteria = { ...defaultHistoryCriteria, minSwellPeriod: 8, maxSwellPeriod: 12,
+    windFromStart: 0, windFromEnd: 360 };
+  const hour = hoursFor("2025-01-01", [10])[10]!;
+  for (const [period, expected] of [[7.5, false], [8, true], [12, true], [12.5, false]] as const) {
+    assert.equal(hourMatchesCriteria({ ...hour, swellPeriod: period }, criteria), expected);
+  }
+  assert.equal(hourMatchesCriteria({ ...hour, swellPeriod: 35 }, { ...criteria, maxSwellPeriod: null }), true);
+  assert.equal(hourMatchesCriteria({ ...hour, swellPeriod: null }, criteria), false);
+  const data: HistoricalData = {
+    startYear: 2025, endYear: 2025, timezone: "UTC",
+    waveGrid: { latitude: 0, longitude: 0 }, windGrid: { latitude: 0, longitude: 0 },
+    hours: hoursFor("2025-01-01", [10, 11, 12])
+      .map((value, index) => index === 11 ? { ...value, swellPeriod: 13 } : value),
+  };
+  const capped = summarizeHistory(data, criteria);
+  assert.equal(capped.days[0]?.longestWindow, 1);
+  assert.equal(capped.months[0]?.qualifyingDays, 0);
+  assert.equal(capped.months[0]?.observedDays, 1);
+  assert.equal(summarizeHistory(data, { ...criteria, maxSwellPeriod: null }).days[0]?.longestWindow, 3);
+  assert.ok(historyCsv(data, criteria).includes("2025-01-01T11:00:00.000Z,2025-01-01,2,13,220,3,355,0"));
+});
 
 test("monthly score requires consecutive matching hours and enough paired data", () => {
   const data: HistoricalData = {

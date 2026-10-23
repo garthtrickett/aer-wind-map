@@ -12,14 +12,16 @@ const coordinates = (latitude: number, longitude: number): string =>
 const numberValue = (event: Event): number => Number((event.target as HTMLInputElement).value);
 
 const numberControl = (
-  label: string, value: number, min: number, max: number, step: number,
-  update: (value: number) => void, unit: string,
+  label: string, value: number | null, min: number, max: number, step: number,
+  update: (value: number) => void, unit: string, clear?: () => void,
 ): TemplateResult => html`
   <label class="history-control"><span>${label}</span><span class="history-input-wrap">
-    <input type="number" min=${String(min)} max=${String(max)} step=${String(step)} .value=${String(value)}
+    <input type="number" min=${String(min)} max=${String(max)} step=${String(step)} .value=${value === null ? "" : String(value)}
+      placeholder=${clear ? "No limit" : nothing}
       @change=${(event: Event) => {
+        if ((event.target as HTMLInputElement).value === "" && clear) { clear(); return; }
         const next = numberValue(event);
-        update(Number.isFinite(next) ? Math.min(max, Math.max(min, next)) : value);
+        if (Number.isFinite(next)) update(Math.min(max, Math.max(min, next)));
       }} />
     <small>${unit}</small>
   </span></label>`;
@@ -70,9 +72,16 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 (value) => setCriteria({ ...criteria, maxSwellHeight: value,
                   minSwellHeight: Math.min(value, criteria.minSwellHeight) }), "m")}
               ${numberControl("Swell period at least", criteria.minSwellPeriod, 0, 30, .5,
-                (value) => setCriteria({ ...criteria, minSwellPeriod: value }), "s")}
+                (value) => setCriteria({ ...criteria, minSwellPeriod: value,
+                  maxSwellPeriod: criteria.maxSwellPeriod === null ? null : Math.max(value, criteria.maxSwellPeriod) }), "s")}
+              ${numberControl("Swell period at most", criteria.maxSwellPeriod, 0, 30, .5,
+                (value) => setCriteria({ ...criteria, maxSwellPeriod: value,
+                  minSwellPeriod: Math.min(value, criteria.minSwellPeriod) }), "s",
+                () => setCriteria({ ...criteria, maxSwellPeriod: null }))}
               ${numberControl("Wind speed at most", criteria.maxWindSpeed, 0, 40, .5,
                 (value) => setCriteria({ ...criteria, maxWindSpeed: value }), "m/s")}
+              ${numberControl("Minimum window", criteria.minConsecutiveHours, 1, 12, 1,
+                (value) => setCriteria({ ...criteria, minConsecutiveHours: value }), "hours")}
               ${numberControl("Wind from", criteria.windFromStart, 0, 359, 1,
                 (value) => setCriteria({ ...criteria, windFromStart: value }), "°")}
               ${numberControl("Wind to", criteria.windFromEnd, 0, 360, 1,
@@ -81,9 +90,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 (value) => setCriteria({ ...criteria, swellFromStart: value }), "°")}
               ${numberControl("Swell to", criteria.swellFromEnd, 0, 360, 1,
                 (value) => setCriteria({ ...criteria, swellFromEnd: value }), "°")}
-              ${numberControl("Minimum window", criteria.minConsecutiveHours, 1, 12, 1,
-                (value) => setCriteria({ ...criteria, minConsecutiveHours: value }), "hours")}
             </div>
+            <p class="history-direction-note">Leave “Swell period at most” blank for no upper limit.</p>
             <p class="history-direction-note">Each “to” bearing is clockwise from its “from” bearing. For example, 315° to 45° crosses north; 0° to 360° includes every direction.</p>
               </div>
             </div>
