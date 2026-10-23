@@ -149,11 +149,30 @@ so an operator can re-arm after reconciling the Telegram chat.
   is private server configuration, not part of this plan or Git.
 - Verified the bot identity with `getMe`. Configured a Railway `/data` volume and
   server-only variables; the existing service has one replica and sleeping off.
-- Deployment and live connection/phone-delivery evidence are recorded below once
-  verified. Automated tests deliberately use a fake recipient and transport.
+- Automated tests use a fake recipient and transport. Live evidence follows.
 
 ### Final usability check
 
 The first requested test notification now works immediately after connection;
 only earlier test requests consume its one-minute cooldown. Connection replies
 do not block it. The regression test passes.
+
+## Live activation evidence — 23 October 2026
+
+- Implementation commits: `a37bbeb`, followed by `013f11a` for the immediate-test
+  refinement. Latest Railway deployment `3460e5fa-c042-4654-a21b-6e5de11343f4`
+  reports **SUCCESS** with `/data` mounted, one replica and application sleeping
+  disabled. `/health` returns 200 and `/api/telegram/status` reports available.
+- Bot identity confirmed as **@AerSurfForecastBot**; `/status`, `/stop` and `/help`
+  appear in its command menu. The bot token remains server-only.
+- Through the signed-in Beeper UI, connected a temporary browser session by
+  sending its private `/start` link to the verified new bot. This exercised the
+  live Telegram update poller, persisted owner/link and outgoing confirmation.
+- Requested exactly one live test notification through Aer. Its full expected
+  text arrived as an incoming message in the owner's Telegram conversation and
+  was read back through the unchanged read-only Beeper API (message `12852`).
+  This verifies Telegram-chat reception, not a banner or sound on a physical phone.
+- Disconnected the temporary test session and confirmed zero monitoring spots
+  for it. No user surf criteria were invented or uploaded. The user enables real
+  monitoring by connecting from the browser holding their saved spots; automatic
+  sync then copies the enabled snapshots to the server.
