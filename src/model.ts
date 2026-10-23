@@ -1,13 +1,13 @@
+import { initialTelegram, presentTelegram, type TelegramPanel, type TelegramProposal } from "./telegram-model.ts";
 import type { WeatherError } from "./ecmwf.ts";
 import type { ForecastRun } from "./wind.ts";
 import type { ForecastField, Layer } from "./wave.ts";
-import { defaultHistoryCriteria, type HistoricalData, type HistoryCriteria, type HistoryError } from "./history.ts";
+import { validCriteria, lastCompleteHistoryYear, defaultHistoryCriteria, type HistoricalData, type HistoryCriteria, type HistoryError } from "./history.ts";
 import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
 import { forecastAlertKey, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
-export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
 export type ForecastAlertStatus =
   | Readonly<{ kind: "loading"; key: string; generation: number }>
   | Readonly<{ kind: "ready"; key: string; generation: number; summary: ForecastAlertSummary }>
@@ -33,6 +33,7 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  telegram: TelegramPanel;
   observations: ObservationsState;
   phase: "idle" | "discovering" | "needsField" | "loading" | "ready" | "failed";
   layer: Layer;
@@ -53,6 +54,8 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | TelegramProposal
+  | { readonly kind: "telegramSpotRestored"; readonly spot: SavedSpot; readonly readOnly?: boolean }
   | ObservationProposal
   | { readonly kind: "discoverStarted" }
   | { readonly kind: "runFound"; readonly run: ForecastRun; readonly layer: Layer }
@@ -96,6 +99,7 @@ export type Proposal =
   | { readonly kind: "forecastAlertsShown" };
 
 export const initialState: State = {
+  telegram: initialTelegram,
   observations: initialObservations,
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
   selected: null, modalOpen: false, error: null, playing: false,
@@ -113,18 +117,7 @@ export const fieldKey = (run: ForecastRun, step: number, layer: Layer = "wind"):
 export const historyKey = (point: Point, startYear: number, endYear: number): string =>
   `${point.latitude}:${point.longitude}:${startYear}:${endYear}`;
 
-export const validCriteria = (criteria: HistoryCriteria): boolean =>
-  Number.isFinite(criteria.minSwellHeight) && criteria.minSwellHeight >= 0 && criteria.minSwellHeight <= 15 &&
-  Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
-  Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
-  (criteria.maxSwellPeriod === null ||
-    (Number.isFinite(criteria.maxSwellPeriod) && criteria.maxSwellPeriod >= criteria.minSwellPeriod && criteria.maxSwellPeriod <= 30)) &&
-  Number.isFinite(criteria.maxWindSpeed) && criteria.maxWindSpeed >= 0 && criteria.maxWindSpeed <= 40 &&
-  Number.isFinite(criteria.windFromStart) && criteria.windFromStart >= 0 && criteria.windFromStart < 360 &&
-  Number.isFinite(criteria.windFromEnd) && criteria.windFromEnd >= 0 && criteria.windFromEnd <= 360 &&
-  Number.isFinite(criteria.swellFromStart) && criteria.swellFromStart >= 0 && criteria.swellFromStart < 360 &&
-  Number.isFinite(criteria.swellFromEnd) && criteria.swellFromEnd >= 0 && criteria.swellFromEnd <= 360 &&
-  Number.isInteger(criteria.minConsecutiveHours) && criteria.minConsecutiveHours >= 1 && criteria.minConsecutiveHours <= 12;
+export { validCriteria, lastCompleteHistoryYear } from "./history.ts";
 
 const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
@@ -135,6 +128,25 @@ const selectionChanged = (state: State, point: Point): State => ({
 
 export const present = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "telegramRequested":
+    case "telegramStarted":
+    case "telegramLoaded":
+    case "telegramFailed":
+    case "telegramLinkFailed":
+    case "telegramSpotsChanged":
+    case "telegramSyncRemembered": {
+      const telegram = presentTelegram(state.telegram, proposal);
+      return telegram === state.telegram ? state : { ...state, telegram };
+    }
+    case "telegramSpotRestored": {
+      if (proposal.readOnly) return { ...state, selected: proposal.spot.point, modalOpen: false, savedSpotsOpen: false,
+        history: { ...state.history, open: true, point: proposal.spot.point, phase: "needsData", data: null,
+          startYear: proposal.spot.startYear, endYear: proposal.spot.endYear, criteria: proposal.spot.criteria,
+          requestedKey: null, error: null, selectedMonth: null, savedSpotId: null,
+          saveName: proposal.spot.name, alertEnabled: false, alertMinDays: proposal.spot.alertMinDays, saveFeedback: null } };
+      return present({ ...state, savedSpots: [proposal.spot, ...state.savedSpots.filter((spot) => spot.id !== proposal.spot.id)] },
+        { kind: "savedSpotOpened", id: proposal.spot.id });
+    }
     case "observationsToggled":
     case "observationLayerToggled":
     case "taiwanCoastalWindToggled":

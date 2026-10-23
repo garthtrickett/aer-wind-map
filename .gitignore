@@ -1,3 +1,9 @@
 node_modules/
 dist/
 public/decoder/
+
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*

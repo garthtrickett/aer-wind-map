@@ -1,5 +1,6 @@
 import type { HistoryCriteria } from "./history.ts";
-import { lastCompleteHistoryYear, validCriteria, type Point } from "./model.ts";
+import { lastCompleteHistoryYear, validCriteria } from "./history.ts";
+import type { Point } from "./model.ts";
 
 export type SavedSpot = Readonly<{
   id: string;
@@ -24,7 +25,7 @@ const storageKey = "aer.saved-spots.v1";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isSavedSpot = (value: unknown): value is SavedSpot => {
+export const isSavedSpot = (value: unknown): value is SavedSpot => {
   if (!isRecord(value) || !isRecord(value.point) || !isRecord(value.criteria)) return false;
   const { latitude, longitude } = value.point;
   return typeof value.id === "string" && value.id.length > 0 && value.id.length <= 100 &&

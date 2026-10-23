@@ -382,3 +382,15 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .leaflet-top.leaflet-right { top: 10px; right: 10px; }
   .leaflet-control-attribution { max-width: 100%; white-space: normal; line-height: 1.2 !important; }
 }
+/* Telegram controls share the saved-spots panel's existing type and colour. */
+.telegram-settings { border-top: 1px solid #c9dddd; margin-top: 16px; padding-top: 16px; }
+.telegram-settings h3 { font-size: 16px; margin: 0 0 8px; }
+.telegram-settings p { font-size: 13px; line-height: 1.5; margin: 8px 0; }
+.telegram-settings small { display: block; margin-top: 8px; font-size: 11px; }
+.telegram-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.telegram-settings button, .telegram-connect { display: inline-block; border: 1px solid #9bbfc2; border-radius: 8px; padding: 8px 10px; background: #f7fbfa; color: #12333e; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; }
+.telegram-settings button:disabled { opacity: .55; cursor: wait; }
+.telegram-settings button:focus-visible, .telegram-connect:focus-visible { outline: 2px solid #087b8d; outline-offset: 3px; }
+.telegram-settings .telegram-connected { font-weight: 650; color: #95e4cd; }
+.telegram-settings .telegram-warning { color: #ffd48a; }
+.telegram-settings .telegram-refresh { margin-top: 12px; }

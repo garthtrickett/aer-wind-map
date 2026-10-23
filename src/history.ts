@@ -13,6 +13,22 @@ export type HistoryCriteria = Readonly<{
   minConsecutiveHours: number;
 }>;
 
+export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
+
+export const validCriteria = (criteria: HistoryCriteria): boolean =>
+  Number.isFinite(criteria.minSwellHeight) && criteria.minSwellHeight >= 0 && criteria.minSwellHeight <= 15 &&
+  Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
+  Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
+  (criteria.maxSwellPeriod === null ||
+    (Number.isFinite(criteria.maxSwellPeriod) && criteria.maxSwellPeriod >= criteria.minSwellPeriod && criteria.maxSwellPeriod <= 30)) &&
+  Number.isFinite(criteria.maxWindSpeed) && criteria.maxWindSpeed >= 0 && criteria.maxWindSpeed <= 40 &&
+  Number.isFinite(criteria.windFromStart) && criteria.windFromStart >= 0 && criteria.windFromStart < 360 &&
+  Number.isFinite(criteria.windFromEnd) && criteria.windFromEnd >= 0 && criteria.windFromEnd <= 360 &&
+  Number.isFinite(criteria.swellFromStart) && criteria.swellFromStart >= 0 && criteria.swellFromStart < 360 &&
+  Number.isFinite(criteria.swellFromEnd) && criteria.swellFromEnd >= 0 && criteria.swellFromEnd <= 360 &&
+  Number.isInteger(criteria.minConsecutiveHours) && criteria.minConsecutiveHours >= 1 && criteria.minConsecutiveHours <= 12;
+
+
 export const defaultHistoryCriteria: HistoryCriteria = {
   minSwellHeight: 1,
   maxSwellHeight: 3,
@@ -188,10 +204,10 @@ export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCrite
   directionInClockwiseRange(hour.windDirection, criteria.windFromStart, criteria.windFromEnd) &&
   directionInClockwiseRange(hour.swellDirection, criteria.swellFromStart, criteria.swellFromEnd);
 
-const historyClock = (timezone: string): Intl.DateTimeFormat =>
+export const historyClock = (timezone: string): Intl.DateTimeFormat =>
   new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });
 
-const withinHistoryHours = (time: number, clock: Intl.DateTimeFormat): boolean => {
+export const withinHistoryHours = (time: number, clock: Intl.DateTimeFormat): boolean => {
   const hour = Number(clock.format(new Date(time * 1000)));
   return hour >= 6 && hour < 18;
 };

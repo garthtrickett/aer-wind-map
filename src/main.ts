@@ -16,6 +16,8 @@ import type { ForecastField } from "./wave.ts";
 import { loadObservations } from "./observations.ts";
 import { loadBuoyHistory, buoyHistoryCsv } from "./buoy-history.ts";
 import { createObservationMarkers } from "./observations-map.ts";
+import { telegramRequest, telegramSpotsKey } from "./telegram-model.ts";
+import { isSavedSpot } from "./saved-spots.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -290,11 +292,15 @@ function dispatch(proposal: Proposal): void {
   const previous = state;
   let next = present(state, proposal);
   if (next === state) return;
-  if ((proposal.kind === "savedSpotSaved" || proposal.kind === "savedSpotRemoved") && next.savedSpots !== previous.savedSpots) {
+  if ((proposal.kind === "savedSpotSaved" || proposal.kind === "savedSpotRemoved" || proposal.kind === "telegramSpotRestored") && next.savedSpots !== previous.savedSpots) {
     const result = writeSavedSpots(() => window.localStorage, next.savedSpots);
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (state.telegram.syncedKey !== previous.telegram.syncedKey) {
+    try { window.localStorage.setItem("aer.telegram.synced.v1", state.telegram.syncedKey ?? ""); }
+    catch { /* Sync status remains visible; server monitoring is already durable. */ }
+  }
   arrowsCanvas.hidden = state.layer === "waves";
   render(view(state, dispatch, windMap.center, Date.now()), ui);
   render(flagView(state, dispatch), flag);
@@ -319,8 +325,9 @@ function dispatch(proposal: Proposal): void {
     displayedSavedSpots = state.savedSpots;
     windMap.setSavedSpots(displayedSavedSpots);
     queueMicrotask(refreshForecastAlerts);
+    queueMicrotask(() => dispatch({ kind: "telegramSpotsChanged", key: telegramSpotsKey(state.savedSpots), edited: true }));
   }
-  if (proposal.kind === "savedSpotOpened" && state.history.savedSpotId === proposal.id && state.history.point) {
+  if ((proposal.kind === "savedSpotOpened" && state.history.savedSpotId === proposal.id || proposal.kind === "telegramSpotRestored") && state.history.point) {
     windMap.focus(state.history.point);
   }
   const nextOverlay = state.observations.selectedId ? "observation" : state.history.open ? "history" : state.modalOpen ? "details" : null;
@@ -339,6 +346,17 @@ function dispatch(proposal: Proposal): void {
 
   const effect = nap(state);
   if (effect) runEffect(effect);
+  const telegram = state.telegram.request;
+  if (telegram && !telegram.started) {
+    const spots = state.savedSpots;
+    const revision = state.telegram.status.revision;
+    dispatch({ kind: "telegramStarted", id: telegram.id, key: telegramSpotsKey(spots) });
+    void telegramRequest(telegram.action, spots, revision).then(
+      (reply) => dispatch({ kind: "telegramLoaded", id: telegram.id, reply }),
+      (cause) => dispatch({ kind: "telegramFailed", id: telegram.id,
+        message: cause instanceof Error ? cause.message : "Telegram is unavailable. Try again." }),
+    );
+  }
 }
 
 document.addEventListener("keydown", (event) => {
@@ -358,13 +376,21 @@ document.addEventListener("keydown", (event) => {
 
 const alertTimer = window.setInterval(refreshForecastAlerts, 15 * 60 * 1000);
 const observationTimer = window.setInterval(() => { if (!document.hidden) dispatch({ kind: "observationsRefreshed" }); }, 5 * 60 * 1000);
-window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); });
+const refreshTelegram = () => {
+  if (!document.hidden && (state.savedSpotsOpen || state.telegram.connectUrl)) dispatch({ kind: "telegramRequested", action: "status" });
+};
+const telegramTimer = window.setInterval(refreshTelegram, 10_000);
+window.addEventListener("focus", refreshTelegram);
+window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
   : { kind: "savedSpotsLoadFailed", error: savedSpotsResult.error });
 displayedSavedSpots = state.savedSpots;
 windMap.setSavedSpots(displayedSavedSpots);
+state = present(state, { kind: "telegramSpotsChanged", key: telegramSpotsKey(state.savedSpots), edited: false });
+try { state = present(state, { kind: "telegramSyncRemembered", key: window.localStorage.getItem("aer.telegram.synced.v1") }); }
+catch { /* Local preset storage already reports its own error. */ }
 queueMicrotask(refreshForecastAlerts);
 const startingBounds = windMap.map.getBounds();
 state = present(state, { kind: "observationViewportChanged", zoom: windMap.map.getZoom(), bounds: {
@@ -374,3 +400,25 @@ render(view(state, dispatch, windMap.center, Date.now()), ui);
 render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);
 if (firstEffect) runEffect(firstEffect);
+dispatch({ kind: "telegramRequested", action: "status" });
+
+const linkedAlert = new URL(window.location.href).searchParams.get("alert");
+const forecastToken = new URLSearchParams(window.location.hash.slice(1)).get("forecast");
+if ((linkedAlert && linkedAlert.length <= 100) || forecastToken) {
+  // Fragments are never sent in navigation requests or Referer headers. Remove
+  // the capability from the address bar after taking our local copy.
+  if (forecastToken) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  void fetch(forecastToken ? "/api/telegram/view" : `/api/telegram/spot?id=${encodeURIComponent(linkedAlert!)}`, {
+    credentials: "same-origin", signal: AbortSignal.timeout(15_000),
+    ...(forecastToken ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: forecastToken }) } : {}),
+  })
+    .then(async (response) => {
+      const raw = await response.json();
+      if (!response.ok || !isSavedSpot(raw.spot)) throw new Error("This forecast link expired or its alert was removed.");
+      dispatch({ kind: "telegramSpotRestored", spot: raw.spot, readOnly: !!forecastToken });
+    }).catch(() => {
+      if (!state.savedSpotsOpen) dispatch({ kind: "savedSpotsToggled" });
+      // A link never imports an unowned or malformed preset.
+      dispatch({ kind: "telegramLinkFailed" });
+    });
+}

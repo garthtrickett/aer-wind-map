@@ -117,8 +117,9 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               </div>
               <label class="history-alert-option"><input type="checkbox" .checked=${history.alertEnabled}
                 @change=${(event: Event) => propose({ kind: "savedSpotAlertChanged", enabled: (event.target as HTMLInputElement).checked })} />
-                Check the next 14 days and alert on screen when these conditions last at least
-                ${Math.max(2, criteria.minConsecutiveHours)} consecutive hours</label>
+                Check the next 14 days when these conditions last at least
+                ${Math.max(2, criteria.minConsecutiveHours)} consecutive hourly samples, 06:00–18:00 local.
+                Connect Telegram in Saved spots for phone alerts.</label>
               ${history.alertEnabled ? html`<label class="history-alert-days" for="history-alert-days">Alert when at least
                 <input id="history-alert-days" type="number" min="1" max="14" step="1" .value=${String(history.alertMinDays)}
                   @change=${(event: Event) => {

@@ -6,7 +6,7 @@ import type { SavedSpot } from "./saved-spots.ts";
 
 const start = Date.parse("2026-09-27T00:00:00Z") / 1000;
 const time = Array.from({ length: 15 * 24 }, (_, index) => start + index * 3600);
-const matching = new Set([25, 26, 73, 74, 95, 97]);
+const matching = new Set([30, 31, 78, 79, 101, 103]);
 const spot: SavedSpot = {
   id: "bukit", name: "Wet season Bukit", point: { latitude: -8.78, longitude: 115.07 },
   startYear: 2023, endYear: 2025, alertEnabled: true, alertMinDays: 2,
@@ -23,7 +23,7 @@ test("14-day alerts require consecutive matching hours on each local day", () =>
   assert.equal(summary.availableDays, 14);
   assert.equal(summary.requiredHours, 2);
   assert.equal(summary.matchingDays, 2);
-  assert.equal(summary.nextWindowStart, time[25]);
+  assert.equal(summary.nextWindowStart, time[30]);
   assert.equal(scoreForecastAlert({ ...spot, criteria: { ...spot.criteria, minConsecutiveHours: 3 } },
     wave, wind, new Date("2026-09-27T00:00:00Z"))?.matchingDays, 0);
   assert.equal(scoreForecastAlert({ ...spot, criteria: { ...spot.criteria, minConsecutiveHours: 1 } },
@@ -45,4 +45,19 @@ test("forecast alerts reject swell periods above the saved maximum", () => {
   const longer = { ...wave, second: time.map(() => 12.5) };
   assert.equal(scoreForecastAlert(capped, longer, wind, now)?.matchingDays, 0);
   assert.equal(scoreForecastAlert(spot, longer, wind, now)?.matchingDays, 2);
+});
+
+test("only 06:00–18:00 at the spot counts; windows end at 18:00 and never bridge missing hours", () => {
+  const allGood = { ...wind, second: time.map(() => 355) };
+  const at = new Date("2026-09-27T00:00:00Z");
+  const utc = scoreForecastAlert(spot, wave, allGood, at)!;
+  assert.equal(utc.windows[0].start, time[6]);
+  assert.equal(utc.windows[0].end, time[18]);
+  const taiwan = scoreForecastAlert(spot, { ...wave, timezone: "Asia/Taipei" }, allGood, at)!;
+  assert.equal(taiwan.windows[0].start, time[0]); // already 08:00 at the spot
+  assert.equal(taiwan.windows[0].end, time[10]); // 18:00 local
+  const nights = { ...wind, second: time.map((_, index) => index % 24 < 6 || index % 24 >= 18 ? 355 : 180) };
+  assert.equal(scoreForecastAlert(spot, wave, nights, at)?.matchingDays, 0);
+  const gaps = { ...wind, second: time.map((_, index) => [6, 8].includes(index % 24) ? 355 : 180) };
+  assert.equal(scoreForecastAlert(spot, wave, gaps, at)?.matchingDays, 0);
 });

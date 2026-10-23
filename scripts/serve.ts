@@ -1,3 +1,4 @@
+import { createAlertRuntime } from "./alerts/runtime.ts";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -9,6 +10,7 @@ const root = resolve(import.meta.dirname, "../dist");
 const port = Number(process.env.PORT || "3000");
 const observations = createObservationFeed();
 const buoyHistory = createBuoyHistoryFeed();
+const telegram = createAlertRuntime();
 const types: Readonly<Record<string, string>> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -37,6 +39,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (pathname.startsWith("/api/telegram/")) {
+    await telegram.handle(request, response);
+    return;
+  }
   if (pathname === "/api/buoy-history") {
     await serveBuoyHistoryRequest(request, response, buoyHistory);
     return;
@@ -74,3 +80,10 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, "0.0.0.0", () => process.stdout.write(`Aer listening on ${port}\n`));
+
+const shutdown = () => {
+  server.close();
+  void telegram.stop().then(() => process.exit(0));
+};
+process.once("SIGTERM", shutdown);
+process.once("SIGINT", shutdown);

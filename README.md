@@ -35,8 +35,13 @@ calendar days. Choose the minimum number of matching days for an on-screen
 alert. A matching day needs at least two consecutive hours (or the larger
 minimum window set in the conditions). The alert appears in the top-right
 corner, shows the matching-day count and next matching window, and opens the
-spot when clicked. Alerts refresh while the app is open; they are not push
-notifications.
+spot when clicked. **Saved spots → Telegram alerts** can also connect a private
+Telegram chat. Enabled spots sync to durable server storage and are checked about
+every six hours with the app closed. Messages list qualifying dates/windows,
+identify the source models and state partial data coverage. Matches use
+06:00–18:00 at the spot; unchanged matches are suppressed and qualifying dates
+are confirmed as they approach. A notification link opens a read-only preview
+in a fresh phone browser. Disconnect in Aer or send `/stop` to the bot to stop.
 
 ## Measured wave and wind stations
 
@@ -118,7 +123,12 @@ BROWSER=webkit npm run smoke:live
 `npm run build` copies the approved ecCodes WASM decoder, bundles its worker,
 and compresses the WASM file for the production server. `node scripts/serve.ts`
 serves `dist` on `$PORT` (default 3000); `GET /health` responds with `ok`.
-The Dockerfile builds and runs the same static server on Railway.
+The Dockerfile builds and runs the same server on Railway.
+
+Telegram additionally needs a dedicated bot, a persistent volume and an always-on
+Node 24 process. See [setup and recovery](docs/telegram-alerts-operations.md) and
+the [reviewed implementation plan](docs/telegram-alerts-plan.md). Configuration
+names are in [.env.example](.env.example); credentials are server-only.
 
 The browser fetches ECMWF's `.index` and GRIB2 byte ranges directly from its
 Google Cloud Open Data mirror. Wind uses the `oper` stream; waves use `wave`.
@@ -162,5 +172,10 @@ without WebGL2 use reduced-resolution Canvas 2D color and arrows.
   remains open. Available future model output becomes coarser farther ahead;
   Open-Meteo interpolates it to hourly samples. Conditions are estimates at
   the chosen sea grid cell, not surf reports at the exact shore point.
+
+Telegram acceptance does not establish phone delivery. Uncertain sends are held
+for reconciliation rather than blindly retried. Forwarded spot-view links grant
+read-only access to that spot/conditions for seven days, never account control.
+Saved presets remain local; monitor snapshots persist on the server.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.

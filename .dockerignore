@@ -3,3 +3,8 @@ dist
 .git
 public/decoder
 *.log
+
+.env
+.env.*
+*.sqlite
+*.sqlite-*

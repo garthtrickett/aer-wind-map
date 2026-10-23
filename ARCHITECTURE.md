@@ -136,6 +136,32 @@
   refresh about every six hours while the page is open and retry failures
   sooner. The alert card can be dismissed without disabling checks.
 
+## Telegram monitoring
+
+`src/forecast-alerts.ts` shares scoring between browser cards and the server.
+It joins wind/swell instants, filters 06:00–18:00 local and returns qualifying
+dates and first windows. Validation lives with shared history criteria rather
+than importing the browser state/view graph.
+
+`scripts/alerts/store.ts` owns SQLite transactions for hashed browser sessions,
+one-use connection links, enabled snapshots, revisions, scheduling, Telegram's
+update cursor, worker lease and delivery attempts. `monitor.ts` applies forecast
+and deduplication policy; `telegram.ts` owns credentials and transport results.
+`http.ts` authenticates same-origin settings requests and bounds inputs.
+`runtime.ts` verifies bot identity and runs the leased background loop in
+production and Vite. Server checks need no browser timer or webhook.
+
+Notification links use expiring read-only capabilities in URL fragments. Opening
+one cannot change monitors or silently import presets. Owner cookies are HttpOnly
+and never appear in links. Telegram has no send idempotency key; uncertain attempts
+are held visibly instead of claimed as guaranteed delivery or repeated on restart.
+
+`src/telegram-model.ts` integrates connection/sync effects with the SAM loop.
+Only successfully persisted local edits trigger automatic sync. Revisions reject
+stale tabs; an initial empty store never bulk-erases monitors. Users can stop
+all installations linked to their private chat with `/stop`. The production
+image includes shared TypeScript modules; SQLite must use a persistent volume.
+
 ## Decoder evaluation, 2026-09-26
 
 The approved prototype dependency is `@meri-imperiumi/eccodes-wasm@2.48.2`.

@@ -1,8 +1,10 @@
-import { hourMatchesCriteria, type HistoricalHour } from "./history.ts";
+import { historyClock, withinHistoryHours, hourMatchesCriteria, type HistoricalHour } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
 export const forecastAlertDays = 14;
+export type ForecastWindow = Readonly<{ day: string; start: number; end: number }>;
 export type ForecastAlertSummary = Readonly<{
+  windows: readonly ForecastWindow[];
   matchingDays: number;
   availableDays: number;
   horizonDays: number;
@@ -61,19 +63,20 @@ export const scoreForecastAlert = (
   spot: SavedSpot, wave: ForecastSeries, wind: ForecastSeries, now: Date,
 ): ForecastAlertSummary | null => {
   const formatter = localDayFormatter(wave.timezone);
+  const clock = historyClock(wave.timezone);
   const today = dayAt(now.getTime() / 1000, formatter);
   const firstDay = Date.parse(`${today}T00:00:00Z`);
   const dates = Array.from({ length: forecastAlertDays }, (_, index) =>
     new Date(firstDay + index * 86_400_000).toISOString().slice(0, 10));
   const days = new Map(dates.map((date) => [date, { available: 0, run: 0, lastTime: null as number | null,
-    runStart: null as number | null, firstWindow: null as number | null }]));
+    runStart: null as number | null, firstWindow: null as number | null, windowEnd: null as number | null }]));
   const windIndex = new Map(wind.time.map((time, index) => [time, index]));
   const requiredHours = Math.max(2, spot.criteria.minConsecutiveHours);
   for (let index = 0; index < wave.time.length; index++) {
     const time = wave.time[index];
     if (time * 1000 < now.getTime()) continue;
     const day = days.get(dayAt(time, formatter));
-    if (!day) continue;
+    if (!day || !withinHistoryHours(time, clock)) continue;
     const windAt = windIndex.get(time);
     const hour: HistoricalHour = {
       time, day: "", swellHeight: wave.first[index], swellPeriod: wave.second[index],
@@ -87,11 +90,14 @@ export const scoreForecastAlert = (
     else { day.run = 1; day.runStart = time; }
     day.lastTime = time;
     if (day.run >= requiredHours && day.firstWindow === null) day.firstWindow = day.runStart;
+    if (day.firstWindow !== null && day.firstWindow === day.runStart) day.windowEnd = time + 3600;
   }
   const availableDays = [...days.values()].filter((day) => day.available >= requiredHours).length;
   if (!availableDays) return null;
   const matching = [...days.values()].filter((day) => day.firstWindow !== null);
-  return { matchingDays: matching.length, availableDays, horizonDays: forecastAlertDays,
+  const windows = [...days].flatMap(([date, day]) => day.firstWindow === null ? []
+    : [{ day: date, start: day.firstWindow, end: day.windowEnd! }]);
+  return { windows, matchingDays: matching.length, availableDays, horizonDays: forecastAlertDays,
     requiredHours, nextWindowStart: matching[0]?.firstWindow ?? null,
     timezone: wave.timezone, checkedAt: now.getTime() };
 };
@@ -121,7 +127,7 @@ export const loadForecastAlerts = async (
     const batch = spots.slice(offset, offset + 20);
     const [waveUrl, windUrl] = urlsFor(batch);
     try {
-      const [waveResponse, windResponse] = await Promise.all([fetcher(waveUrl), fetcher(windUrl)]);
+      const [waveResponse, windResponse] = await Promise.all([fetcher(waveUrl, { signal: AbortSignal.timeout(30_000) }), fetcher(windUrl, { signal: AbortSignal.timeout(30_000) })]);
       if (!waveResponse.ok || !windResponse.ok) { checks.push(...perSpot(batch, { kind: "network" })); continue; }
       const [waveRaw, windRaw]: unknown[] = await Promise.all([waveResponse.json(), windResponse.json()]);
       const waveRows = Array.isArray(waveRaw) ? waveRaw : [waveRaw];

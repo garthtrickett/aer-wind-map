@@ -1,3 +1,4 @@
+import { telegramView } from "./telegram-view.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
 import { describeWeatherError } from "./ecmwf.ts";
 import { compassDirection, sampleWind, validTime } from "./wind.ts";
@@ -103,7 +104,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             @click=${() => propose({ kind: "savedSpotRemoved", id: spot.id })}>×</button>
         </div>`;
       })}</div>` : html`<p class="saved-spots-empty">Open a point’s Find your season panel to save its settings here.</p>`}
-      <p class="saved-spots-foot">Saved in this browser</p>
+      ${telegramView(state.telegram, propose)}
+      <p class="saved-spots-foot">Presets saved in this browser; synced Telegram alerts run on the server.</p>
     </section>` : nothing}
 
     ${forecastMatches.length ? state.forecastAlertsDismissed ? html`
@@ -115,7 +117,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <div class="forecast-alert-list">${forecastMatches.map(({ spot, summary }) => html`
           <button type="button" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong>
-            <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hours (alert threshold ${spot.alertMinDays})</span>
+            <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hourly samples, 06:00–18:00 local (alert threshold ${spot.alertMinDays})</span>
             ${summary.nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
               timeZone: summary.timezone, weekday: "short", month: "short", day: "numeric",
               hour: "numeric", minute: "2-digit", timeZoneName: "short",
