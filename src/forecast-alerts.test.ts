@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { scoreForecastAlert } from "./forecast-alerts.ts";
+import { loadForecastPoint, loadForecastAlerts, scoreForecastAlert } from "./forecast-alerts.ts";
 import { defaultHistoryCriteria } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
@@ -60,4 +60,38 @@ test("only 06:00–18:00 at the spot counts; windows end at 18:00 and never brid
   assert.equal(scoreForecastAlert(spot, wave, nights, at)?.matchingDays, 0);
   const gaps = { ...wind, second: time.map((_, index) => [6, 8].includes(index % 24) ? 355 : 180) };
   assert.equal(scoreForecastAlert(spot, wave, gaps, at)?.matchingDays, 0);
+});
+
+
+test("draft forecasts and batched saved alerts share downloads and scoring", async () => {
+  const requests: URL[] = [];
+  const fetcher: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    const marine = url.hostname.startsWith("marine-");
+    const row = { timezone: "UTC", hourly: { time, ...(marine
+      ? { swell_wave_height: wave.first, swell_wave_period: wave.second, swell_wave_direction: wave.third }
+      : { wind_speed_10m: wind.first, wind_direction_10m: wind.second }) } };
+    const count = url.searchParams.get("latitude")!.split(",").length;
+    return Response.json(count > 1 ? Array.from({ length: count }, () => row) : row);
+  };
+  const result = await loadForecastPoint(spot.point, fetcher);
+  assert.equal(requests.length, 2);
+  assert.ok(result.ok);
+  const now = new Date("2026-09-27T00:00:00Z");
+  const draft = scoreForecastAlert({ criteria: spot.criteria }, result.data.wave, result.data.wind, now);
+  const alerts = await loadForecastAlerts([spot, { ...spot, id: "second" }], now, fetcher);
+  assert.equal(requests.length, 4, "saved checks retain multi-location batching");
+  for (const check of alerts) { assert.ok(check.ok); assert.deepEqual(check.summary, draft); }
+  assert.ok(requests.every((url) => url.searchParams.get("forecast_days") === "15"));
+});
+
+test("draft forecasts report network and malformed-data failures", async () => {
+  const unavailable: typeof fetch = async () => new Response("", { status: 503 });
+  assert.deepEqual(await loadForecastPoint(spot.point, unavailable), { ok: false, error: { kind: "network" } });
+  const invalid: typeof fetch = async () => Response.json({ timezone: "not-a-timezone", hourly: {
+    time, swell_wave_height: wave.first, swell_wave_period: wave.second, swell_wave_direction: wave.third,
+    wind_speed_10m: wind.first, wind_direction_10m: wind.second,
+  } });
+  assert.deepEqual(await loadForecastPoint(spot.point, invalid), { ok: false, error: { kind: "invalid" } });
 });

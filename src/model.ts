@@ -4,7 +4,7 @@ import type { ForecastRun } from "./wind.ts";
 import type { ForecastField, Layer } from "./wave.ts";
 import { validCriteria, lastCompleteHistoryYear, defaultHistoryCriteria, type HistoricalData, type HistoryCriteria, type HistoryError } from "./history.ts";
 import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
-import { forecastAlertKey, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
+import { forecastAlertKey, type ForecastData, type ForecastDataResult, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
@@ -12,6 +12,14 @@ export type ForecastAlertStatus =
   | Readonly<{ kind: "loading"; key: string; generation: number }>
   | Readonly<{ kind: "ready"; key: string; generation: number; summary: ForecastAlertSummary }>
   | Readonly<{ kind: "failed"; key: string; generation: number; error: ForecastAlertError }>;
+
+export type ForecastPreview = { readonly request: number } & (
+  | Readonly<{ phase: "idle" }>
+  | Readonly<{ phase: "loading" }>
+  | Readonly<{ phase: "ready"; data: ForecastData; checkedAt: number }>
+  | Readonly<{ phase: "failed"; error: ForecastAlertError }>
+);
+const resetForecastPreview = (preview: ForecastPreview): ForecastPreview => ({ phase: "idle", request: preview.request + 1 });
 
 export type HistoryPanel = Readonly<{
   open: boolean;
@@ -29,6 +37,7 @@ export type HistoryPanel = Readonly<{
   saveName: string;
   alertEnabled: boolean;
   alertMinDays: number;
+  forecastPreview: ForecastPreview;
   saveFeedback: "saved" | "nameRequired" | "storageFailed" | null;
 }>;
 
@@ -96,7 +105,10 @@ export type Proposal =
   | { readonly kind: "forecastAlertsStarted"; readonly generation: number; readonly entries: readonly Readonly<{ id: string; key: string }>[] }
   | { readonly kind: "forecastAlertsCompleted"; readonly generation: number; readonly checks: readonly ForecastAlertCheck[] }
   | { readonly kind: "forecastAlertsDismissed" }
-  | { readonly kind: "forecastAlertsShown" };
+  | { readonly kind: "forecastAlertsShown" }
+  | { readonly kind: "forecastPreviewStarted"; readonly request: number }
+  | { readonly kind: "forecastPreviewCompleted"; readonly request: number; readonly result: ForecastDataResult; readonly checkedAt: number }
+  | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
   telegram: initialTelegram,
@@ -110,6 +122,7 @@ export const initialState: State = {
     startYear: Math.max(2022, lastCompleteHistoryYear - 2), endYear: lastCompleteHistoryYear,
     criteria: defaultHistoryCriteria, requestedKey: null, data: null, error: null, selectedMonth: null, downloadRequested: false,
     savedSpotId: null, saveName: "", alertEnabled: false, alertMinDays: 1, saveFeedback: null,
+    forecastPreview: { phase: "idle", request: 0 },
   },
 };
 
@@ -122,7 +135,7 @@ export { validCriteria, lastCompleteHistoryYear } from "./history.ts";
 const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
   observations: { ...state.observations, selectedId: null },
-  history: { ...state.history, open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
+  history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview), open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
     downloadRequested: false, savedSpotId: null, saveName: "", alertEnabled: false, alertMinDays: 1, saveFeedback: null },
 });
 
@@ -190,7 +203,7 @@ export const present = (state: State, proposal: Proposal): State => {
     case "locationSelected": return selectionChanged(state, proposal.point);
     case "locationDragged": return selectionChanged(state, proposal.point);
     case "detailsOpened": return state.selected ? { ...state, modalOpen: true } : state;
-    case "selectionCleared": return { ...state, selected: null, modalOpen: false, history: { ...state.history, open: false, point: null, data: null, requestedKey: null, downloadRequested: false } };
+    case "selectionCleared": return { ...state, selected: null, modalOpen: false, history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview), open: false, point: null, data: null, requestedKey: null, downloadRequested: false } };
     case "modalClosed": return { ...state, modalOpen: false };
     case "playToggled": return { ...state, playing: !state.playing };
     case "playTick":
@@ -200,7 +213,7 @@ export const present = (state: State, proposal: Proposal): State => {
     case "historyOpened":
       if (!state.selected) return state;
       return { ...state, modalOpen: false, history: {
-        ...state.history, open: true, point: state.selected,
+        ...state.history, open: true, point: state.selected, forecastPreview: resetForecastPreview(state.history.forecastPreview),
         phase: state.history.data && state.history.point?.latitude === state.selected.latitude && state.history.point.longitude === state.selected.longitude
           ? "ready" : "needsData",
         requestedKey: null, error: null,
@@ -215,7 +228,7 @@ export const present = (state: State, proposal: Proposal): State => {
         state.history.point.longitude === spot.point.longitude &&
         state.history.startYear === spot.startYear && state.history.endYear === spot.endYear;
       return { ...state, selected: spot.point, modalOpen: false, savedSpotsOpen: false, history: {
-        ...state.history, open: true, point: spot.point, startYear: spot.startYear, endYear: spot.endYear,
+        ...state.history, open: true, point: spot.point, forecastPreview: resetForecastPreview(state.history.forecastPreview), startYear: spot.startYear, endYear: spot.endYear,
         criteria: spot.criteria, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
         requestedKey: null, error: null, selectedMonth: null, downloadRequested: false,
         savedSpotId: spot.id, saveName: spot.name, alertEnabled: spot.alertEnabled, alertMinDays: spot.alertMinDays, saveFeedback: null,
@@ -224,7 +237,7 @@ export const present = (state: State, proposal: Proposal): State => {
     case "savedSpotNameChanged":
       return state.history.open ? { ...state, history: { ...state.history, saveName: proposal.name, saveFeedback: null } } : state;
     case "savedSpotAlertChanged":
-      return state.history.open ? { ...state, history: { ...state.history, alertEnabled: proposal.enabled, saveFeedback: null } } : state;
+      return state.history.open ? { ...state, history: { ...state.history, alertEnabled: proposal.enabled, forecastPreview: resetForecastPreview(state.history.forecastPreview), saveFeedback: null } } : state;
     case "savedSpotAlertMinDaysChanged":
       return state.history.open && Number.isInteger(proposal.days) && proposal.days >= 1 && proposal.days <= 14
         ? { ...state, history: { ...state.history, alertMinDays: proposal.days, saveFeedback: null } } : state;
@@ -275,9 +288,20 @@ export const present = (state: State, proposal: Proposal): State => {
       }
       return { ...state, forecastAlerts: alerts };
     }
+    case "forecastPreviewStarted":
+      if (!state.history.open || !state.history.alertEnabled || state.history.forecastPreview.phase !== "idle" ||
+        state.history.forecastPreview.request !== proposal.request) return state;
+      return { ...state, history: { ...state.history, forecastPreview: { phase: "loading", request: proposal.request } } };
+    case "forecastPreviewCompleted":
+      if (state.history.forecastPreview.phase !== "loading" || state.history.forecastPreview.request !== proposal.request) return state;
+      return { ...state, history: { ...state.history, forecastPreview: proposal.result.ok
+        ? { phase: "ready", request: proposal.request, data: proposal.result.data, checkedAt: proposal.checkedAt }
+        : { phase: "failed", request: proposal.request, error: proposal.result.error } } };
+    case "forecastPreviewRefresh":
+      return { ...state, history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview) } };
     case "forecastAlertsDismissed": return { ...state, forecastAlertsDismissed: true };
     case "forecastAlertsShown": return { ...state, forecastAlertsDismissed: false };
-    case "historyClosed": return { ...state, history: { ...state.history, open: false, requestedKey: null, downloadRequested: false } };
+    case "historyClosed": return { ...state, history: { ...state.history, open: false, requestedKey: null, downloadRequested: false, forecastPreview: resetForecastPreview(state.history.forecastPreview) } };
     case "historyYearsChanged":
       if (!Number.isInteger(proposal.startYear) || !Number.isInteger(proposal.endYear) ||
         proposal.startYear < 2022 || proposal.endYear > lastCompleteHistoryYear ||
@@ -308,6 +332,7 @@ export const present = (state: State, proposal: Proposal): State => {
 
 export type Effect =
   | ObservationEffect
+  | { readonly kind: "loadForecastPreview"; readonly point: Point; readonly request: number }
   | { readonly kind: "discover"; readonly layer: Layer }
   | { readonly kind: "load"; readonly run: ForecastRun; readonly step: number; readonly key: string; readonly layer: Layer }
   | { readonly kind: "loadHistory"; readonly point: Point; readonly startYear: number; readonly endYear: number; readonly key: string }
@@ -320,6 +345,9 @@ export const nap = (state: State): Effect | null => {
   if (state.history.open && state.history.phase === "needsData" && state.history.point) {
     return { kind: "loadHistory", point: state.history.point, startYear: state.history.startYear,
       endYear: state.history.endYear, key: historyKey(state.history.point, state.history.startYear, state.history.endYear) };
+  }
+  if (state.history.open && state.history.alertEnabled && state.history.point && state.history.forecastPreview.phase === "idle") {
+    return { kind: "loadForecastPreview", point: state.history.point, request: state.history.forecastPreview.request };
   }
   if (state.phase === "idle") return { kind: "discover", layer: state.layer };
   if (state.phase === "needsField" && state.run) {

@@ -10,7 +10,7 @@ import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
 import { readSavedSpots, writeSavedSpots } from "./saved-spots.ts";
-import { forecastAlertKey, loadForecastAlerts } from "./forecast-alerts.ts";
+import { forecastAlertKey, loadForecastAlerts, loadForecastPoint } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
 import { loadObservations } from "./observations.ts";
@@ -233,6 +233,13 @@ const runEffect = (effect: Effect): void => {
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     dispatch({ kind: "historyDownloadCompleted" });
+    return;
+  }
+  if (effect.kind === "loadForecastPreview") {
+    dispatch({ kind: "forecastPreviewStarted", request: effect.request });
+    void loadForecastPoint(effect.point).then((result) => dispatch({
+      kind: "forecastPreviewCompleted", request: effect.request, result, checkedAt: Date.now(),
+    }));
     return;
   }
   if (effect.kind === "loadHistory") {

@@ -36,19 +36,28 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   const start = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) / 1000;
   const time = Array.from({ length: 15 * 24 }, (_, index) => start + index * 3600);
-  const hourly = (fields: Record<string, number[]>): object => ({ timezone: "UTC", hourly: { time, ...fields } });
+  const hourly = (fields: Record<string, (number | null)[]>): object => ({ timezone: "UTC", hourly: { time, ...fields } });
   const wave = hourly({ swell_wave_height: time.map(() => 2), swell_wave_period: time.map(() => 12),
     swell_wave_direction: time.map(() => 220) });
   const wind = hourly({ wind_speed_10m: time.map(() => 3),
     wind_direction_10m: time.map((_, index) => [2, 4].includes(Math.floor(index / 24)) ? 90 : 180) });
   const historicalTime = Array.from({ length: 24 }, (_, index) => Date.parse("2025-01-01T00:00:00Z") / 1000 + index * 3600);
   const archiveRequests: string[] = [];
+  let forecastRequests = 0;
+  let responseMode: "normal" | "network" | "empty" = "normal";
+  let releasePreview!: () => void;
+  let holdPreview = true;
+  const previewGate = new Promise<void>((resolve) => { releasePreview = resolve; });
   await page.route("**/v1/**", async (route) => {
     const url = route.request().url();
-    if (url.includes("forecast_days=15") && url.includes("models=ncep_gfswave025")) {
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify(wave) });
-    } else if (url.includes("forecast_days=15") && url.includes("models=ecmwf_ifs")) {
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify(wind) });
+    if (url.includes("forecast_days=15")) {
+      forecastRequests++;
+      if (holdPreview) await previewGate;
+      const marine = url.includes("models=ncep_gfswave025");
+      if (responseMode === "network") await route.fulfill({ status: 503, body: "Unavailable" });
+      else await route.fulfill({ contentType: "application/json", body: JSON.stringify(marine
+        ? responseMode === "empty" ? hourly({ swell_wave_height: time.map(() => null),
+          swell_wave_period: time.map(() => 12), swell_wave_direction: time.map(() => 220) }) : wave : wind) });
     } else if (url.includes("models=meteofrance_wave") || url.includes("archive-api.open-meteo.com")) {
       archiveRequests.push(url);
       const marine = url.includes("marine-api");
@@ -84,6 +93,45 @@ try {
   await page.locator(".history-alert-option input").check();
   await page.getByLabel("Alert when at least").fill("2");
   await page.getByLabel("Alert when at least").press("Tab");
+  const preview = page.locator(".history-forecast-preview");
+  await expect(preview).toContainText("Checking the next 14 days");
+  assert.equal(await page.evaluate(() => localStorage.getItem("aer.saved-spots.v1")), null, "draft checks do not require saving");
+  holdPreview = false;
+  releasePreview();
+  await expect(preview).toContainText("2 of 14 days match");
+  await expect(preview).toContainText("Your alert threshold is met");
+  await expect(preview.locator("li")).toHaveCount(2);
+  await expect(preview.locator("li").first()).toContainText("06:00–18:00");
+  assert.equal(forecastRequests, 2);
+  await maximumPeriod.fill("11");
+  await maximumPeriod.press("Tab");
+  await expect(preview).toContainText("0 of 14 days match");
+  await expect(preview).toContainText("No days match your current conditions");
+  await maximumPeriod.fill("12");
+  await maximumPeriod.press("Tab");
+  await page.getByLabel("Alert when at least").fill("3");
+  await page.getByLabel("Alert when at least").press("Tab");
+  await expect(preview).toContainText("2 of 14 days match");
+  await expect(preview).toContainText("Your alert threshold is not met yet");
+  assert.equal(forecastRequests, 2, "condition and day-threshold edits reuse downloaded forecasts");
+  await page.getByLabel("Alert when at least").fill("2");
+  await page.getByLabel("Alert when at least").press("Tab");
+  responseMode = "network";
+  await page.getByRole("button", { name: "Refresh forecast", exact: true }).click();
+  await expect(preview).toContainText("The forecast could not be loaded");
+  responseMode = "empty";
+  await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
+  await expect(preview).toContainText("No usable paired swell and wind forecast");
+  responseMode = "normal";
+  await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
+  await expect(preview).toContainText("2 of 14 days match");
+  await preview.screenshot({ path: "/tmp/aer-forecast-preview-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await preview.scrollIntoViewIfNeeded();
+  const box = await preview.boundingBox();
+  assert.ok(box && box.x >= 0 && box.x + box.width <= 390, "forecast results fit the mobile viewport");
+  await preview.screenshot({ path: "/tmp/aer-forecast-preview-mobile.png" });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Save spot", exact: true }).click();
   await page.waitForFunction(() => {
     const raw = localStorage.getItem("aer.saved-spots.v1");

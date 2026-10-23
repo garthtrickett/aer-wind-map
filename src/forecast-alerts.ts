@@ -41,7 +41,8 @@ const parseSeries = (raw: unknown, fields: readonly [string, string, string?]): 
   if (!Array.isArray(time) || !Array.isArray(first) || !Array.isArray(second) ||
     (thirdName && !Array.isArray(third)) || time.length === 0 || first.length !== time.length || second.length !== time.length ||
     (thirdName && (third as unknown[]).length !== time.length) ||
-    !time.every((value, index) => Number.isInteger(value) && (index === 0 || value > time[index - 1])) ||
+    !time.every((value, index) => Number.isInteger(value) && Number.isFinite(new Date(value * 1000).getTime()) &&
+      (index === 0 || value > time[index - 1])) ||
     !first.every(numberOrNull) || !second.every(numberOrNull) || (thirdName && !(third as unknown[]).every(numberOrNull))) return null;
   return { timezone: raw.timezone, time: time as number[], first: first as (number | null)[],
     second: second as (number | null)[], third: third as (number | null)[] | null };
@@ -60,7 +61,7 @@ export const forecastAlertKey = (spot: SavedSpot): string =>
   JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, spot.alertMinDays]);
 
 export const scoreForecastAlert = (
-  spot: SavedSpot, wave: ForecastSeries, wind: ForecastSeries, now: Date,
+  spot: Pick<SavedSpot, "criteria">, wave: ForecastSeries, wind: ForecastSeries, now: Date,
 ): ForecastAlertSummary | null => {
   const formatter = localDayFormatter(wave.timezone);
   const clock = historyClock(wave.timezone);
@@ -102,10 +103,10 @@ export const scoreForecastAlert = (
     timezone: wave.timezone, checkedAt: now.getTime() };
 };
 
-const urlsFor = (spots: readonly SavedSpot[]): readonly [string, string] => {
+const urlsFor = (points: readonly SavedSpot["point"][]): readonly [string, string] => {
   const coordinates = {
-    latitude: spots.map((spot) => spot.point.latitude).join(","),
-    longitude: spots.map((spot) => spot.point.longitude).join(","),
+    latitude: points.map((point) => point.latitude).join(","),
+    longitude: points.map((point) => point.longitude).join(","),
   };
   const common = { ...coordinates, forecast_days: "15", timezone: "auto", timeformat: "unixtime", cell_selection: "sea" };
   return [
@@ -116,8 +117,42 @@ const urlsFor = (spots: readonly SavedSpot[]): readonly [string, string] => {
   ];
 };
 
-const perSpot = (spots: readonly SavedSpot[], error: ForecastAlertError): ForecastAlertCheck[] =>
-  spots.map((spot) => ({ id: spot.id, key: forecastAlertKey(spot), ok: false, error }));
+export type ForecastData = Readonly<{ wave: ForecastSeries; wind: ForecastSeries }>;
+export type ForecastDataResult =
+  | Readonly<{ ok: true; data: ForecastData }>
+  | Readonly<{ ok: false; error: ForecastAlertError }>;
+
+// Download once; both saved alerts and draft previews use the same data and scoring rules.
+const loadForecastBatch = async (
+  points: readonly SavedSpot["point"][], fetcher: typeof fetch,
+): Promise<readonly ForecastDataResult[]> => {
+  const failure = (kind: ForecastAlertError["kind"]): ForecastDataResult[] =>
+    points.map(() => ({ ok: false, error: { kind } }));
+  const [waveUrl, windUrl] = urlsFor(points);
+  try {
+    const [waveResponse, windResponse] = await Promise.all([
+      fetcher(waveUrl, { signal: AbortSignal.timeout(30_000) }),
+      fetcher(windUrl, { signal: AbortSignal.timeout(30_000) }),
+    ]);
+    if (!waveResponse.ok || !windResponse.ok) return failure("network");
+    const [waveRaw, windRaw]: unknown[] = await Promise.all([waveResponse.json(), windResponse.json()]);
+    const waveRows = Array.isArray(waveRaw) ? waveRaw : [waveRaw];
+    const windRows = Array.isArray(windRaw) ? windRaw : [windRaw];
+    if (waveRows.length !== points.length || windRows.length !== points.length) return failure("invalid");
+    return points.map((_, index): ForecastDataResult => {
+      const wave = parseSeries(waveRows[index], ["swell_wave_height", "swell_wave_period", "swell_wave_direction"]);
+      const wind = parseSeries(windRows[index], ["wind_speed_10m", "wind_direction_10m"]);
+      if (!wave || !wind) return { ok: false, error: { kind: "invalid" } };
+      try { localDayFormatter(wave.timezone); }
+      catch { return { ok: false, error: { kind: "invalid" } }; }
+      return { ok: true, data: { wave, wind } };
+    });
+  } catch { return failure("network"); }
+};
+
+export const loadForecastPoint = async (
+  point: SavedSpot["point"], fetcher: typeof fetch = fetch,
+): Promise<ForecastDataResult> => (await loadForecastBatch([point], fetcher))[0];
 
 export const loadForecastAlerts = async (
   spots: readonly SavedSpot[], now: Date, fetcher: typeof fetch = fetch,
@@ -125,29 +160,16 @@ export const loadForecastAlerts = async (
   const checks: ForecastAlertCheck[] = [];
   for (let offset = 0; offset < spots.length; offset += 20) {
     const batch = spots.slice(offset, offset + 20);
-    const [waveUrl, windUrl] = urlsFor(batch);
-    try {
-      const [waveResponse, windResponse] = await Promise.all([fetcher(waveUrl, { signal: AbortSignal.timeout(30_000) }), fetcher(windUrl, { signal: AbortSignal.timeout(30_000) })]);
-      if (!waveResponse.ok || !windResponse.ok) { checks.push(...perSpot(batch, { kind: "network" })); continue; }
-      const [waveRaw, windRaw]: unknown[] = await Promise.all([waveResponse.json(), windResponse.json()]);
-      const waveRows = Array.isArray(waveRaw) ? waveRaw : [waveRaw];
-      const windRows = Array.isArray(windRaw) ? windRaw : [windRaw];
-      if (waveRows.length !== batch.length || windRows.length !== batch.length) {
-        checks.push(...perSpot(batch, { kind: "invalid" })); continue;
-      }
-      for (let index = 0; index < batch.length; index++) {
-        const spot = batch[index];
-        const key = forecastAlertKey(spot);
-        const wave = parseSeries(waveRows[index], ["swell_wave_height", "swell_wave_period", "swell_wave_direction"]);
-        const wind = parseSeries(windRows[index], ["wind_speed_10m", "wind_direction_10m"]);
-        if (!wave || !wind) { checks.push({ id: spot.id, key, ok: false, error: { kind: "invalid" } }); continue; }
-        try {
-          const summary = scoreForecastAlert(spot, wave, wind, now);
-          checks.push(summary ? { id: spot.id, key, ok: true, summary }
-            : { id: spot.id, key, ok: false, error: { kind: "unavailable" } });
-        } catch { checks.push({ id: spot.id, key, ok: false, error: { kind: "invalid" } }); }
-      }
-    } catch { checks.push(...perSpot(batch, { kind: "network" })); }
+    const results = await loadForecastBatch(batch.map((spot) => spot.point), fetcher);
+    for (let index = 0; index < batch.length; index++) {
+      const spot = batch[index];
+      const identity = { id: spot.id, key: forecastAlertKey(spot) };
+      const result = results[index];
+      if (!result.ok) { checks.push({ ...identity, ...result }); continue; }
+      const summary = scoreForecastAlert(spot, result.data.wave, result.data.wind, now);
+      checks.push(summary ? { ...identity, ok: true, summary }
+        : { ...identity, ok: false, error: { kind: "unavailable" } });
+    }
   }
   return checks;
 };

@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import { summarizeHistory, type HistoryCriteria } from "./history.ts";
+import { scoreForecastAlert } from "./forecast-alerts.ts";
 import { historyCompassView } from "./history-compass.ts";
 import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
@@ -25,6 +26,39 @@ const numberControl = (
       }} />
     <small>${unit}</small>
   </span></label>`;
+
+const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult => {
+  const preview = history.forecastPreview;
+  const refresh = (): void => propose({ kind: "forecastPreviewRefresh" });
+  if (preview.phase === "idle" || preview.phase === "loading") return html`
+    <div class="history-forecast-preview" aria-busy="true"><p role="status">Checking the next 14 days…</p></div>`;
+  if (preview.phase === "failed") return html`
+    <div class="history-forecast-preview"><p role="status">The forecast could not be loaded. Try again.</p>
+      <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
+  // Draft edits rescore the downloaded hours immediately, without saving or refetching.
+  const summary = scoreForecastAlert(history, preview.data.wave, preview.data.wind, new Date(preview.checkedAt));
+  if (!summary) return html`
+    <div class="history-forecast-preview"><p role="status">No usable paired swell and wind forecast is available for this spot.</p>
+      <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
+  const date = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, weekday: "short", day: "numeric", month: "short" });
+  const clock = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return html`<div class="history-forecast-preview">
+    <div class="history-forecast-heading">
+      <p role="status"><strong>${summary.matchingDays} of 14 days match</strong><br />
+        ${summary.matchingDays >= history.alertMinDays ? "Your alert threshold is met." : "Your alert threshold is not met yet."}</p>
+      <button type="button" class="secondary-button" @click=${refresh}>Refresh forecast</button>
+    </div>
+    ${summary.windows.length ? html`<ul class="history-forecast-windows" aria-label="Matching forecast days">
+      ${summary.windows.map((window) => html`<li>
+        <span>${date.format(new Date(window.start * 1000))}</span>
+        <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong>
+      </li>`)}
+    </ul>` : html`<p>No days match your current conditions.</p>`}
+    ${summary.availableDays < 14 ? html`<p>Usable forecast for ${summary.availableDays} of 14 days. The remaining days are unknown.</p>` : nothing}
+    <small>Times are local to the spot (${summary.timezone}). Swell: GFS Wave · Wind: ECMWF.
+      Checked ${clock.format(new Date(summary.checkedAt))}.</small>
+  </div>`;
+};
 
 export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
@@ -129,7 +163,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     input.value = String(days);
                     propose({ kind: "savedSpotAlertMinDaysChanged", days });
                   }} />
-                of the next 14 days match</label>` : nothing}
+                of the next 14 days match</label>
+                ${forecastPreviewView(history, propose)}` : nothing}
               ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
                 role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."
                   : history.saveFeedback === "nameRequired" ? "Enter a name to save this spot."

@@ -125,3 +125,48 @@ test("a late forecast alert cannot replace changed spot rules", () => {
     checks: [{ id: spot.id, key: nextKey, ok: true, summary }] });
   assert.equal(completed.forecastAlerts[spot.id]?.kind, "ready");
 });
+
+
+test("enabling draft alerts checks immediately before saving and rescores edits without another fetch", () => {
+  const point = { latitude: -8.78, longitude: 115.07 };
+  const opened = present(present(initialState, { kind: "locationSelected", point }), { kind: "historyOpened" });
+  const archive = present(opened, { kind: "historyLoadStarted", key: historyKey(point, opened.history.startYear, opened.history.endYear) });
+  const enabled = present(archive, { kind: "savedSpotAlertChanged", enabled: true });
+  const request = enabled.history.forecastPreview.request;
+  assert.deepEqual(nap(enabled), { kind: "loadForecastPreview", point, request });
+  assert.equal(enabled.savedSpots, initialState.savedSpots);
+  assert.equal(enabled.telegram, initialState.telegram);
+  const loading = present(enabled, { kind: "forecastPreviewStarted", request });
+  assert.notEqual(nap(loading)?.kind, "loadForecastPreview");
+  const series = { timezone: "UTC", time: [0], first: [2], second: [12], third: [220] };
+  const data = { wave: series, wind: series };
+  const ready = present(loading, { kind: "forecastPreviewCompleted", request, result: { ok: true, data }, checkedAt: 1000 });
+  const edited = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxSwellPeriod: 11 } });
+  assert.equal(edited.history.forecastPreview, ready.history.forecastPreview);
+  assert.notEqual(nap(edited)?.kind, "loadForecastPreview");
+  const threshold = present(edited, { kind: "savedSpotAlertMinDaysChanged", days: 3 });
+  assert.equal(threshold.history.forecastPreview, ready.history.forecastPreview);
+  const reopened = present(present(threshold, { kind: "historyClosed" }), { kind: "historyOpened" });
+  assert.equal(nap(reopened)?.kind, "loadHistory");
+  assert.equal(reopened.history.forecastPreview.phase, "idle");
+});
+
+test("preview retries, disabling alerts, and switching spots reject obsolete completions", () => {
+  const point = { latitude: 23, longitude: 121 };
+  const opened = present(present(initialState, { kind: "locationSelected", point }), { kind: "historyOpened" });
+  const enabled = present(opened, { kind: "savedSpotAlertChanged", enabled: true });
+  const request = enabled.history.forecastPreview.request;
+  const loading = present(enabled, { kind: "forecastPreviewStarted", request });
+  const completion = { kind: "forecastPreviewCompleted", request, result: { ok: false, error: { kind: "network" } }, checkedAt: 1000 } as const;
+  const failed = present(loading, completion);
+  assert.equal(failed.history.forecastPreview.phase, "failed");
+  const retry = present(failed, { kind: "forecastPreviewRefresh" });
+  assert.equal(retry.history.forecastPreview.phase, "idle");
+  assert.equal(present(retry, completion), retry);
+  const disabled = present(loading, { kind: "savedSpotAlertChanged", enabled: false });
+  assert.equal(present(disabled, completion), disabled);
+  const moved = present(loading, { kind: "locationSelected", point: { latitude: 24, longitude: 122 } });
+  assert.equal(present(moved, completion), moved);
+  const closed = present(loading, { kind: "historyClosed" });
+  assert.equal(present(closed, completion), closed);
+});

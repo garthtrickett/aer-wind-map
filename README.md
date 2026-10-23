@@ -30,6 +30,12 @@ and conditions. **Saved spots** on the map lists them; their markers reopen
 the same settings. You can update a spot, save a copy, or remove one. These
 saves stay in this browser's local storage.
 
+Checking the alert checkbox in **Find your season** immediately previews the next
+14 local calendar days, before saving. Results show the matching days and local
+time windows, whether the minimum-day threshold is met, and any gaps in forecast
+coverage. Editing conditions or the threshold updates the preview using the
+downloaded hours; **Refresh forecast** fetches new data.
+
 Each saved spot can also check its conditions against the next 14 local
 calendar days. Choose the minimum number of matching days for an on-screen
 alert. A matching day needs at least two consecutive hours (or the larger
