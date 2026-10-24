@@ -143,7 +143,11 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
         <div class="history-head">
           <div><div class="eyebrow">SPOT HISTORY</div><h2 id="history-title">Find your season</h2>
             <p>${coordinates(history.point.latitude, history.point.longitude)} · ${history.startYear}–${history.endYear}</p></div>
-          <button class="close-button" aria-label="Close history" @click=${() => propose({ kind: "historyClosed" })}>×</button>
+          <div class="history-head-actions">
+            ${history.savedSpotId ? html`<button class="history-delete-marker" type="button"
+              @click=${() => propose({ kind: "savedSpotRemoved", id: history.savedSpotId! })}>Delete marker</button>` : nothing}
+            <button class="close-button" aria-label="Close history" @click=${() => propose({ kind: "historyClosed" })}>×</button>
+          </div>
         </div>
         <div class="history-body">
           <div class="history-intro">A day qualifies when the selected conditions meet every rule for at least

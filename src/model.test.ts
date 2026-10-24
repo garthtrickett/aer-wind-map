@@ -139,6 +139,8 @@ test("named spot presets save, reopen, update, and remove independently", () => 
   const removed = present(updated, { kind: "savedSpotRemoved", id: "spot-1" });
   assert.equal(removed.savedSpots.length, 1);
   assert.equal(removed.history.savedSpotId, null);
+  assert.equal(removed.history.open, false);
+  assert.equal(removed.selected, null);
   assert.equal(present(removed, { kind: "savedSpotOpened", id: "spot-1" }), removed);
 });
 

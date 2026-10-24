@@ -121,9 +121,15 @@ try {
     await expect(page.locator(".history-forecast-heading")).toContainText("Your alert threshold is not met yet.");
     await expect(page.locator(".history-linked-results")).toContainText("Nearshore wind: Not met");
     await page.getByRole("button", { name: "Close history" }).click();
-    await page.getByRole("button", { name: /^Saved spots / }).click();
-    await page.getByRole("button", { name: "Remove Nearshore wind", exact: true }).click();
-    await page.locator(".saved-spot-open").filter({ hasText: "Offshore swell" }).click();
+    await page.locator(".saved-spot-wind").click({ position: { x: 17, y: 6 } });
+    await expect(page.getByLabel("Name this spot and season")).toHaveValue("Nearshore wind");
+    await expect(page.getByRole("button", { name: /^Saved spots / })).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: "Delete marker", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Find your season" })).toHaveCount(0);
+    await expect(page.locator(".saved-spot-wind")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator(".saved-spot-wind")).toHaveCount(0);
+    await open("Offshore swell");
     await expect(page.locator(".history-linked-spots [role=alert]")).toContainText("A linked spot is missing");
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0].linkedSpotIds), ["coast"]);
     assert.deepEqual(errors, []);

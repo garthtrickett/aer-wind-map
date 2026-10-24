@@ -283,9 +283,10 @@ export const present = (state: State, proposal: Proposal): State => {
       if (spots.length === state.savedSpots.length) return state;
       const alerts = { ...state.forecastAlerts };
       delete alerts[proposal.id];
-      return { ...state, savedSpots: spots, savedSpotsError: null, forecastAlerts: alerts,
+      const next = { ...state, savedSpots: spots, savedSpotsError: null, forecastAlerts: alerts,
         history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview),
           ...(state.history.savedSpotId === proposal.id ? { savedSpotId: null, saveFeedback: null } : {}) } };
+      return state.history.savedSpotId === proposal.id ? present(next, { kind: "selectionCleared" }) : next;
     }
     case "savedSpotsPersistFailed": return { ...state, savedSpotsError: proposal.error,
       history: { ...state.history, saveFeedback: "storageFailed" } };
