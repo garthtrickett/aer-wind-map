@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evaluateForecastRules, forecastAlertKey, loadForecastPoint, loadForecastAlerts, scoreForecastAlert, type ForecastAlertSummary } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastAlertKey, loadForecastPoint, loadForecastGroup, loadForecastAlerts, scoreForecastAlert, scoreForecastData, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { defaultHistoryCriteria } from "./history.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
@@ -15,6 +15,84 @@ const spot: SavedSpot = {
 };
 const wave = { timezone: "UTC", time, first: time.map(() => 2), second: time.map(() => 12), third: time.map(() => 220) };
 const wind = { timezone: "UTC", time, first: time.map(() => 3), second: time.map((_, index) => matching.has(index) ? 355 : 180), third: null };
+
+const offshore: SavedSpot = { ...spot, id: "offshore", name: "Offshore swell", linkedSpotIds: ["coast"],
+  criteria: { ...spot.criteria, conditions: "swell" }, alertRules: [{ minDays: 2, withinDays: 4 }] };
+const coast: SavedSpot = { ...spot, id: "coast", name: "Nearshore wind", alertEnabled: false,
+  criteria: { ...spot.criteria, conditions: "wind" }, alertRules: [{ minDays: 2, withinDays: 4 }] };
+const at = new Date("2026-09-27T00:00:00Z");
+
+test("linked swell and wind count shared UTC hours, including an overlap after an earlier daily window", () => {
+  const swell = { ...wave, first: time.map((_, i) => [6, 7, 12, 13].includes(i % 24) ? 2 : 0) };
+  const localWind = { ...wind, second: time.map((_, i) => [12, 13].includes(i % 24) ? 355 : 180) };
+  const data = { wave: swell, wind, linked: [{ spot: coast, wave, wind: localWind }] };
+  const summary = scoreForecastData(offshore, data, at)!;
+  assert.equal(summary.matchingDays, 14);
+  assert.equal(summary.windows[0].start, time[12]);
+  assert.equal(summary.windows[0].end, time[14]);
+  const result = evaluateForecastRules(summary, offshore.alertRules!);
+  assert.equal(result.matched, true);
+  assert.equal(result.linked[0].evaluation.matched, true);
+  const separateHours = { ...data, linked: [{ spot: coast, wave, wind: { ...localWind,
+    second: time.map((_, i) => [8, 9].includes(i % 24) ? 355 : 180) } }] };
+  assert.equal(scoreForecastData(offshore, separateHours, at)?.matchingDays, 0);
+});
+
+test("linked points cannot pass on separate dates; every point's own day rules must pass", () => {
+  const swell = { ...wave, first: time.map((_, i) => Math.floor(i / 24) % 2 === 0 ? 2 : 0) };
+  const localWind = { ...wind, second: time.map((_, i) => Math.floor(i / 24) % 2 === 1 ? 355 : 180) };
+  assert.equal(scoreForecastData(offshore, { wave: swell, wind, linked: [{ spot: coast, wave, wind: localWind }] }, at)?.matchingDays, 0);
+  const twoDays = { ...wave, first: time.map((_, i) => [1, 3].includes(Math.floor(i / 24)) ? 2 : 0) };
+  const strict = { ...coast, alertRules: [{ minDays: 3, withinDays: 4 }] };
+  const summary = scoreForecastData(offshore, { wave: twoDays, wind,
+    linked: [{ spot: strict, wave, wind: { ...wind, second: time.map(() => 355) } }] }, at)!;
+  const result = evaluateForecastRules(summary, offshore.alertRules!);
+  assert.equal(result.rules[0].met, true);
+  assert.equal(result.linked[0].evaluation.matched, false);
+  assert.equal(result.matched, false);
+  assert.deepEqual(result.windows, []);
+});
+
+test("missing linked points fail closed, reciprocal links terminate, and dependency edits change the alert key", async () => {
+  const neverFetch: typeof fetch = async () => { throw new Error("missing links must not download"); };
+  assert.deepEqual(await loadForecastGroup(offshore, [], neverFetch), { ok: false, error: { kind: "unavailable" } });
+  assert.equal(scoreForecastData(offshore, { wave, wind }, at), null);
+  const reciprocal = { ...coast, linkedSpotIds: [offshore.id] };
+  assert.ok(scoreForecastData(offshore, { wave, wind, linked: [{ spot: reciprocal, wave, wind }] }, at));
+  assert.notEqual(forecastAlertKey(offshore, [coast]), forecastAlertKey(offshore, [{ ...coast,
+    criteria: { ...coast.criteria, maxWindSpeed: 1 } }]));
+  assert.notEqual(forecastAlertKey(offshore, [coast]), forecastAlertKey(offshore, []));
+});
+
+test("single-source points do not require or download unused marine/wind data", async () => {
+  const requests: URL[] = [];
+  const fetcher: typeof fetch = async (input) => {
+    const url = new URL(String(input)); requests.push(url);
+    const marine = url.hostname.startsWith("marine-");
+    return Response.json({ timezone: "UTC", hourly: { time, ...(marine
+      ? { swell_wave_height: wave.first, swell_wave_period: wave.second, swell_wave_direction: wave.third }
+      : { wind_speed_10m: wind.first, wind_direction_10m: time.map(() => 355) }) } });
+  };
+  const coastOnly = await loadForecastGroup(coast, [], fetcher);
+  assert.ok(coastOnly.ok);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].hostname, "api.open-meteo.com");
+  assert.equal(scoreForecastData(coast, coastOnly.data, at)?.availableDays, 14);
+  requests.length = 0;
+  const result = await loadForecastGroup(offshore, [coast], fetcher);
+  assert.ok(result.ok);
+  assert.equal(requests.length, 2, "one swell point and one wind point require two provider calls");
+  assert.equal(scoreForecastData(offshore, result.data, at)?.matchingDays, 14);
+});
+
+test("linked points use the longest hourly requirement and shortest look-ahead", () => {
+  const longer = { ...coast, alertLookAheadDays: 7, criteria: { ...coast.criteria, minConsecutiveHours: 3 } };
+  const result = scoreForecastData(offshore, { wave, wind, linked: [{ spot: longer, wave,
+    wind: { ...wind, second: time.map(() => 355) } }] }, at)!;
+  assert.equal(result.requiredHours, 3);
+  assert.equal(result.horizonDays, 7);
+  assert.equal(result.matchingDays, 7);
+});
 
 test("14-day alerts require consecutive matching hours on each local day", () => {
   const summary = scoreForecastAlert(spot, wave, wind, new Date("2026-09-27T00:00:00Z"));

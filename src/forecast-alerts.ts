@@ -1,5 +1,6 @@
 import { alertRulesFor, forecastLookAhead, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
-import { historyClock, withinHistoryHours, hourMatchesCriteria, type HistoricalHour } from "./history.ts";
+import { conditionSource, hourHasData, historyClock, withinHistoryHours, hourMatchesCriteria, type ConditionSource, type HistoricalHour } from "./history.ts";
+import { linkedSpotGroup } from "./spot-links.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
 export const forecastAlertDays = maxForecastDays;
@@ -16,6 +17,7 @@ export type ForecastAlertSummary = Readonly<{
   nextWindowStart: number | null;
   timezone: string;
   checkedAt: number;
+  linkedRequirements?: readonly Readonly<{ id: string; name: string; rules: readonly AlertDayRule[] }>[];
 }>;
 export type ForecastAlertError = Readonly<{ kind: "network" | "invalid" | "unavailable" }>;
 export type ForecastAlertCheck =
@@ -61,37 +63,62 @@ const dayAt = (time: number, formatter: Intl.DateTimeFormat): string => {
   return `${part("year")}-${part("month")}-${part("day")}`;
 };
 
-export const forecastAlertKey = (spot: SavedSpot): string =>
-  JSON.stringify([spot.id, spot.point, spot.criteria, spot.alertEnabled, alertRulesFor(spot), forecastLookAhead(spot)]);
+export const forecastAlertKey = (spot: SavedSpot, catalog: readonly SavedSpot[] = []): string => {
+  const group = linkedSpotGroup(spot, catalog);
+  return JSON.stringify([group.spots.map((item) => [item.id, item.point, item.criteria, item.alertEnabled,
+    alertRulesFor(item), forecastLookAhead(item), item.linkedSpotIds ?? []]), group.missing]);
+};
 
-export const scoreForecastAlert = (
-  spot: Pick<SavedSpot, "criteria" | "alertLookAheadDays">, wave: ForecastSeries, wind: ForecastSeries, now: Date,
-): ForecastAlertSummary | null => {
-  const formatter = localDayFormatter(wave.timezone);
-  const clock = historyClock(wave.timezone);
+type ScoringSpot = Pick<SavedSpot, "criteria" | "alertLookAheadDays">;
+type ForecastPointData = Readonly<{ wave: ForecastSeries; wind: ForecastSeries }>;
+type LinkedForecast = ForecastPointData & Readonly<{ spot: SavedSpot }>;
+
+export const forecastSources = (spots: readonly ScoringSpot[]) => {
+  const swell = spots.some((spot) => conditionSource(spot.criteria) !== "wind");
+  const wind = spots.some((spot) => conditionSource(spot.criteria) !== "swell");
+  return { label: [swell ? `${forecastSwell.label} primary swell` : "", wind ? "ECMWF IFS wind" : ""].filter(Boolean).join(" + "),
+    coverage: swell ? forecastSwellCoverage : "Hourly wind forecasts cover up to 14 days." };
+};
+
+const seriesFor = (spot: ScoringSpot, data: ForecastPointData): ForecastSeries =>
+  conditionSource(spot.criteria) === "wind" ? data.wind : data.wave;
+
+const scoreGroup = (spot: ScoringSpot, data: ForecastPointData, linked: readonly LinkedForecast[], now: Date): ForecastAlertSummary | null => {
+  const entries = [{ spot, ...data }, ...linked].map((entry) => ({ ...entry,
+    waveIndex: new Map(entry.wave.time.map((time, index) => [time, index])),
+    windIndex: new Map(entry.wind.time.map((time, index) => [time, index])),
+    clock: historyClock(seriesFor(entry.spot, entry).timezone),
+  }));
+  const timezone = seriesFor(spot, data).timezone;
+  const formatter = localDayFormatter(timezone);
   const today = dayAt(now.getTime() / 1000, formatter);
   const firstDay = Date.parse(`${today}T00:00:00Z`);
-  const horizonDays = forecastLookAhead(spot);
+  const horizonDays = Math.min(forecastLookAhead(spot), ...linked.map((entry) => forecastLookAhead(entry.spot)));
   const dates = Array.from({ length: horizonDays }, (_, index) =>
     new Date(firstDay + index * 86_400_000).toISOString().slice(0, 10));
   const days = new Map(dates.map((date) => [date, { available: 0, run: 0, lastTime: null as number | null,
     runStart: null as number | null, firstWindow: null as number | null, windowEnd: null as number | null }]));
-  const windIndex = new Map(wind.time.map((time, index) => [time, index]));
-  const requiredHours = Math.max(2, spot.criteria.minConsecutiveHours);
-  for (let index = 0; index < wave.time.length; index++) {
-    const time = wave.time[index];
+  const requiredHours = Math.max(2, ...entries.map((entry) => entry.spot.criteria.minConsecutiveHours));
+  // Intersect raw UTC hours, not each point's first daily window: a later run may overlap.
+  for (const time of seriesFor(spot, data).time) {
     if (time * 1000 < now.getTime()) continue;
     const day = days.get(dayAt(time, formatter));
-    if (!day || !withinHistoryHours(time, clock)) continue;
-    const windAt = windIndex.get(time);
-    const hour: HistoricalHour = {
-      time, day: "", swellHeight: wave.first[index], swellPeriod: wave.second[index],
-      swellDirection: wave.third?.[index] ?? null, windSpeed: windAt === undefined ? null : wind.first[windAt],
-      windDirection: windAt === undefined ? null : wind.second[windAt],
-    };
-    if (hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
-      hour.windSpeed !== null && hour.windDirection !== null) day.available++;
-    if (!hourMatchesCriteria(hour, spot.criteria)) { day.run = 0; day.lastTime = null; day.runStart = null; continue; }
+    if (!day) continue;
+    const hours = entries.map((entry) => {
+      const waveAt = entry.waveIndex.get(time), windAt = entry.windIndex.get(time);
+      const hour: HistoricalHour = { time, day: "",
+        swellHeight: waveAt === undefined ? null : entry.wave.first[waveAt],
+        swellPeriod: waveAt === undefined ? null : entry.wave.second[waveAt],
+        swellDirection: waveAt === undefined ? null : entry.wave.third?.[waveAt] ?? null,
+        windSpeed: windAt === undefined ? null : entry.wind.first[windAt],
+        windDirection: windAt === undefined ? null : entry.wind.second[windAt] };
+      return { hour, entry };
+    });
+    const daylight = entries.every((entry) => withinHistoryHours(time, entry.clock));
+    if (daylight && hours.every(({ hour, entry }) => hourHasData(hour, entry.spot.criteria))) day.available++;
+    if (!daylight || !hours.every(({ hour, entry }) => hourMatchesCriteria(hour, entry.spot.criteria))) {
+      day.run = 0; day.lastTime = null; day.runStart = null; continue;
+    }
     if (day.lastTime !== null && time - day.lastTime === 3600) day.run++;
     else { day.run = 1; day.runStart = time; }
     day.lastTime = time;
@@ -99,14 +126,24 @@ export const scoreForecastAlert = (
     if (day.firstWindow !== null && day.firstWindow === day.runStart) day.windowEnd = time + 3600;
   }
   const availableDates = [...days].filter(([, day]) => day.available >= requiredHours).map(([date]) => date);
-  const availableDays = availableDates.length;
-  if (!availableDays) return null;
-  const matching = [...days.values()].filter((day) => day.firstWindow !== null);
+  if (!availableDates.length) return null;
   const windows = [...days].flatMap(([date, day]) => day.firstWindow === null ? []
     : [{ day: date, start: day.firstWindow, end: day.windowEnd! }]);
-  return { windows, availableDates, matchingDays: matching.length, availableDays, horizonDays,
-    requiredHours, nextWindowStart: matching[0]?.firstWindow ?? null,
-    timezone: wave.timezone, checkedAt: now.getTime() };
+  return { windows, availableDates, matchingDays: windows.length, availableDays: availableDates.length, horizonDays,
+    requiredHours, nextWindowStart: windows[0]?.start ?? null, timezone, checkedAt: now.getTime(),
+    ...(linked.length ? { linkedRequirements: linked.map(({ spot: peer }) =>
+      ({ id: peer.id, name: peer.name, rules: alertRulesFor(peer) })) } : {}),
+  };
+};
+
+export const scoreForecastAlert = (spot: ScoringSpot, wave: ForecastSeries, wind: ForecastSeries, now: Date): ForecastAlertSummary | null =>
+  scoreGroup(spot, { wave, wind }, [], now);
+
+export const scoreForecastData = (spot: SavedSpot, data: ForecastData, now: Date): ForecastAlertSummary | null => {
+  const linked = data.linked ?? [];
+  const group = linkedSpotGroup(spot, linked.map((entry) => entry.spot));
+  if (group.missing.length || group.spots.length !== linked.length + 1) return null;
+  return scoreGroup(spot, data, linked, now);
 };
 
 export const forecastPeriodLabel = (period: Readonly<{ startDay: string; endDay: string }>): string => {
@@ -115,7 +152,7 @@ export const forecastPeriodLabel = (period: Readonly<{ startDay: string; endDay:
 };
 
 /** Scan every complete N-day period wholly inside the look-ahead horizon. Any rule can trigger. */
-export const evaluateForecastRules = (summary: ForecastAlertSummary, dayRules: readonly AlertDayRule[]) => {
+const evaluateDayRules = (summary: ForecastAlertSummary, dayRules: readonly AlertDayRule[]) => {
   const today = dayAt(summary.checkedAt / 1000, localDayFormatter(summary.timezone));
   const start = Date.parse(`${today}T00:00:00Z`);
   const dateAt = (offset: number): string => new Date(start + offset * 86_400_000).toISOString().slice(0, 10);
@@ -140,6 +177,17 @@ export const evaluateForecastRules = (summary: ForecastAlertSummary, dayRules: r
     windows: summary.windows.filter((window) => matchingDates.has(window.day)) };
 };
 
+/** Each linked point must pass one of its own rules, using the same jointly matching days. */
+export const evaluateForecastRules = (summary: ForecastAlertSummary, dayRules: readonly AlertDayRule[]) => {
+  const own = evaluateDayRules(summary, dayRules);
+  const linked = (summary.linkedRequirements ?? []).map((peer) => ({ ...peer,
+    evaluation: evaluateDayRules(summary, peer.rules) }));
+  const matched = own.matched && linked.every((peer) => peer.evaluation.matched);
+  const windows = matched ? own.windows.filter((window) => linked.every((peer) =>
+    peer.evaluation.windows.some((other) => other.day === window.day))) : [];
+  return { ...own, matched: matched && windows.length > 0, windows, linked };
+};
+
 const urlsFor = (points: readonly SavedSpot["point"][]): readonly [string, string] => {
   const coordinates = {
     latitude: points.map((point) => point.latitude).join(","),
@@ -155,31 +203,35 @@ const urlsFor = (points: readonly SavedSpot["point"][]): readonly [string, strin
   ];
 };
 
-export type ForecastData = Readonly<{ wave: ForecastSeries; wind: ForecastSeries }>;
+export type ForecastData = ForecastPointData & Readonly<{ linked?: readonly LinkedForecast[] }>;
 export type ForecastDataResult =
   | Readonly<{ ok: true; data: ForecastData }>
   | Readonly<{ ok: false; error: ForecastAlertError }>;
 
 // Download once; both saved alerts and draft previews use the same data and scoring rules.
 const loadForecastBatch = async (
-  points: readonly SavedSpot["point"][], fetcher: typeof fetch,
+  points: readonly SavedSpot["point"][], fetcher: typeof fetch, conditions: ConditionSource = "both",
 ): Promise<readonly ForecastDataResult[]> => {
   const failure = (kind: ForecastAlertError["kind"]): ForecastDataResult[] =>
     points.map(() => ({ ok: false, error: { kind } }));
   const [waveUrl, windUrl] = urlsFor(points);
   try {
     const [waveResponse, windResponse] = await Promise.all([
-      fetcher(waveUrl, { signal: AbortSignal.timeout(30_000) }),
-      fetcher(windUrl, { signal: AbortSignal.timeout(30_000) }),
+      conditions === "wind" ? null : fetcher(waveUrl, { signal: AbortSignal.timeout(30_000) }),
+      conditions === "swell" ? null : fetcher(windUrl, { signal: AbortSignal.timeout(30_000) }),
     ]);
-    if (!waveResponse.ok || !windResponse.ok) return failure("network");
-    const [waveRaw, windRaw]: unknown[] = await Promise.all([waveResponse.json(), windResponse.json()]);
+    if ((waveResponse && !waveResponse.ok) || (windResponse && !windResponse.ok)) return failure("network");
+    const [waveRaw, windRaw]: unknown[] = await Promise.all([waveResponse?.json(), windResponse?.json()]);
     const waveRows = Array.isArray(waveRaw) ? waveRaw : [waveRaw];
     const windRows = Array.isArray(windRaw) ? windRaw : [windRaw];
-    if (waveRows.length !== points.length || windRows.length !== points.length) return failure("invalid");
+    if ((waveResponse && waveRows.length !== points.length) || (windResponse && windRows.length !== points.length)) return failure("invalid");
     return points.map((_, index): ForecastDataResult => {
-      const wave = parseSeries(waveRows[index], ["swell_wave_height", "swell_wave_period", "swell_wave_direction"]);
-      const wind = parseSeries(windRows[index], ["wind_speed_10m", "wind_direction_10m"]);
+      let wave = parseSeries(waveRows[index], ["swell_wave_height", "swell_wave_period", "swell_wave_direction"]);
+      let wind = parseSeries(windRows[index], ["wind_speed_10m", "wind_direction_10m"]);
+      const blank = (series: ForecastSeries): ForecastSeries => ({ ...series,
+        first: series.time.map(() => null), second: series.time.map(() => null), third: null });
+      if (conditions === "wind" && wind) wave = blank(wind);
+      if (conditions === "swell" && wave) wind = blank(wave);
       if (!wave || !wind) return { ok: false, error: { kind: "invalid" } };
       try { localDayFormatter(wave.timezone); }
       catch { return { ok: false, error: { kind: "invalid" } }; }
@@ -192,22 +244,50 @@ export const loadForecastPoint = async (
   point: SavedSpot["point"], fetcher: typeof fetch = fetch,
 ): Promise<ForecastDataResult> => (await loadForecastBatch([point], fetcher))[0];
 
-export const loadForecastAlerts = async (
-  spots: readonly SavedSpot[], now: Date, fetcher: typeof fetch = fetch,
-): Promise<readonly ForecastAlertCheck[]> => {
-  const checks: ForecastAlertCheck[] = [];
-  for (let offset = 0; offset < spots.length; offset += 20) {
-    const batch = spots.slice(offset, offset + 20);
-    const results = await loadForecastBatch(batch.map((spot) => spot.point), fetcher);
-    for (let index = 0; index < batch.length; index++) {
-      const spot = batch[index];
-      const identity = { id: spot.id, key: forecastAlertKey(spot) };
-      const result = results[index];
-      if (!result.ok) { checks.push({ ...identity, ...result }); continue; }
-      const summary = scoreForecastAlert(spot, result.data.wave, result.data.wind, now);
-      checks.push(summary ? { ...identity, ok: true, summary }
-        : { ...identity, ok: false, error: { kind: "unavailable" } });
+const loadSpotData = async (spots: readonly SavedSpot[], fetcher: typeof fetch): Promise<ReadonlyMap<string, ForecastDataResult>> => {
+  const data = new Map<string, ForecastDataResult>();
+  for (const conditions of ["both", "swell", "wind"] as const) {
+    const selected = spots.filter((spot) => conditionSource(spot.criteria) === conditions);
+    for (let offset = 0; offset < selected.length; offset += 20) {
+      const batch = selected.slice(offset, offset + 20);
+      const results = await loadForecastBatch(batch.map((spot) => spot.point), fetcher, conditions);
+      batch.forEach((spot, index) => data.set(spot.id, results[index]));
     }
   }
-  return checks;
+  return data;
+};
+
+const groupData = (spot: SavedSpot, catalog: readonly SavedSpot[], results: ReadonlyMap<string, ForecastDataResult>): ForecastDataResult => {
+  const group = linkedSpotGroup(spot, catalog);
+  if (group.missing.length) return { ok: false, error: { kind: "unavailable" } };
+  const own = results.get(spot.id);
+  if (!own?.ok) return own ?? { ok: false, error: { kind: "unavailable" } };
+  const linked: LinkedForecast[] = [];
+  for (const peer of group.spots.slice(1)) {
+    const result = results.get(peer.id);
+    if (!result?.ok) return result ?? { ok: false, error: { kind: "unavailable" } };
+    linked.push({ spot: peer, ...result.data });
+  }
+  return { ok: true, data: { ...own.data, ...(linked.length ? { linked } : {}) } };
+};
+
+export const loadForecastGroup = async (spot: SavedSpot, catalog: readonly SavedSpot[], fetcher: typeof fetch = fetch): Promise<ForecastDataResult> => {
+  const group = linkedSpotGroup(spot, catalog);
+  if (group.missing.length) return { ok: false, error: { kind: "unavailable" } };
+  return groupData(spot, catalog, await loadSpotData(group.spots, fetcher));
+};
+
+export const loadForecastAlerts = async (
+  spots: readonly SavedSpot[], now: Date, fetcher: typeof fetch = fetch, catalog: readonly SavedSpot[] = spots,
+): Promise<readonly ForecastAlertCheck[]> => {
+  const needed = new Map<string, SavedSpot>();
+  for (const spot of spots) for (const peer of linkedSpotGroup(spot, catalog).spots) needed.set(peer.id, peer);
+  const results = await loadSpotData([...needed.values()], fetcher);
+  return spots.map((spot): ForecastAlertCheck => {
+    const identity = { id: spot.id, key: forecastAlertKey(spot, catalog) };
+    const result = groupData(spot, catalog, results);
+    if (!result.ok) return { ...identity, ...result };
+    const summary = scoreForecastData(spot, result.data, now);
+    return summary ? { ...identity, ok: true, summary } : { ...identity, ok: false, error: { kind: "unavailable" } };
+  });
 };

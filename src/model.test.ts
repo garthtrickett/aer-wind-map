@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fieldKey, historyKey, initialState, nap, present } from "./model.ts";
+import { draftSavedSpot, fieldKey, historyKey, initialState, nap, present } from "./model.ts";
 import { forecastAlertKey } from "./forecast-alerts.ts";
 import type { HistoricalData } from "./history.ts";
 import type { WindField } from "./wind.ts";
@@ -53,7 +53,7 @@ test("historical results belong to the selected spot and criteria rescore cached
   const selected = present(initialState, { kind: "locationSelected", point });
   const opened = present(selected, { kind: "historyOpened" });
   const key = historyKey(point, opened.history.startYear, opened.history.endYear);
-  assert.deepEqual(nap(opened), { kind: "loadHistory", point,
+  assert.deepEqual(nap(opened), { kind: "loadHistory", conditions: "both", point,
     startYear: opened.history.startYear, endYear: opened.history.endYear, key });
   const loading = present(opened, { kind: "historyLoadStarted", key });
   const data: HistoricalData = {
@@ -67,6 +67,46 @@ test("historical results belong to the selected spot and criteria rescore cached
   const rescored = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxWindSpeed: 3 } });
   assert.equal(rescored.history.data, data);
   assert.equal(nap(rescored)?.kind, "discover");
+});
+
+test("switching a point to wind only invalidates paired history and in-flight forecast data", () => {
+  const opened = present(present(initialState, { kind: "locationSelected", point: { latitude: -8, longitude: 115 } }), { kind: "historyOpened" });
+  const enabled = present(opened, { kind: "savedSpotAlertChanged", enabled: true });
+  const loading = present(enabled, { kind: "forecastPreviewStarted", request: enabled.history.forecastPreview.request });
+  const changed = present(loading, { kind: "historyCriteriaChanged", criteria: { ...loading.history.criteria, conditions: "wind" } });
+  assert.equal(changed.history.forecastPreview.phase, "idle");
+  assert.notEqual(changed.history.forecastPreview.request, loading.history.forecastPreview.request);
+  const effect = nap(changed);
+  assert.equal(effect?.kind, "loadHistory");
+  if (effect?.kind === "loadHistory") { assert.equal(effect.conditions, "wind"); assert.match(effect.key, /:wind$/); }
+});
+
+test("linked spot removal preserves the requirement and rejects a previously computed alert", () => {
+  const peer = { id: "wind", name: "Coast", point: { latitude: -8, longitude: 115 },
+    startYear: 2023, endYear: 2025, criteria: initialState.history.criteria, alertEnabled: false, alertMinDays: 1 };
+  const root = { ...peer, id: "swell", name: "Offshore", alertEnabled: true, linkedSpotIds: [peer.id] };
+  let state = present(initialState, { kind: "savedSpotsLoaded", spots: [root, peer] });
+  const key = forecastAlertKey(root, state.savedSpots);
+  state = present(state, { kind: "forecastAlertsStarted", generation: 1, entries: [{ id: root.id, key }] });
+  state = present(state, { kind: "savedSpotRemoved", id: peer.id });
+  assert.deepEqual(state.savedSpots[0].linkedSpotIds, [peer.id]);
+  const after = present(state, { kind: "forecastAlertsCompleted", generation: 1,
+    checks: [{ id: root.id, key, ok: false, error: { kind: "network" } }] });
+  assert.notEqual(after.forecastAlerts[root.id]?.kind, "failed", "stale result belongs to the old dependency set");
+});
+
+test("a phone link keeps linked settings ephemeral until explicitly saved, without enabling peer alerts", () => {
+  const peer = { id: "wind", name: "Coast", point: { latitude: -8, longitude: 115 },
+    startYear: 2023, endYear: 2025, criteria: initialState.history.criteria, alertEnabled: false, alertMinDays: 1,
+    linkedSpotIds: ["swell"] };
+  const root = { ...peer, id: "swell", name: "Offshore", linkedSpotIds: [peer.id] };
+  const viewed = present(initialState, { kind: "telegramSpotRestored", spot: root, linkedSpots: [peer], readOnly: true });
+  assert.equal(viewed.savedSpots.length, 0);
+  assert.deepEqual(viewed.history.linkedCatalog, [peer]);
+  const saved = present(viewed, { kind: "savedSpotSaved", id: "my-copy" });
+  assert.equal(saved.savedSpots.length, 2);
+  assert.deepEqual(saved.savedSpots.find((spot) => spot.id === peer.id)?.linkedSpotIds, ["my-copy"]);
+  assert.equal(saved.savedSpots.every((spot) => !spot.alertEnabled), true);
 });
 
 test("named spot presets save, reopen, update, and remove independently", () => {
@@ -133,7 +173,7 @@ test("enabling draft alerts checks immediately before saving and rescores edits 
   const archive = present(opened, { kind: "historyLoadStarted", key: historyKey(point, opened.history.startYear, opened.history.endYear) });
   const enabled = present(archive, { kind: "savedSpotAlertChanged", enabled: true });
   const request = enabled.history.forecastPreview.request;
-  assert.deepEqual(nap(enabled), { kind: "loadForecastPreview", point, request });
+  assert.deepEqual(nap(enabled), { kind: "loadForecastPreview", point, request, spot: draftSavedSpot(enabled.history), catalog: [] });
   assert.equal(enabled.savedSpots, initialState.savedSpots);
   assert.equal(enabled.telegram, initialState.telegram);
   const loading = present(enabled, { kind: "forecastPreviewStarted", request });

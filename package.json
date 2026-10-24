@@ -12,6 +12,7 @@
     "smoke:history": "node tests/history-smoke.ts",
     "smoke:zoom": "node tests/zoom-smoke.ts",
     "smoke:saved": "node tests/saved-spots-smoke.ts",
+    "smoke:linked": "node tests/linked-spots-smoke.ts",
     "smoke:forecast": "node tests/forecast-source-smoke.ts",
     "build": "npm run prepare:decoder && npm run check && vite build && node scripts/compress.ts",
     "preview": "vite preview --host 0.0.0.0",

@@ -101,11 +101,23 @@ export const createWindMap = (
   map.on("click", (event: L.LeafletMouseEvent) =>
     onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) }),
   );
+  const savedLinkRenderer = L.svg();
   const savedLayer = L.layerGroup().addTo(map);
   const savedIcon = L.divIcon({ className: "saved-spot-icon", html: '<span aria-hidden="true"></span>',
     iconSize: [28, 28], iconAnchor: [14, 27] });
   const setSavedSpots = (spots: readonly SavedSpot[]): void => {
     savedLayer.clearLayers();
+    const drawn = new Set<string>();
+    for (const spot of spots) for (const id of spot.linkedSpotIds ?? []) {
+      const peer = spots.find((item) => item.id === id);
+      const key = [spot.id, id].sort().join(":");
+      if (!peer || drawn.has(key)) continue;
+      drawn.add(key);
+      const label = document.createElement("span");
+      label.textContent = `${spot.name} + ${peer.name}`;
+      L.polyline([[spot.point.latitude, spot.point.longitude], [peer.point.latitude, peer.point.longitude]],
+        { renderer: savedLinkRenderer, className: "saved-spot-link", color: "#167589", weight: 2, dashArray: "6 6", opacity: .8 }).bindTooltip(label).addTo(savedLayer);
+    }
     for (const spot of spots) {
       const label = document.createElement("span");
       label.textContent = spot.name;

@@ -44,10 +44,16 @@ server mounts the same routes and background implementation as production.
 
 ## Behaviour
 
-- The server persists snapshots of **enabled** saved spots independently of the
+- The server persists snapshots of **enabled** saved spots and their linked conditions independently of the
   browser. It does not need an open tab, an awake laptop, or the phone online to
   evaluate forecasts. Telegram delivery still requires connectivity.
-- Every rule must match: height range, minimum/optional maximum swell period,
+- Link an offshore **Swell only** point to a nearshore **Wind only** point in
+  the saved-spot editor. Linked points can have their own alerts disabled.
+  Required settings still sync. Only days with overlapping matching hours count;
+  each point must pass one of its own X-out-of-Y rows. The group uses the longest
+  minimum window and shortest look-ahead. Missing dependencies prevent alerts.
+  Historical charts remain specific to the selected point.
+- Every selected condition must match: height range, minimum/optional maximum swell period,
   clockwise wind/swell source-direction ranges, maximum wind speed, consecutive
   samples. Day-count rules slide across the chosen look-ahead: for example,
   **2 matching days in any 4-day period**, or **4 in any 7-day period**. Any

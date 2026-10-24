@@ -128,6 +128,7 @@ npm run smoke:history
 npm run smoke:zoom
 npm run smoke:saved
 npm run smoke:forecast
+npm run smoke:linked
 BROWSER=firefox npm run smoke:live
 BROWSER=webkit npm run smoke:live
 ```
@@ -163,6 +164,28 @@ stay visible on the map.
 Wind color uses a reduced-size texture in a MapLibre WebGL layer. Animated
 arrows use a second WebGL canvas that follows the map's zoom transform. Browsers
 without WebGL2 use reduced-resolution Canvas 2D color and arrows.
+
+## Linking an offshore swell point with nearshore wind
+
+1. Save the offshore point with **Use this point for → Swell only**.
+2. Save the coastal point with **Wind only**. Set its X-out-of-Y rules; its own
+   alert checkbox can stay off.
+3. Reopen the offshore point, select the coastal point under **Link conditions
+   from other saved spots**, enable forecast checking and update the saved spot.
+
+A matching day requires overlapping UTC hours when every linked point's selected
+conditions pass, within 06:00–18:00 at each point. The longest minimum hourly
+window and shortest look-ahead in the group apply. Every point must pass at
+least one of its own sliding day-count rows using those jointly matching days.
+The preview shows each linked point's result; dashed lines join linked map pins.
+Missing points or missing required forecasts cannot trigger an alert. Remove a
+broken requirement explicitly or restore the missing point.
+
+Links apply to forecast previews and browser/Telegram alerts. Historical charts
+and CSVs score only the selected point and its chosen sources. Telegram stores
+required linked points even if their individual alerts are disabled. A shared
+phone link includes read-only linked settings without importing them into the
+recipient's saved spots.
 
 ## Limits
 

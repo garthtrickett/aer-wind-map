@@ -104,7 +104,7 @@ try {
   holdPreview = false;
   releasePreview();
   await expect(preview).toContainText("4 of 14 days match");
-  await expect(preview).toContainText("Swell: Météo-France MFWAM");
+  await expect(preview).toContainText("Météo-France MFWAM primary swell + ECMWF IFS wind");
   await expect(preview).toContainText("up to 10 days; later days are unknown");
   await expect(preview).toContainText("Your alert threshold is met");
   await expect(preview.locator(".history-forecast-windows li")).toHaveCount(4);
@@ -163,7 +163,7 @@ try {
   await expect(preview).toContainText("The forecast could not be loaded");
   responseMode = "empty";
   await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
-  await expect(preview).toContainText("No usable paired swell and wind forecast");
+  await expect(preview).toContainText("No usable forecast is available for all selected conditions");
   responseMode = "short";
   await page.getByRole("button", { name: "Retry forecast", exact: true }).click();
   await expect(preview).toContainText("1 of 14 days match");

@@ -207,3 +207,32 @@ transform as MapLibre's canvas, that arrows keep changing during zoom, and
 that reduced-motion arrows stay still. Chromium checks the low-resolution
 Canvas 2D fallback. Headless zoom frame timings vary on this shared host;
 physical-device smoothness remains to be measured.
+
+
+## Linked forecast conditions
+
+`HistoryCriteria.conditions` is an optional `both | swell | wind` selector;
+legacy presets default to both. Single-source history and forecast requests
+skip the unused provider and score coverage using only required fields.
+`SavedSpot.linkedSpotIds` adds AND dependencies without changing each point's
+own OR day-count rows. `spot-links.ts` resolves a bounded graph, deduplicating
+reciprocal links. Missing references remain visible and fail closed.
+
+The shared forecast evaluator intersects raw UTC hourly matches across the
+resolved points before constructing daily windows. Intersecting only each
+point's first daily window would miss later overlapping sessions. The group
+uses the greatest required consecutive-hour count, the shortest configured
+look-ahead, and local daylight at every point. Each member's rules evaluate the
+joint days; notifications require all members and shared qualifying dates.
+Draft previews cache the group's raw forecasts; link/source changes discard
+old requests. Alert identity includes every dependency's criteria and rules,
+so changing or removing a peer invalidates an older result.
+
+Telegram sync sends the closure of enabled roots, including disabled linked
+conditions. SQLite stores all snapshots, but only enabled roots become watches
+or count as enabled monitors. Each worker batch resolves links within one
+owner's catalog. In-flight results and delivery acknowledgements carry a group
+identity so a peer edit cannot mark an old forecast current or suppress a fresh
+alert. The nullable `deliveries.group_key` column is added idempotently to
+existing databases. Capability views return read-only linked snapshots;
+these live in the history panel until the user explicitly saves a preset.

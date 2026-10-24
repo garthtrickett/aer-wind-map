@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { alertRulesFor } from "../../src/alert-rules.ts";
 import { evaluateForecastRules, forecastAlertKey, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { linkedSpotGroup } from "../../src/spot-links.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { disconnectedTelegram, type TelegramStatus } from "../../src/telegram-types.ts";
 import type { TelegramSend, TelegramUpdate } from "./telegram.ts";
@@ -12,12 +13,14 @@ export const secret = (): string => randomBytes(32).toString("base64url");
 export const digest = (value: string): string => createHash("sha256").update(value).digest("hex");
 export type WatchedSpot = Readonly<{
   owner: string; chatId: number; spot: SavedSpot; config: string;
+  catalog?: readonly SavedSpot[]; groupKey?: string;
   qualified: boolean; notifiedDates: readonly string[]; confirmedDates: readonly string[]; notifiedAt: number | null;
 }>;
 type Owner = { id: string; chat_id: number | null; revision: number; blocked: number };
 export type Delivery = Readonly<{
   id: string; owner: string | null; chat_id: number; spot_id: string | null; config: string | null;
   text: string; url: string | null; state: string; attempts: number;
+  group_key?: string | null;
   dates: string | null; confirmation: number; confirmation_dates: string | null;
 }>;
 
@@ -51,6 +54,9 @@ export const openAlertStore = (path: string) => {
     INSERT OR IGNORE INTO worker_lease VALUES (1,NULL,0);
     PRAGMA user_version=1;`);
 
+  if (!(db.prepare("PRAGMA table_info(deliveries)").all() as { name: string }[]).some((column) => column.name === "group_key"))
+    db.exec("ALTER TABLE deliveries ADD COLUMN group_key TEXT");
+
   const transaction = <T>(action: () => T): T => {
     db.exec("BEGIN IMMEDIATE");
     try { const result = action(); db.exec("COMMIT"); return result; }
@@ -66,11 +72,23 @@ export const openAlertStore = (path: string) => {
     db.prepare("DELETE FROM views WHERE owner=?").run(owner);
     cancel(owner);
   };
+  const catalog = (owner: string): readonly SavedSpot[] =>
+    (db.prepare("SELECT config FROM spots WHERE owner=?").all(owner) as { config: string }[]).map((row) => JSON.parse(row.config));
+  const linkedSpots = (owner: string, id: string): readonly SavedSpot[] => {
+    const spots = catalog(owner), root = spots.find((spot) => spot.id === id);
+    return root ? linkedSpotGroup(root, spots).spots.slice(1) : [];
+  };
+  const viewRow = (token: string, now: number): { owner: string; config: string } | undefined => {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return undefined;
+    return db.prepare(`SELECT s.owner,s.config FROM views v JOIN spots s ON s.owner=v.owner AND s.id=v.spot_id
+      JOIN owners o ON o.id=s.owner WHERE v.token=? AND v.expires_at>? AND o.chat_id IS NOT NULL`)
+      .get(digest(token), now) as { owner: string; config: string } | undefined;
+  };
   const status = (owner: string | null, now: number): TelegramStatus => {
     const row = owner ? ownerAt(owner) : undefined;
     if (!row) return { ...disconnectedTelegram, available: true };
     const info = db.prepare(`SELECT COUNT(*) AS count, MAX(checked_at) AS checked,
-      MAX(error) AS error FROM spots WHERE owner=?`).get(owner!) as { count: number; checked: number | null; error: number };
+      MAX(error) AS error FROM spots WHERE owner=? AND json_extract(config,'$.alertEnabled')=1`).get(owner!) as { count: number; checked: number | null; error: number };
     const delivery = db.prepare(`SELECT MAX(sent_at) AS sent,
       MAX(CASE WHEN state='uncertain' THEN 2 WHEN state='failed' THEN 1 ELSE 0 END) AS problem
       FROM deliveries WHERE owner=? AND state != 'cancelled'`).get(owner!) as { sent: number | null; problem: number };
@@ -80,12 +98,12 @@ export const openAlertStore = (path: string) => {
       issue: row.blocked ? "blocked" : delivery.problem === 2 ? "uncertain" : delivery.problem === 1 ? "delivery" : info.error ? "forecast" : null };
   };
   const enqueue = (delivery: { id: string; owner: string | null; chatId: number; text: string; url?: string;
-    spotId?: string; config?: string; dates?: readonly string[]; confirmation?: boolean; confirmedDates?: readonly string[] }, now: number) => {
-    db.prepare(`INSERT OR IGNORE INTO deliveries(id,owner,chat_id,spot_id,config,text,url,next_try,created_at,dates,confirmation,confirmation_dates)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(delivery.id, delivery.owner, delivery.chatId, delivery.spotId ?? null,
+    spotId?: string; config?: string; groupKey?: string; dates?: readonly string[]; confirmation?: boolean; confirmedDates?: readonly string[] }, now: number) => {
+    db.prepare(`INSERT OR IGNORE INTO deliveries(id,owner,chat_id,spot_id,config,text,url,next_try,created_at,dates,confirmation,confirmation_dates,group_key)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(delivery.id, delivery.owner, delivery.chatId, delivery.spotId ?? null,
       delivery.config ?? null, delivery.text, delivery.url ?? null, now, now,
       delivery.dates ? JSON.stringify(delivery.dates) : null, Number(delivery.confirmation ?? false),
-      delivery.confirmedDates ? JSON.stringify(delivery.confirmedDates) : null);
+      delivery.confirmedDates ? JSON.stringify(delivery.confirmedDates) : null, delivery.groupKey ?? null);
   };
 
   return {
@@ -115,13 +133,14 @@ export const openAlertStore = (path: string) => {
         const row = ownerAt(owner);
         if (!row || row.chat_id === null || row.revision !== revision) return false;
         const existing = db.prepare("SELECT id,config FROM spots WHERE owner=?").all(owner) as { id: string; config: string }[];
+        const oldCatalog = existing.map((entry) => JSON.parse(entry.config) as SavedSpot);
         for (const old of existing) if (!spots.some((spot) => spot.id === old.id))
           db.prepare("DELETE FROM spots WHERE owner=? AND id=?").run(owner, old.id);
         for (const spot of spots) {
           const config = JSON.stringify(spot);
           const old = existing.find((entry) => entry.id === spot.id);
-          if (old?.config === config) continue;
-          const rulesChanged = !old || forecastAlertKey(JSON.parse(old.config)) !== forecastAlertKey(spot);
+          const rulesChanged = !old || forecastAlertKey(JSON.parse(old.config), oldCatalog) !== forecastAlertKey(spot, spots);
+          if (old?.config === config && !rulesChanged) continue;
           db.prepare(`INSERT INTO spots(owner,id,config) VALUES (?,?,?) ON CONFLICT(owner,id) DO UPDATE
             SET config=excluded.config,next_check=0,error=0,qualified=CASE WHEN ? THEN 0 ELSE qualified END,
             notified_dates=CASE WHEN ? THEN '[]' ELSE notified_dates END,
@@ -135,16 +154,18 @@ export const openAlertStore = (path: string) => {
         return true;
       });
     },
+    linkedSpots,
+    viewLinked(token: string, now: number): readonly SavedSpot[] {
+      const row = viewRow(token, now);
+      return row ? linkedSpots(row.owner, JSON.parse(row.config).id).map((spot) => ({ ...spot, alertEnabled: false })) : [];
+    },
     disconnect(owner: string) { transaction(() => disconnect(owner)); },
     spot(owner: string, id: string): SavedSpot | null {
       const row = db.prepare("SELECT config FROM spots WHERE owner=? AND id=?").get(owner, id) as { config: string } | undefined;
       return row ? JSON.parse(row.config) : null;
     },
     view(token: string, now: number): SavedSpot | null {
-      if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-      const row = db.prepare(`SELECT s.config FROM views v JOIN spots s ON s.owner=v.owner AND s.id=v.spot_id
-        JOIN owners o ON o.id=s.owner WHERE v.token=? AND v.expires_at>? AND o.chat_id IS NOT NULL`)
-        .get(digest(token), now) as { config: string } | undefined;
+      const row = viewRow(token, now);
       // A view link carries no account control or alert opt-in into a new browser.
       return row ? { ...JSON.parse(row.config), alertEnabled: false } : null;
     },
@@ -176,7 +197,7 @@ export const openAlertStore = (path: string) => {
             db.prepare("UPDATE deliveries SET state='cancelled' WHERE chat_id=? AND state IN ('queued','retry')").run(chatId);
             reply = "All Aer alerts to this chat are stopped. Reconnect from Saved spots whenever you want.";
           } else if (/^\/status(?:@\w+)?$/.test(command)) {
-            const count = (db.prepare(`SELECT COUNT(*) AS n FROM spots s JOIN owners o ON s.owner=o.id WHERE o.chat_id=?`).get(chatId) as { n: number }).n;
+            const count = (db.prepare(`SELECT COUNT(*) AS n FROM spots s JOIN owners o ON s.owner=o.id WHERE o.chat_id=? AND json_extract(s.config,'$.alertEnabled')=1`).get(chatId) as { n: number }).n;
             reply = `Aer is monitoring ${count} enabled saved ${count === 1 ? "spot" : "spots"}. Checks run about every 6 hours with the app closed. /stop stops all alerts.`;
           } else if (/^\/help(?:@\w+)?$/.test(command)) reply = "Set conditions in Aer → Find your season, enable the 14-day alert and save. Connect Telegram in Saved spots. /status shows monitoring; /stop stops all alerts. Forecast matches use 06:00–18:00 at the spot, not observed surf conditions.";
           const recent = (db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE chat_id=? AND created_at>?").get(chatId, now - 60_000) as { n: number }).n;
@@ -197,9 +218,10 @@ export const openAlertStore = (path: string) => {
     release(holder: string) { db.prepare("UPDATE worker_lease SET holder=NULL,expires=0 WHERE holder=?").run(holder); },
     due(now: number): readonly WatchedSpot[] {
       const rows = db.prepare(`SELECT s.*,o.chat_id FROM spots s JOIN owners o ON s.owner=o.id
-        WHERE o.chat_id IS NOT NULL AND s.next_check<=? ORDER BY s.next_check LIMIT 20`).all(now) as
+        WHERE o.chat_id IS NOT NULL AND json_extract(s.config,'$.alertEnabled')=1 AND s.next_check<=? ORDER BY s.next_check LIMIT 20`).all(now) as
         { owner: string; chat_id: number; config: string; qualified: number; notified_dates: string; confirmed_dates: string; notified_at: number | null }[];
       return rows.map((row) => ({ owner: row.owner, chatId: row.chat_id, spot: JSON.parse(row.config), config: row.config,
+        catalog: catalog(row.owner), groupKey: forecastAlertKey(JSON.parse(row.config), catalog(row.owner)),
         qualified: !!row.qualified, notifiedDates: JSON.parse(row.notified_dates), confirmedDates: JSON.parse(row.confirmed_dates), notifiedAt: row.notified_at }));
     },
     checked(watch: WatchedSpot, summary: ForecastAlertSummary | null, now: number,
@@ -207,7 +229,8 @@ export const openAlertStore = (path: string) => {
       transaction(() => {
         if (ownerAt(watch.owner)?.chat_id !== watch.chatId) return;
         const row = db.prepare("SELECT config FROM spots WHERE owner=? AND id=?").get(watch.owner, watch.spot.id) as { config: string } | undefined;
-        if (row?.config !== watch.config) return;
+        if (row?.config !== watch.config || (watch.groupKey &&
+          forecastAlertKey(watch.spot, catalog(watch.owner)) !== watch.groupKey)) return;
         const matching = summary !== null && evaluateForecastRules(summary, alertRulesFor(watch.spot)).matched;
         // Null = unavailable. It must not re-arm a previously qualifying alert.
         db.prepare(`UPDATE spots SET checked_at=?,next_check=?,error=?,summary=?,
@@ -220,7 +243,7 @@ export const openAlertStore = (path: string) => {
           db.prepare("INSERT INTO views VALUES (?,?,?,?)").run(digest(token), watch.owner, watch.spot.id, now + 7 * 86_400_000);
           const url = new URL(notification.url);
           url.hash = `forecast=${token}`;
-          enqueue({ id: secret(), owner: watch.owner, chatId: watch.chatId, spotId: watch.spot.id, config: watch.config,
+          enqueue({ id: secret(), owner: watch.owner, chatId: watch.chatId, spotId: watch.spot.id, config: watch.config, groupKey: watch.groupKey,
             ...notification, url: url.toString() }, now);
         }
       });
@@ -243,7 +266,8 @@ export const openAlertStore = (path: string) => {
         const owner = delivery.owner ? ownerAt(delivery.owner) : null;
         const spot = delivery.spot_id && delivery.owner
           ? db.prepare("SELECT config FROM spots WHERE owner=? AND id=?").get(delivery.owner, delivery.spot_id) as { config: string } | undefined : null;
-        if ((delivery.owner && owner?.chat_id !== delivery.chat_id) || (delivery.spot_id && spot?.config !== delivery.config)) {
+        if ((delivery.owner && owner?.chat_id !== delivery.chat_id) || (delivery.spot_id && (spot?.config !== delivery.config || (delivery.group_key &&
+          forecastAlertKey(JSON.parse(spot.config), catalog(delivery.owner!)) !== delivery.group_key)))) {
           db.prepare("UPDATE deliveries SET state='cancelled' WHERE id=?").run(delivery.id); return false;
         }
         return db.prepare("UPDATE deliveries SET state='sending',attempts=attempts+1,next_try=? WHERE id=? AND state IN ('queued','retry')")
@@ -259,7 +283,10 @@ export const openAlertStore = (path: string) => {
         const state = result.kind === "retry" && delivery.attempts >= 5 ? "failed" : result.kind;
         db.prepare("UPDATE deliveries SET state=?,next_try=?,sent_at=? WHERE id=?").run(state,
           result.kind === "retry" ? now + result.afterMs : now, result.kind === "sent" ? now : null, delivery.id);
-        if (result.kind === "sent" && delivery.owner && delivery.spot_id && delivery.dates) {
+        const current = delivery.owner && delivery.spot_id
+          ? catalog(delivery.owner).find((spot) => spot.id === delivery.spot_id) : null;
+        const unchangedGroup = !delivery.group_key || (current && forecastAlertKey(current, catalog(delivery.owner!)) === delivery.group_key);
+        if (result.kind === "sent" && delivery.owner && delivery.spot_id && delivery.dates && unchangedGroup) {
           const dates = delivery.dates;
           db.prepare(`UPDATE spots SET notified_at=?,notified_dates=?,qualified=1,
             confirmed_dates=COALESCE(?,confirmed_dates)

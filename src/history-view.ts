@@ -1,9 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit-html";
-import { summarizeHistory, type HistoryCriteria } from "./history.ts";
+import { conditionSource, summarizeHistory, type ConditionSource, type HistoryCriteria } from "./history.ts";
 import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
-import { evaluateForecastRules, forecastPeriodLabel, forecastSwell, forecastSwellCoverage, scoreForecastAlert } from "./forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastSources, scoreForecastData } from "./forecast-alerts.ts";
+import { linkedSpotGroup } from "./spot-links.ts";
+import type { SavedSpot } from "./saved-spots.ts";
 import { historyCompassView } from "./history-compass.ts";
-import { lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
+import { draftSavedSpot, lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -17,7 +19,7 @@ const numberControl = (
   label: string, value: number | null, min: number, max: number, step: number,
   update: (value: number) => void, unit: string, clear?: () => void,
 ): TemplateResult => html`
-  <label class="history-control"><span>${label}</span><span class="history-input-wrap">
+  <label class="history-control" data-source=${label.startsWith("Swell") ? "swell" : label.startsWith("Wind") ? "wind" : "both"}><span>${label}</span><span class="history-input-wrap">
     <input type="number" min=${String(min)} max=${String(max)} step=${String(step)} .value=${value === null ? "" : String(value)}
       placeholder=${clear ? "No limit" : nothing}
       @change=${(event: Event) => {
@@ -34,14 +36,15 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
   if (preview.phase === "idle" || preview.phase === "loading") return html`
     <div class="history-forecast-preview" aria-busy="true"><p role="status">Checking the next ${history.alertLookAheadDays} days…</p></div>`;
   if (preview.phase === "failed") return html`
-    <div class="history-forecast-preview"><p role="status">The forecast could not be loaded. Try again.</p>
+    <div class="history-forecast-preview"><p role="status">The forecast could not be loaded for this point or a linked point. Check the links and try again.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
   // Draft edits rescore the downloaded hours immediately, without saving or refetching.
-  const summary = scoreForecastAlert(history, preview.data.wave, preview.data.wind, new Date(preview.checkedAt));
+  const summary = scoreForecastData(draftSavedSpot(history), preview.data, new Date(preview.checkedAt));
   if (!summary) return html`
-    <div class="history-forecast-preview"><p role="status">No usable paired swell and wind forecast is available for this spot.</p>
+    <div class="history-forecast-preview"><p role="status">No usable forecast is available for all selected conditions and linked spots.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
   const evaluation = evaluateForecastRules(summary, history.alertRules);
+  const sources = forecastSources([history, ...(preview.data.linked ?? []).map((entry) => entry.spot)]);
   const date = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, weekday: "short", day: "numeric", month: "short" });
   const clock = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return html`<div class="history-forecast-preview">
@@ -63,6 +66,11 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
           ? html`<small>Usable forecast for ${rule.availableDays}/${rule.withinDays} days; the rest are unknown.</small>` : nothing}
       </li>`)}
     </ul>
+    ${evaluation.linked.length ? html`<div class="history-linked-results"><strong>Linked points — all must pass</strong>
+      ${evaluation.linked.map((peer) => html`<p>${peer.name}: <strong>${peer.evaluation.matched ? "Met" : "Not met"}</strong>
+        ${peer.evaluation.rules.map((rule) => `${rule.matchingDays} / ${rule.minDays} needed in any ${rule.withinDays} days`).join(" or ")}</p>`)}
+      <small>Counts only shared matching hours, using the longest minimum window and shortest look-ahead of these points.</small>
+    </div>` : nothing}
     ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next ${summary.horizonDays} days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
       ${summary.windows.map((window) => html`<li>
         <span>${date.format(new Date(window.start * 1000))}</span>
@@ -70,8 +78,8 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
       </li>`)}
     </ul>` : html`<p>No days match your current conditions.</p>`}
     ${summary.availableDays < summary.horizonDays ? html`<p>Usable forecast for ${summary.availableDays} of ${summary.horizonDays} days. The remaining days are unknown.</p>` : nothing}
-    <small>Times are local to the spot (${summary.timezone}). Swell: ${forecastSwell.label} · Wind: ECMWF.
-      ${forecastSwellCoverage} Checked ${clock.format(new Date(summary.checkedAt))}.</small>
+    <small>Times are local to the spot (${summary.timezone}). ${sources.label}.
+      ${sources.coverage} Checked ${clock.format(new Date(summary.checkedAt))}.</small>
   </div>`;
 };
 
@@ -103,12 +111,18 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
   </fieldset>`;
 };
 
-export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing => {
+export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[] = []): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
   const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
     id: asNew || !history.savedSpotId ? crypto.randomUUID() : history.savedSpotId });
   const criteria = history.criteria;
+  const catalog = [...history.linkedCatalog, ...savedSpots];
+  const group = linkedSpotGroup(draftSavedSpot(history), catalog);
+  const linkOptions = catalog.filter((spot, index) => spot.id !== (history.savedSpotId ?? history.sourceSpotId) &&
+    catalog.findIndex((other) => other.id === spot.id) === index);
+  const setLink = (id: string, checked: boolean): void => propose({ kind: "savedSpotLinksChanged",
+    ids: checked ? [...history.linkedSpotIds, id] : history.linkedSpotIds.filter((other) => other !== id) });
   const summary = history.phase === "ready" && history.data ? summarizeHistory(history.data, criteria) : null;
   const ranked = summary?.months.filter((month) => month.qualifyingDays > 0)
     .sort((a, b) => b.percent - a.percent || b.qualifyingDays - a.qualifyingDays || a.month - b.month) ?? [];
@@ -132,12 +146,19 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
           <button class="close-button" aria-label="Close history" @click=${() => propose({ kind: "historyClosed" })}>×</button>
         </div>
         <div class="history-body">
-          <div class="history-intro">A day qualifies when the swell and wind meet every rule for at least
+          <div class="history-intro">A day qualifies when the selected conditions meet every rule for at least
             ${criteria.minConsecutiveHours} consecutive hourly samples between 06:00 and 18:00 at the spot's local time.
             The same local hours apply every day.
             Months rank by the share of days with usable data that qualify.</div>
-          <div class="history-settings">
+          <div class="history-settings" data-source=${conditionSource(criteria)}>
             <div class="history-settings-head"><h3>Your conditions</h3><span>Directions describe where wind and swell come from</span></div>
+            <label class="history-source-select">Use this point for
+              <select aria-label="Conditions to check at this point" .value=${conditionSource(criteria)}
+                @change=${(event: Event) => setCriteria({ ...criteria, conditions: (event.target as HTMLSelectElement).value as ConditionSource })}>
+                <option value="both">Swell and wind</option><option value="swell">Swell only (offshore point)</option>
+                <option value="wind">Wind only (nearshore point)</option>
+              </select>
+            </label>
             <div class="history-settings-layout">
               ${historyCompassView(criteria)}
               <div class="history-settings-fields">
@@ -192,12 +213,26 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 <button type="submit">${history.savedSpotId ? "Update saved spot" : "Save spot"}</button>
                 ${history.savedSpotId ? html`<button type="button" class="history-save-new" @click=${() => saveSpot(true)}>Save as new</button>` : nothing}
               </div>
+              <fieldset class="history-linked-spots"><legend>Link conditions from other saved spots</legend>
+                <p>All linked points must pass their own X-out-of-Y rules on days with overlapping matching hours.
+                  A linked point can have its own alerts switched off.</p>
+                ${linkOptions.length ? linkOptions.map((peer) => html`<label>
+                  <input type="checkbox" .checked=${history.linkedSpotIds.includes(peer.id)}
+                    @change=${(event: Event) => setLink(peer.id, (event.target as HTMLInputElement).checked)} />
+                  <span>${peer.name} <small>${conditionSource(peer.criteria) === "both" ? "Swell + wind" : conditionSource(peer.criteria) === "swell" ? "Swell only" : "Wind only"}</small></span>
+                </label>`) : html`<p>Save a second point on the map, then select it here.</p>`}
+                ${history.linkedSpotIds.filter((id) => !catalog.some((peer) => peer.id === id)).map((id) => html`<label class="history-link-missing">
+                  <input type="checkbox" .checked=${true} @change=${() => setLink(id, false)} />
+                  <span>Missing linked spot — uncheck to remove this requirement</span></label>`)}
+                ${group.missing.length ? html`<p role="alert" class="history-link-missing">A linked spot is missing. This alert cannot trigger until its links are repaired.</p>` : nothing}
+                <small>Links affect forecast alerts. The historical chart below checks this point only.</small>
+              </fieldset>
               <label class="history-alert-option"><input type="checkbox" .checked=${history.alertEnabled}
                 @change=${(event: Event) => propose({ kind: "savedSpotAlertChanged", enabled: (event.target as HTMLInputElement).checked })} />
                 Check the forecast when these conditions last at least
                 ${Math.max(2, criteria.minConsecutiveHours)} consecutive hourly samples, 06:00–18:00 local.
                 Connect Telegram in Saved spots for phone alerts.</label>
-              ${history.alertEnabled ? html`<label class="history-alert-lookahead">Search the next
+              <label class="history-alert-lookahead">Search the next
                 <input type="number" min="1" max=${String(maxForecastDays)} step="1" aria-label="Forecast look-ahead days"
                   .value=${String(history.alertLookAheadDays)} @change=${(event: Event) => {
                     const input = event.target as HTMLInputElement;
@@ -208,7 +243,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                   }} />days for a qualifying period
               </label><p class="history-alert-lookahead-help">Look-ahead starts today at the spot; up to ${maxForecastDays} forecast days are available.</p>
                 ${alertRulesView(history.alertRules, propose)}
-                ${forecastPreviewView(history, propose)}` : nothing}
+                ${history.alertEnabled ? forecastPreviewView(history, propose) : nothing}
               ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
                 role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."
                   : history.saveFeedback === "nameRequired" ? "Enter a name to save this spot."
@@ -216,7 +251,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
             </form>
           </div>
           ${history.phase === "loading" || history.phase === "needsData" ? html`
-            <div class="history-message" role="status">Loading hourly swell and wind history for ${history.startYear}–${history.endYear}…</div>`
+            <div class="history-message" role="status">Loading hourly condition history for ${history.startYear}–${history.endYear}…</div>`
             : history.phase === "failed" ? html`
               <div class="history-message" role="alert"><strong>Historical data could not be loaded.</strong>
                 <p>${history.error?.kind === "invalid" ? "The archive returned incomplete data." : "Please check your connection and try again."}</p>
@@ -227,7 +262,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                   <span>${best.qualifyingDays} of ${best.observedDays} usable days · ${best.percent.toFixed(0)}%</span></div>`
                   : html`<div class="history-message">${summary.months.some((month) => month.observedDays > 0)
                     ? "No days match these conditions. Try another wind direction or adjust the swell and wind limits."
-                    : "No paired swell and wind days are available for this spot and year range."}</div>`}
+                    : "No days with the selected condition data are available for this spot and year range."}</div>`}
                 <div class="history-months" aria-label="Qualifying days by month">
                   ${summary.months.map((month) => html`
                     <button type="button" class=${`history-month ${selectedMonth === month.month ? "selected" : ""}`}
@@ -247,9 +282,10 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     <div class="history-day"><span>${day.day}</span><strong>${day.longestWindow} hourly samples</strong>
                       <span>from ${day.windowStart === null || !localClock ? "—" : localClock.format(new Date(day.windowStart * 1000))}</span></div>`)
                     : html`<p>No qualifying days in this month.</p>`}</div>`}
-                <p class="history-coverage">A usable day has at least 18 hours with both swell and wind data.
-                  Times are local to ${history.data.timezone}. Wave model cell: ${coordinates(history.data.waveGrid.latitude, history.data.waveGrid.longitude)};
-                  wind model cell: ${coordinates(history.data.windGrid.latitude, history.data.windGrid.longitude)}.</p>
+                <p class="history-coverage">A usable day has at least 18 hours of data for the selected conditions.
+                  Times are local to ${history.data.timezone}.
+                  ${conditionSource(criteria) !== "wind" ? html`Wave model cell: ${coordinates(history.data.waveGrid.latitude, history.data.waveGrid.longitude)}.` : nothing}
+                  ${conditionSource(criteria) !== "swell" ? html`Wind model cell: ${coordinates(history.data.windGrid.latitude, history.data.windGrid.longitude)}.` : nothing}</p>
                 <button class="history-download" type="button" @click=${() => propose({ kind: "historyDownloadRequested" })}>Download hourly CSV</button>
               ` : nothing}
           <p class="history-source">Historical swell: Météo-France MFWAM via <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Open-Meteo Marine</a>.

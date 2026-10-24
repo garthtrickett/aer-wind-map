@@ -1,3 +1,4 @@
+import { linkedSpotGroup } from "./spot-links.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 import { disconnectedTelegram, type TelegramReply, type TelegramStatus } from "./telegram-types.ts";
 
@@ -19,7 +20,11 @@ export const initialTelegram: TelegramPanel = {
   status: disconnectedTelegram, loaded: false, request: null, sequence: 0,
   localKey: "[]", syncedKey: null, wantSync: false, connectUrl: null, expiresAt: null, message: null, error: null,
 };
-export const telegramSpots = (spots: readonly SavedSpot[]): readonly SavedSpot[] => spots.filter((spot) => spot.alertEnabled);
+export const telegramSpots = (spots: readonly SavedSpot[]): readonly SavedSpot[] => {
+  const needed = new Set(spots.filter((spot) => spot.alertEnabled)
+    .flatMap((spot) => linkedSpotGroup(spot, spots).spots.map((peer) => peer.id)));
+  return spots.filter((spot) => needed.has(spot.id));
+};
 export const telegramSpotsKey = (spots: readonly SavedSpot[]): string => JSON.stringify(telegramSpots(spots));
 export type TelegramProposal =
   | Readonly<{ kind: "telegramRequested"; action: TelegramAction }>

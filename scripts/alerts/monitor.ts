@@ -1,10 +1,12 @@
+import { conditionSource } from "../../src/history.ts";
+import { linkedSpotGroup } from "../../src/spot-links.ts";
 import { alertRulesFor } from "../../src/alert-rules.ts";
-import { evaluateForecastRules, forecastPeriodLabel, forecastSwell, forecastSwellCoverage, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { evaluateForecastRules, forecastPeriodLabel, forecastSources, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { secret, type AlertStore, type WatchedSpot } from "./store.ts";
 import type { Telegram } from "./telegram.ts";
 
-type ForecastLoader = (spots: readonly SavedSpot[], now: Date) => Promise<readonly ForecastAlertCheck[]>;
+type ForecastLoader = (spots: readonly SavedSpot[], now: Date, catalog?: readonly SavedSpot[]) => Promise<readonly ForecastAlertCheck[]>;
 
 const dateText = (time: number, timezone: string): string => new Intl.DateTimeFormat("en-GB", {
   timeZone: timezone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
@@ -23,26 +25,35 @@ export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummar
   const confirmation = watch.qualified && !newDates && near.some((day) => !watch.confirmedDates.includes(day));
   if (watch.qualified && !newDates && !confirmation) return null;
   const spot = watch.spot;
+  const members = linkedSpotGroup(spot, watch.catalog ?? []).spots;
+  const sources = forecastSources(members);
   const title = confirmation ? "Closer-range forecast confirmation" : near.length ? "Forecast matches" : "Early forecast heads-up";
   const text = [
     `${spot.name} — ${title}`,
-    `Searching the next ${summary.horizonDays} local days; any rule can trigger:`,
+    `Searching the next ${summary.horizonDays} local days; ${evaluation.linked.length ? "each point must pass one of its rules" : "any rule can trigger"}:`,
     ...evaluation.rules.map((rule) => `${rule.met ? "Met" : "Not met"}: ${rule.matchingDays} matching days in a ${rule.withinDays}-day period; need ${rule.minDays}.${rule.bestPeriod ? ` ${forecastPeriodLabel(rule.bestPeriod)}.` : " No complete period fits the look-ahead."}`),
+    ...evaluation.linked.map((peer) => `Linked: ${peer.name} — ${peer.evaluation.matched ? "met" : "not met"}; ${peer.evaluation.rules.map((rule) => `${rule.matchingDays} matching days, need ${rule.minDays} in any ${rule.withinDays} days`).join(" or ")}.`),
+    ...(evaluation.linked.length ? ["All linked conditions match during the same hours and dates."] : []),
     `At least ${summary.requiredHours} consecutive hourly samples, between 06:00 and 18:00.`,
     ...evaluation.windows.map((window) => `${dateText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
     `Local time: ${summary.timezone}.`,
-    `Swell ${spot.criteria.minSwellHeight}–${spot.criteria.maxSwellHeight} m; period ${spot.criteria.minSwellPeriod}–${spot.criteria.maxSwellPeriod ?? "unlimited"} s.`,
-    `Swell from ${spot.criteria.swellFromStart}° → ${spot.criteria.swellFromEnd}° clockwise.`,
-    `Wind ≤${spot.criteria.maxWindSpeed} m/s (${(spot.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${spot.criteria.windFromStart}° → ${spot.criteria.windFromEnd}° clockwise.`,
-    `Paired daylight data available on ${summary.availableDays}/${summary.horizonDays} days.`,
-    `Model estimates: ${forecastSwell.label} primary swell + ECMWF IFS wind via Open-Meteo. ${forecastSwellCoverage} Distant forecasts can change; this is not a surf observation.`,
+    ...members.flatMap((member) => [
+      ...(members.length > 1 ? [member.name + ":"] : []),
+      ...(conditionSource(member.criteria) === "wind" ? [] : [
+        `Swell ${member.criteria.minSwellHeight}–${member.criteria.maxSwellHeight} m; period ${member.criteria.minSwellPeriod}–${member.criteria.maxSwellPeriod ?? "unlimited"} s.`,
+        `Swell from ${member.criteria.swellFromStart}° → ${member.criteria.swellFromEnd}° clockwise.`]),
+      ...(conditionSource(member.criteria) === "swell" ? [] : [
+        `Wind ≤${member.criteria.maxWindSpeed} m/s (${(member.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${member.criteria.windFromStart}° → ${member.criteria.windFromEnd}° clockwise.`]),
+    ]),
+    `Selected daylight data available on ${summary.availableDays}/${summary.horizonDays} days.`,
+    `Model estimates: ${sources.label} via Open-Meteo. ${sources.coverage} Distant forecasts can change; this is not a surf observation.`,
   ].join("\n");
   const url = new URL(publicUrl);
   url.searchParams.set("alert", spot.id);
   return { text, url: url.toString(), dates, confirmation, confirmedDates: [...new Set([...watch.confirmedDates, ...near])] };
 };
 
-export const createMonitor = ({ store, telegram, publicUrl, load = loadForecastAlerts, clock = Date.now,
+export const createMonitor = ({ store, telegram, publicUrl, load = (spots, now, catalog) => loadForecastAlerts(spots, now, fetch, catalog), clock = Date.now,
   report = (event: string) => process.stdout.write(`${event}\n`) }: Readonly<{
     store: AlertStore; telegram: Telegram; publicUrl: string; load?: ForecastLoader; clock?: () => number; report?: (event: string) => void;
   }>) => {
@@ -71,15 +82,19 @@ export const createMonitor = ({ store, telegram, publicUrl, load = loadForecastA
       if (signal.aborted || !store.lease(holder, clock())) return;
       const watches = store.due(clock());
       if (watches.length) {
-        let checks: readonly ForecastAlertCheck[] = [];
-        try { checks = await load(watches.map((watch) => watch.spot), new Date(clock())); }
-        catch { report("Aer Telegram: forecast batch unavailable"); }
-        for (let i = 0; i < watches.length; i++) {
-          const watch = watches[i];
-          const check = checks[i];
-          const summary = check?.ok && check.id === watch.spot.id ? check.summary : null;
-          const notification = summary ? notificationFor(watch, summary, clock(), publicUrl) : null;
-          store.checked(watch, summary, clock(), notification ?? undefined);
+        // IDs belong to an installation. Never resolve links using another owner's presets.
+        for (const owner of new Set(watches.map((watch) => watch.owner))) {
+          const batch = watches.filter((watch) => watch.owner === owner);
+          let checks: readonly ForecastAlertCheck[] = [];
+          try { checks = await load(batch.map((watch) => watch.spot), new Date(clock()), batch[0].catalog); }
+          catch { report("Aer Telegram: forecast batch unavailable"); }
+          for (let i = 0; i < batch.length; i++) {
+            const watch = batch[i];
+            const check = checks[i];
+            const summary = check?.ok && check.id === watch.spot.id ? check.summary : null;
+            const notification = summary ? notificationFor(watch, summary, clock(), publicUrl) : null;
+            store.checked(watch, summary, clock(), notification ?? undefined);
+          }
         }
       }
       if (signal.aborted || !store.lease(holder, clock())) return;

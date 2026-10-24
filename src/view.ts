@@ -58,7 +58,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
     : busy ? "Loading forecast" : "Live forecast";
   const forecastMatches = state.savedSpots.flatMap((spot) => {
     const alert = state.forecastAlerts[spot.id];
-    if (!spot.alertEnabled || alert?.kind !== "ready" || alert.key !== forecastAlertKey(spot)) return [];
+    if (!spot.alertEnabled || alert?.kind !== "ready" || alert.key !== forecastAlertKey(spot, state.savedSpots)) return [];
     const evaluation = evaluateForecastRules(alert.summary, alertRulesFor(spot));
     return evaluation.matched ? [{ spot, summary: alert.summary, evaluation,
       nextWindowStart: evaluation.windows[0]?.start ?? null }] : [];
@@ -98,9 +98,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <div class="saved-spot-row">
           <button type="button" class="saved-spot-open" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
             <strong>${spot.name}</strong><span>${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
-            ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot) && alert.kind === "ready"
+            ${spot.linkedSpotIds?.length ? html`<small>Linked with ${spot.linkedSpotIds.map((id) => state.savedSpots.find((peer) => peer.id === id)?.name ?? "Missing spot").join(", ")}</small>` : nothing}
+            ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot, state.savedSpots) && alert.kind === "ready"
               ? `${alert.summary.matchingDays} of ${alert.summary.horizonDays} forecast days match · alert at ${alertRulesLabel(spot)}`
-              : alert?.key === forecastAlertKey(spot) && alert.kind === "failed" ? "Alert check unavailable" : "Checking forecast…"}</small>` : nothing}
+              : alert?.key === forecastAlertKey(spot, state.savedSpots) && alert.kind === "failed" ? "Alert check unavailable" : "Checking forecast…"}</small>` : nothing}
           </button>
           <button type="button" class="saved-spot-remove" aria-label=${`Remove ${spot.name}`}
             @click=${() => propose({ kind: "savedSpotRemoved", id: spot.id })}>×</button>
@@ -195,7 +196,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
         </section>
       </div>` : nothing}
-    ${historyView(state.history, propose)}
+    ${historyView(state.history, propose, state.savedSpots)}
     ${observationsView(state.observations, propose, now)}
   `;
 };

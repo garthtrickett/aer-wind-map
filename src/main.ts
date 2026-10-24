@@ -10,7 +10,7 @@ import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
 import { readSavedSpots, writeSavedSpots } from "./saved-spots.ts";
-import { forecastAlertKey, loadForecastAlerts, loadForecastPoint } from "./forecast-alerts.ts";
+import { forecastAlertKey, loadForecastAlerts, loadForecastGroup } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
 import { loadObservations } from "./observations.ts";
@@ -237,14 +237,14 @@ const runEffect = (effect: Effect): void => {
   }
   if (effect.kind === "loadForecastPreview") {
     dispatch({ kind: "forecastPreviewStarted", request: effect.request });
-    void loadForecastPoint(effect.point).then((result) => dispatch({
+    void loadForecastGroup(effect.spot, effect.catalog).then((result) => dispatch({
       kind: "forecastPreviewCompleted", request: effect.request, result, checkedAt: Date.now(),
     }));
     return;
   }
   if (effect.kind === "loadHistory") {
     dispatch({ kind: "historyLoadStarted", key: effect.key });
-    void loadHistoricalSpot({ point: effect.point, startYear: effect.startYear, endYear: effect.endYear }).then((result) => {
+    void loadHistoricalSpot({ point: effect.point, startYear: effect.startYear, endYear: effect.endYear, conditions: effect.conditions }).then((result) => {
       dispatch(result.ok
         ? { kind: "historyLoaded", key: effect.key, data: result.value }
         : { kind: "historyFailed", key: effect.key, error: result.error });
@@ -281,14 +281,14 @@ const runEffect = (effect: Effect): void => {
 const refreshForecastAlerts = (): void => {
   const spots = state.savedSpots.filter((spot) => spot.alertEnabled);
   if (!spots.length) { alertSignature = ""; return; }
-  const signature = JSON.stringify(spots.map(forecastAlertKey));
+  const signature = JSON.stringify(spots.map((spot) => forecastAlertKey(spot, state.savedSpots)));
   const now = new Date();
   if (signature === alertSignature && now.getTime() < nextAlertRefreshAt) return;
   alertSignature = signature;
   nextAlertRefreshAt = now.getTime() + 6 * 60 * 60 * 1000;
   const generation = ++alertGeneration;
-  dispatch({ kind: "forecastAlertsStarted", generation, entries: spots.map((spot) => ({ id: spot.id, key: forecastAlertKey(spot) })) });
-  void loadForecastAlerts(spots, now).then((checks) => {
+  dispatch({ kind: "forecastAlertsStarted", generation, entries: spots.map((spot) => ({ id: spot.id, key: forecastAlertKey(spot, state.savedSpots) })) });
+  void loadForecastAlerts(spots, now, fetch, state.savedSpots).then((checks) => {
     if (generation === alertGeneration && checks.some((check) => !check.ok))
       nextAlertRefreshAt = Math.min(nextAlertRefreshAt, Date.now() + 15 * 60 * 1000);
     dispatch({ kind: "forecastAlertsCompleted", generation, checks });
@@ -422,7 +422,7 @@ if ((linkedAlert && linkedAlert.length <= 100) || forecastToken) {
     .then(async (response) => {
       const raw = await response.json();
       if (!response.ok || !isSavedSpot(raw.spot)) throw new Error("This forecast link expired or its alert was removed.");
-      dispatch({ kind: "telegramSpotRestored", spot: raw.spot, readOnly: !!forecastToken });
+      dispatch({ kind: "telegramSpotRestored", spot: raw.spot, linkedSpots: Array.isArray(raw.linkedSpots) && raw.linkedSpots.every(isSavedSpot) ? raw.linkedSpots : [], readOnly: !!forecastToken });
     }).catch(() => {
       if (!state.savedSpotsOpen) dispatch({ kind: "savedSpotsToggled" });
       // A link never imports an unowned or malformed preset.

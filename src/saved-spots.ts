@@ -1,4 +1,5 @@
 import { validAlertRules, validForecastLookAhead, type AlertDayRule } from "./alert-rules.ts";
+import { validSpotLinks } from "./spot-links.ts";
 import type { HistoryCriteria } from "./history.ts";
 import { lastCompleteHistoryYear, validCriteria } from "./history.ts";
 import type { Point } from "./model.ts";
@@ -14,6 +15,7 @@ export type SavedSpot = Readonly<{
   alertMinDays: number;
   alertRules?: readonly AlertDayRule[];
   alertLookAheadDays?: number;
+  linkedSpotIds?: readonly string[];
 }>;
 
 export type SavedSpotsError = Readonly<{ kind: "invalid" | "unavailable" }>;
@@ -37,6 +39,7 @@ export const isSavedSpot = (value: unknown): value is SavedSpot => {
     Number.isInteger(value.alertMinDays) && (value.alertMinDays as number) >= 1 && (value.alertMinDays as number) <= 14 &&
     (value.alertRules === undefined || validAlertRules(value.alertRules)) &&
     (value.alertLookAheadDays === undefined || validForecastLookAhead(value.alertLookAheadDays)) &&
+    (value.linkedSpotIds === undefined || (validSpotLinks(value.linkedSpotIds) && !value.linkedSpotIds.includes(value.id))) &&
     typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
     typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180 &&
     Number.isInteger(value.startYear) && (value.startYear as number) >= 2022 &&

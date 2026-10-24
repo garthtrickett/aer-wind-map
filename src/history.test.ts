@@ -13,6 +13,28 @@ const hoursFor = (date: string, matching: readonly number[], direction = 355, av
     windDirection: hour < available ? direction : null,
   }));
 
+test("wind-only and swell-only history download and score just the chosen source", async () => {
+  const point = { latitude: -8.7, longitude: 115.1 };
+  for (const conditions of ["wind", "swell"] as const) {
+    const requests: string[] = [];
+    const hours = hoursFor("2025-01-01", Array.from({ length: 24 }, (_, i) => i));
+    const fetcher: typeof fetch = async (input) => {
+      requests.push(String(input));
+      return Response.json({ ...point, timezone: "UTC", hourly: { time: hours.map((hour) => hour.time),
+        ...(conditions === "wind" ? { wind_speed_10m: hours.map(() => 3), wind_direction_10m: hours.map(() => 355) }
+          : { swell_wave_height: hours.map(() => 2), swell_wave_period: hours.map(() => 12), swell_wave_direction: hours.map(() => 220) }) } });
+    };
+    const result = await loadHistoricalSpot({ point, startYear: 2025, endYear: 2025, conditions, fetcher });
+    assert.ok(result.ok);
+    assert.equal(requests.length, 1);
+    assert.equal(new URL(requests[0]).hostname, conditions === "wind" ? "archive-api.open-meteo.com" : "marine-api.open-meteo.com");
+    const criteria = { ...defaultHistoryCriteria, conditions, windFromStart: 315, windFromEnd: 45 };
+    assert.equal(summarizeHistory(result.value, criteria).months[0].qualifyingDays, 1);
+    assert.equal(hourMatchesCriteria(result.value.hours[6], criteria), true);
+    assert.equal(hourMatchesCriteria(result.value.hours[6], { ...criteria, conditions: "both" }), false);
+  }
+});
+
 test("swell period bounds are inclusive and an over-limit hour breaks the matching window", () => {
   const criteria = { ...defaultHistoryCriteria, minSwellPeriod: 8, maxSwellPeriod: 12,
     windFromStart: 0, windFromEnd: 360 };

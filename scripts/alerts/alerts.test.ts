@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { defaultHistoryCriteria } from "../../src/history.ts";
-import { forecastAlertKey, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
+import { forecastAlertKey, loadForecastAlerts, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { openAlertStore, digest, type AlertStore } from "./store.ts";
 import { createMonitor, notificationFor } from "./monitor.ts";
@@ -83,6 +83,103 @@ test("the first test message is allowed immediately after linking, with a cooldo
     assert.equal(f.store.test(owner, now), true);
     assert.equal(f.store.test(owner, now + 1000), false);
     assert.equal(f.store.test(owner, now + 60_001), true);
+  } finally { f.clean(); }
+});
+
+test("linked dependencies persist without their own alert, appear in phone links, and edits reject an in-flight result", async () => {
+  const f = fixture();
+  try {
+    const { owner } = connect(f.store);
+    const peer: SavedSpot = { ...spot, id: "coast", name: "Nearshore wind", alertEnabled: false,
+      criteria: { ...spot.criteria, conditions: "wind" } };
+    const root: SavedSpot = { ...spot, linkedSpotIds: [peer.id], criteria: { ...spot.criteria, conditions: "swell" } };
+    assert.equal(f.store.sync(owner, [root, peer], 0), true);
+    assert.equal(f.store.status(owner, now).spotCount, 1);
+    assert.equal(f.store.due(now).length, 1);
+    for (const reply of f.store.pending(now)) {
+      f.store.beginDelivery(reply, now);
+      f.store.delivered(reply, { kind: "sent", messageId: 1 }, now);
+    }
+    const watch = f.store.due(now)[0];
+    assert.deepEqual(watch.catalog, [root, peer]);
+    const joint = { ...summary(), linkedRequirements: [{ id: peer.id, name: peer.name, rules: [{ minDays: 2, withinDays: 14 }] }] };
+    const notification = notificationFor(watch, joint, now, "https://aer.example");
+    assert.ok(notification);
+    assert.match(notification.text, /Linked: Nearshore wind/);
+    f.store.checked(watch, joint, now, notification);
+    const queued = f.store.pending(now).find((delivery) => delivery.spot_id === root.id)!;
+    assert.ok(queued);
+    const token = new URL(queued.url!).hash.slice("#forecast=".length);
+    assert.equal(f.store.view(token, now)?.id, root.id);
+    assert.deepEqual(f.store.viewLinked(token, now), [peer]);
+    const changed = { ...peer, criteria: { ...peer.criteria, maxWindSpeed: 1 } };
+    assert.equal(f.store.sync(owner, [root, changed], 1), true);
+    f.store.checked(watch, joint, now + 1, notification);
+    assert.equal(f.store.due(now + 1).length, 1, "old result cannot mark the edited dependency checked");
+    assert.equal(f.store.pending(now + 1).filter((delivery) => delivery.spot_id).length, 0);
+    const current = f.store.due(now + 1)[0];
+    assert.equal(current.qualified, false);
+    assert.equal(current.catalog?.find((item) => item.id === peer.id)?.criteria.maxWindSpeed, 1);
+    f.store.checked(current, joint, now + 1, notification);
+    const inFlight = f.store.pending(now + 1).find((delivery) => delivery.spot_id === root.id)!;
+    assert.ok(f.store.beginDelivery(inFlight, now + 1));
+    f.store.sync(owner, [root, peer], 2);
+    f.store.delivered(inFlight, { kind: "sent", messageId: 2 }, now + 2);
+    assert.equal(f.store.due(now + 2)[0].qualified, false, "an acknowledgement for old peer conditions cannot qualify the new group");
+    f.store.close();
+    const reopened = openAlertStore(f.path);
+    assert.equal(reopened.due(now + 1)[0].catalog?.length, 2);
+    reopened.close();
+  } finally { rmSync(f.path.substring(0, f.path.lastIndexOf("/")), { recursive: true, force: true }); }
+});
+
+test("closed-tab monitor uses both real scoring paths and sends only when every linked day rule passes", async () => {
+  const f = fixture();
+  try {
+    const { owner } = connect(f.store);
+    const peer: SavedSpot = { ...spot, id: "coast", name: "Nearshore wind", alertEnabled: false,
+      criteria: { ...spot.criteria, conditions: "wind", windFromStart: 315, windFromEnd: 45 },
+      alertRules: [{ minDays: 3, withinDays: 4 }] };
+    const root: SavedSpot = { ...spot, name: "Offshore swell", linkedSpotIds: [peer.id],
+      criteria: { ...spot.criteria, conditions: "swell" }, alertRules: [{ minDays: 2, withinDays: 4 }] };
+    const time = Array.from({ length: 10 * 24 }, (_, i) => now / 1000 + i * 3600);
+    const fetcher: typeof fetch = async (input) => Response.json({ timezone: "UTC", hourly: { time,
+      ...(String(input).includes("marine-api")
+        ? { swell_wave_height: time.map(() => 2), swell_wave_period: time.map(() => 12), swell_wave_direction: time.map(() => 220) }
+        : { wind_speed_10m: time.map(() => 3), wind_direction_10m: time.map((_, i) => [3, 4].includes(Math.floor(i / 24)) ? 355 : 180) }) } });
+    const transportFake = transport();
+    const monitor = createMonitor({ store: f.store, telegram: transportFake.telegram, publicUrl: "https://aer.example",
+      clock: () => now, report: () => {}, load: (roots, at, catalog) => loadForecastAlerts(roots, at, fetcher, catalog) });
+    f.store.sync(owner, [root, peer], 0);
+    await monitor.tick();
+    assert.equal(transportFake.messages.filter((text) => text.includes("All linked conditions match")).length, 0);
+    f.store.sync(owner, [root, { ...peer, alertRules: [{ minDays: 2, withinDays: 4 }] }], 1);
+    await monitor.tick();
+    assert.equal(transportFake.messages.filter((text) => text.includes("All linked conditions match")).length, 1);
+    await monitor.tick();
+    assert.equal(transportFake.messages.filter((text) => text.includes("All linked conditions match")).length, 1);
+  } finally { f.clean(); }
+});
+
+test("background linked lookup keeps identical spot IDs isolated between owners", async () => {
+  const f = fixture();
+  try {
+    const first = connect(f.store, now, 1, 111);
+    const second = connect(f.store, now, 2, 222);
+    const peer = { ...spot, id: "shared-id", alertEnabled: false };
+    const root = { ...spot, linkedSpotIds: [peer.id] };
+    f.store.sync(first.owner, [root, { ...peer, name: "First coast" }], 0);
+    f.store.sync(second.owner, [root, { ...peer, name: "Second coast" }], 0);
+    const seen: string[] = [];
+    const monitor = createMonitor({ store: f.store, telegram: transport().telegram,
+      publicUrl: "https://aer.example", clock: () => now, report: () => {},
+      load: async (roots, _at, catalog) => {
+        assert.equal(roots.length, 1);
+        seen.push(catalog!.find((item) => item.id === peer.id)!.name);
+        return [];
+      } });
+    await monitor.tick();
+    assert.deepEqual(seen.sort(), ["First coast", "Second coast"]);
   } finally { f.clean(); }
 });
 

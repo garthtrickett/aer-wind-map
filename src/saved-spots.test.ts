@@ -11,6 +11,16 @@ const spot: SavedSpot = {
   alertEnabled: true, alertMinDays: 3,
 };
 
+test("condition sources and links persist; invalid links are rejected while missing references remain repairable", () => {
+  const saved = { ...spot, linkedSpotIds: ["coast"], criteria: { ...spot.criteria, conditions: "swell" as const } };
+  assert.equal(isSavedSpot(saved), true);
+  const storage = { getItem: () => JSON.stringify({ version: 1, spots: [saved] }), setItem: () => undefined };
+  assert.deepEqual(readSavedSpots(() => storage), { ok: true, value: [saved] });
+  for (const linkedSpotIds of [[spot.id], ["coast", "coast"], [""], [42], Array(50).fill("id")])
+    assert.equal(isSavedSpot({ ...saved, linkedSpotIds }), false);
+  assert.equal(isSavedSpot({ ...saved, criteria: { ...saved.criteria, conditions: "anything" } }), false);
+});
+
 test("named spots and criteria round-trip through browser storage", () => {
   let text: string | null = null;
   const storage = { getItem: () => text, setItem: (_key: string, value: string) => { text = value; } };

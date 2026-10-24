@@ -30,7 +30,7 @@ export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }
       if (route === "/api/telegram/status") { json(response, 200, { status: current() }); return; }
       if (route === "/api/telegram/spot" && owner) {
         const spot = store.spot(owner, url.searchParams.get("id") ?? "");
-        json(response, spot ? 200 : 404, spot ? { status: current(), spot } : { error: "Spot unavailable in this browser. Open the original browser used to connect Telegram." }); return;
+        json(response, spot ? 200 : 404, spot ? { status: current(), spot, linkedSpots: store.linkedSpots(owner, spot.id) } : { error: "Spot unavailable in this browser. Open the original browser used to connect Telegram." }); return;
       }
       json(response, 404, { error: "Not found" }); return;
     }
@@ -53,7 +53,7 @@ export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }
       if (route === "/api/telegram/view" && request.method === "POST") {
         const token = (raw as { token?: unknown } | null)?.token;
         const spot = typeof token === "string" ? store.view(token, now) : null;
-        json(response, spot ? 200 : 404, spot ? { status: current(), spot }
+        json(response, spot ? 200 : 404, spot ? { status: current(), spot, linkedSpots: store.viewLinked(token as string, now) }
           : { error: "This forecast link expired or its alert was removed. Ask for a new alert link." }); return;
       }
       if (route === "/api/telegram/connect" && request.method === "POST") {
@@ -66,9 +66,9 @@ export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }
       if (!owner || !store.hasOwner(owner)) { json(response, 401, { error: "Connect Telegram from this browser first." }); return; }
       if (route === "/api/telegram/spots" && request.method === "PUT") {
         const body = raw as { spots?: unknown; revision?: unknown } | null;
-        if (!body || !Array.isArray(body.spots) || body.spots.length > 50 || !body.spots.every((spot) => isSavedSpot(spot) && spot.alertEnabled) ||
+        if (!body || !Array.isArray(body.spots) || body.spots.length > 50 || !body.spots.every((spot) => isSavedSpot(spot)) ||
           new Set(body.spots.map((spot) => spot.id)).size !== body.spots.length || !Number.isSafeInteger(body.revision)) {
-          json(response, 400, { error: "Send at most 50 valid, enabled saved spots." }); return;
+          json(response, 400, { error: "Send at most 50 valid saved spots, including linked conditions." }); return;
         }
         if (!store.sync(owner, body.spots, body.revision as number)) { json(response, 409, { error: "Connection or settings changed. Refresh the connection status and sync again." }); return; }
         json(response, 200, { status: current() }); return;

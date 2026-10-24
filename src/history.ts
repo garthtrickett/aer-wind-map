@@ -1,6 +1,9 @@
 import type { Point } from "./model.ts";
 
+export type ConditionSource = "both" | "swell" | "wind";
+export const conditionSource = (criteria: HistoryCriteria): ConditionSource => criteria.conditions ?? "both";
 export type HistoryCriteria = Readonly<{
+  conditions?: ConditionSource;
   minSwellHeight: number;
   maxSwellHeight: number;
   minSwellPeriod: number;
@@ -16,6 +19,7 @@ export type HistoryCriteria = Readonly<{
 export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
 
 export const validCriteria = (criteria: HistoryCriteria): boolean =>
+  (criteria.conditions === undefined || ["both", "swell", "wind"].includes(criteria.conditions)) &&
   Number.isFinite(criteria.minSwellHeight) && criteria.minSwellHeight >= 0 && criteria.minSwellHeight <= 15 &&
   Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
   Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
@@ -120,7 +124,7 @@ const localDay = (time: number, formatter: Intl.DateTimeFormat): string => {
 };
 
 export const loadHistoricalSpot = async (
-  { point, startYear, endYear, fetcher = fetch }: Readonly<{ point: Point; startYear: number; endYear: number; fetcher?: typeof fetch }>,
+  { point, startYear, endYear, conditions = "both", fetcher = fetch }: Readonly<{ point: Point; startYear: number; endYear: number; conditions?: ConditionSource; fetcher?: typeof fetch }>,
 ): Promise<HistoryResult> => {
   const waveUrl = historicalUrl("https://marine-api.open-meteo.com/v1/marine", point, startYear, endYear,
     "swell_wave_height,swell_wave_period,swell_wave_direction", "meteofrance_wave");
@@ -130,18 +134,22 @@ export const loadHistoricalSpot = async (
   let windRaw: unknown;
   try {
     const [waveResponse, windResponse] = await Promise.all([
-      fetcher(waveUrl, { signal: AbortSignal.timeout(45_000) }),
-      fetcher(windUrl, { signal: AbortSignal.timeout(45_000) }),
+      conditions === "wind" ? null : fetcher(waveUrl, { signal: AbortSignal.timeout(45_000) }),
+      conditions === "swell" ? null : fetcher(windUrl, { signal: AbortSignal.timeout(45_000) }),
     ]);
-    if (!waveResponse.ok || !windResponse.ok) {
-      return { ok: false, error: { kind: "unavailable", detail: `Wave HTTP ${waveResponse.status}; wind HTTP ${windResponse.status}` } };
+    if ((waveResponse && !waveResponse.ok) || (windResponse && !windResponse.ok)) {
+      return { ok: false, error: { kind: "unavailable", detail: `Wave HTTP ${waveResponse?.status ?? "unused"}; wind HTTP ${windResponse?.status ?? "unused"}` } };
     }
-    [waveRaw, windRaw] = await Promise.all([waveResponse.json(), windResponse.json()]);
+    [waveRaw, windRaw] = await Promise.all([waveResponse?.json(), windResponse?.json()]);
   } catch (cause) {
     return { ok: false, error: { kind: "network", detail: String(cause) } };
   }
-  const wave = parseSeries(waveRaw, "swell_wave_height", "swell_wave_period", "swell_wave_direction");
-  const wind = parseSeries(windRaw, "wind_speed_10m", "wind_direction_10m");
+  let wave = parseSeries(waveRaw, "swell_wave_height", "swell_wave_period", "swell_wave_direction");
+  let wind = parseSeries(windRaw, "wind_speed_10m", "wind_direction_10m");
+  const blank = (series: Series): Series => ({ ...series, latitude: point.latitude, longitude: point.longitude,
+    first: series.time.map(() => null), second: series.time.map(() => null), third: null });
+  if (conditions === "wind" && wind) wave = blank(wind);
+  if (conditions === "swell" && wave) wind = blank(wave);
   if (!wave || !wind) return { ok: false, error: { kind: "invalid", detail: "Historical hourly data was incomplete." } };
 
   let formatter: Intl.DateTimeFormat;
@@ -194,15 +202,21 @@ export const directionInClockwiseRange = (actual: number, start: number, end: nu
   return span === 360 || offset <= span;
 };
 
+export const hourHasData = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
+  (conditionSource(criteria) === "wind" ||
+    (hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null)) &&
+  (conditionSource(criteria) === "swell" || (hour.windSpeed !== null && hour.windDirection !== null));
+
 export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
-  hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
-  hour.windSpeed !== null && hour.windDirection !== null &&
-  hour.swellHeight >= criteria.minSwellHeight && hour.swellHeight <= criteria.maxSwellHeight &&
-  hour.swellPeriod >= criteria.minSwellPeriod &&
-  (criteria.maxSwellPeriod === null || hour.swellPeriod <= criteria.maxSwellPeriod) &&
-  hour.windSpeed <= criteria.maxWindSpeed &&
-  directionInClockwiseRange(hour.windDirection, criteria.windFromStart, criteria.windFromEnd) &&
-  directionInClockwiseRange(hour.swellDirection, criteria.swellFromStart, criteria.swellFromEnd);
+  hourHasData(hour, criteria) &&
+  (conditionSource(criteria) === "wind" || (
+    hour.swellHeight! >= criteria.minSwellHeight && hour.swellHeight! <= criteria.maxSwellHeight &&
+    hour.swellPeriod! >= criteria.minSwellPeriod &&
+    (criteria.maxSwellPeriod === null || hour.swellPeriod! <= criteria.maxSwellPeriod) &&
+    directionInClockwiseRange(hour.swellDirection!, criteria.swellFromStart, criteria.swellFromEnd))) &&
+  (conditionSource(criteria) === "swell" || (
+    hour.windSpeed! <= criteria.maxWindSpeed &&
+    directionInClockwiseRange(hour.windDirection!, criteria.windFromStart, criteria.windFromEnd)));
 
 export const historyClock = (timezone: string): Intl.DateTimeFormat =>
   new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });
@@ -241,8 +255,7 @@ export const summarizeHistory = (data: HistoricalData, criteria: HistoryCriteria
   for (const hour of data.hours) {
     const day = days.get(hour.day);
     if (!day) continue;
-    const available = hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null &&
-      hour.windSpeed !== null && hour.windDirection !== null;
+    const available = hourHasData(hour, criteria);
     if (available) day.available++;
     if (!withinHistoryHours(hour.time, clock) || !hourMatchesCriteria(hour, criteria)) {
       day.run = 0; day.runStart = null; day.lastTime = null; continue;
