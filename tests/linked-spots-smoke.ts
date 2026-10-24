@@ -33,6 +33,7 @@ const offshore: SavedSpot = { ...coast, id: "offshore", name: "Offshore swell", 
 try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ viewport });
+    let calmWind = false;
     await context.addInitScript((spots) => {
       if (!localStorage.getItem("aer.saved-spots.v1")) localStorage.setItem("aer.saved-spots.v1", JSON.stringify({ version: 1, spots }));
     }, [offshore, coast]);
@@ -52,7 +53,7 @@ try {
         const row = { latitude: -8.75, longitude: 115.1, timezone: "UTC", hourly: { time, ...(marine
           ? { swell_wave_height: time.map((_, i) => !forecast || ([2, 3, 7, 8].includes(Math.floor(i / 24)) && i % 24 >= 6 && i % 24 < 10) ? 2 : 0),
             swell_wave_period: time.map(() => 12), swell_wave_direction: time.map(() => 220) }
-          : { wind_speed_10m: time.map(() => 3),
+          : { wind_speed_10m: time.map(() => forecast && calmWind ? .5 : 3),
             wind_direction_10m: time.map((_, i) => !forecast || ([3, 7, 8].includes(Math.floor(i / 24)) && i % 24 >= 8 && i % 24 < 11) ? 355 : 180) }) } };
         await route.fulfill({ contentType: "application/json", body: JSON.stringify(count > 1 ? Array(count).fill(row) : row) }); return;
       }
@@ -66,8 +67,11 @@ try {
       await page.locator(".saved-spot-open").filter({ has: page.getByText(name, { exact: true }) }).click();
     };
     await open("Offshore swell");
-    await expect(page.getByLabel("Conditions to check at this point")).toHaveValue("swell");
+    await expect(page.getByLabel("Marker type")).toHaveValue("swell");
     await expect(page.getByLabel("Wind speed at most")).toBeHidden();
+    await expect(page.getByLabel("Wind direction ignored at or below")).toBeHidden();
+    await expect(page.locator(".saved-spot-swell")).toHaveText("S");
+    await expect(page.locator(".saved-spot-wind")).toHaveText("W");
     await expect(page.locator(".history-forecast-heading")).toContainText("4 of 14 days match");
     await page.locator(".history-linked-spots").getByLabel(/Nearshore wind/).check();
     await expect(page.locator(".history-forecast-heading")).toContainText("3 of 14 days match");
@@ -82,10 +86,33 @@ try {
     await expect(page.locator(".history-linked-spots").getByLabel(/Nearshore wind/)).toBeChecked();
     await expect(page.locator(".history-forecast-heading")).toContainText("3 of 14 days match");
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
-    await page.screenshot({ path: `/tmp/aer-linked-spots-${viewport.width}.png`, fullPage: true });
+    await page.screenshot({ path: `/tmp/aer-calm-markers-${viewport.width}.png`, fullPage: true });
+    calmWind = true;
+    await page.getByRole("button", { name: "Refresh forecast", exact: true }).click();
+    await expect(page.locator(".history-forecast-heading")).toContainText("4 of 14 days match");
+    await expect(page.locator(".history-forecast-windows li").first()).toContainText("06:00–10:00");
     await page.getByRole("button", { name: "Close history" }).click();
     await open("Nearshore wind");
     await expect(page.getByLabel("Swell height from")).toBeHidden();
+    const calm = page.getByLabel("Wind direction ignored at or below");
+    await expect(calm).toHaveValue("2");
+    await calm.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/aer-calm-wind-editor-${viewport.width}.png`, fullPage: true });
+    await page.getByLabel("Marker type").selectOption("both");
+    await expect(page.getByLabel("Swell height from")).toBeVisible();
+    await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
+    await expect(page.locator(".saved-spot-both")).toHaveText("W+S");
+    await page.getByLabel("Marker type").selectOption("wind");
+    await calm.fill("0"); await calm.press("Tab");
+    await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
+    await expect(page.locator(".saved-spot-wind")).toHaveText("W");
+    await page.getByRole("button", { name: "Close history" }).click();
+    await open("Offshore swell");
+    await expect(page.locator(".history-forecast-heading")).toContainText("3 of 14 days match");
+    await page.getByRole("button", { name: "Close history" }).click();
+    await open("Nearshore wind");
+    await expect(calm).toHaveValue("0");
+    await calm.fill("2"); await calm.press("Tab");
     await page.getByLabel("Matching days for rule 1").fill("4");
     await page.getByLabel("Matching days for rule 1").press("Tab");
     await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
@@ -101,6 +128,6 @@ try {
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0].linkedSpotIds), ["coast"]);
     assert.deepEqual(errors, []);
     await context.close();
-    console.log(`Linked points: ${viewport.width}px passed, including persistence, shared hours, independent rules and missing dependencies.`);
+    console.log(`Linked points: ${viewport.width}px passed, including marker types, configurable calm-wind matching, shared hours and missing dependencies.`);
   }
 } finally { await browser.close(); await new Promise<void>((resolve) => server.close(() => resolve())); }

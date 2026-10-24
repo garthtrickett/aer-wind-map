@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit-html";
-import { conditionSource, summarizeHistory, type ConditionSource, type HistoryCriteria } from "./history.ts";
+import { calmWindThresholdKmh, conditionSourceLabel, conditionSource, summarizeHistory, type ConditionSource, type HistoryCriteria } from "./history.ts";
 import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
 import { evaluateForecastRules, forecastPeriodLabel, forecastSources, scoreForecastData } from "./forecast-alerts.ts";
 import { linkedSpotGroup } from "./spot-links.ts";
@@ -152,13 +152,14 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
             Months rank by the share of days with usable data that qualify.</div>
           <div class="history-settings" data-source=${conditionSource(criteria)}>
             <div class="history-settings-head"><h3>Your conditions</h3><span>Directions describe where wind and swell come from</span></div>
-            <label class="history-source-select">Use this point for
-              <select aria-label="Conditions to check at this point" .value=${conditionSource(criteria)}
+            <label class="history-source-select">Marker type
+              <select aria-label="Marker type" .value=${conditionSource(criteria)}
                 @change=${(event: Event) => setCriteria({ ...criteria, conditions: (event.target as HTMLSelectElement).value as ConditionSource })}>
-                <option value="both">Swell and wind</option><option value="swell">Swell only (offshore point)</option>
-                <option value="wind">Wind only (nearshore point)</option>
+                <option value="both">Wind + swell</option><option value="wind">Wind only</option>
+                <option value="swell">Swell only</option>
               </select>
             </label>
+            <p class="history-direction-note">Use a swell-only marker offshore and a wind-only marker near shore, then link them below.</p>
             <div class="history-settings-layout">
               ${historyCompassView(criteria)}
               <div class="history-settings-fields">
@@ -178,6 +179,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 () => setCriteria({ ...criteria, maxSwellPeriod: null }))}
               ${numberControl("Wind speed at most", criteria.maxWindSpeed, 0, 40, .5,
                 (value) => setCriteria({ ...criteria, maxWindSpeed: value }), "m/s")}
+              ${numberControl("Wind direction ignored at or below", calmWindThresholdKmh(criteria), 0, 10, .5,
+                (value) => setCriteria({ ...criteria, calmWindKmh: value }), "km/h")}
               ${numberControl("Minimum window", criteria.minConsecutiveHours, 1, 12, 1,
                 (value) => setCriteria({ ...criteria, minConsecutiveHours: value }), "hours")}
               ${numberControl("Wind from", criteria.windFromStart, 0, 359, 1,
@@ -189,6 +192,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               ${numberControl("Swell to", criteria.swellFromEnd, 0, 360, 1,
                 (value) => setCriteria({ ...criteria, swellFromEnd: value }), "°")}
             </div>
+            <p class="history-direction-note history-calm-note">At or below this calm-wind speed, any wind direction passes.
+              Set 0 to always check direction. Your maximum wind speed and all swell limits still apply.</p>
             <p class="history-direction-note">Leave “Swell period at most” blank for no upper limit.</p>
             <p class="history-direction-note">Each “to” bearing is clockwise from its “from” bearing. For example, 315° to 45° crosses north; 0° to 360° includes every direction.</p>
               </div>
@@ -219,7 +224,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 ${linkOptions.length ? linkOptions.map((peer) => html`<label>
                   <input type="checkbox" .checked=${history.linkedSpotIds.includes(peer.id)}
                     @change=${(event: Event) => setLink(peer.id, (event.target as HTMLInputElement).checked)} />
-                  <span>${peer.name} <small>${conditionSource(peer.criteria) === "both" ? "Swell + wind" : conditionSource(peer.criteria) === "swell" ? "Swell only" : "Wind only"}</small></span>
+                  <span>${peer.name} <small>${conditionSourceLabel(peer.criteria)}</small></span>
                 </label>`) : html`<p>Save a second point on the map, then select it here.</p>`}
                 ${history.linkedSpotIds.filter((id) => !catalog.some((peer) => peer.id === id)).map((id) => html`<label class="history-link-missing">
                   <input type="checkbox" .checked=${true} @change=${() => setLink(id, false)} />

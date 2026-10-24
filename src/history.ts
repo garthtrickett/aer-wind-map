@@ -2,7 +2,11 @@ import type { Point } from "./model.ts";
 
 export type ConditionSource = "both" | "swell" | "wind";
 export const conditionSource = (criteria: HistoryCriteria): ConditionSource => criteria.conditions ?? "both";
+export const conditionSourceLabel = (criteria: HistoryCriteria): string =>
+  ({ both: "Wind + swell", wind: "Wind only", swell: "Swell only" })[conditionSource(criteria)];
+export const calmWindThresholdKmh = (criteria: HistoryCriteria): number => criteria.calmWindKmh ?? 2;
 export type HistoryCriteria = Readonly<{
+  calmWindKmh?: number;
   conditions?: ConditionSource;
   minSwellHeight: number;
   maxSwellHeight: number;
@@ -20,6 +24,7 @@ export const lastCompleteHistoryYear = new Date().getUTCFullYear() - 1;
 
 export const validCriteria = (criteria: HistoryCriteria): boolean =>
   (criteria.conditions === undefined || ["both", "swell", "wind"].includes(criteria.conditions)) &&
+  (criteria.calmWindKmh === undefined || (Number.isFinite(criteria.calmWindKmh) && criteria.calmWindKmh >= 0 && criteria.calmWindKmh <= 10)) &&
   Number.isFinite(criteria.minSwellHeight) && criteria.minSwellHeight >= 0 && criteria.minSwellHeight <= 15 &&
   Number.isFinite(criteria.maxSwellHeight) && criteria.maxSwellHeight >= criteria.minSwellHeight && criteria.maxSwellHeight <= 15 &&
   Number.isFinite(criteria.minSwellPeriod) && criteria.minSwellPeriod >= 0 && criteria.minSwellPeriod <= 30 &&
@@ -34,6 +39,7 @@ export const validCriteria = (criteria: HistoryCriteria): boolean =>
 
 
 export const defaultHistoryCriteria: HistoryCriteria = {
+  calmWindKmh: 2,
   minSwellHeight: 1,
   maxSwellHeight: 3,
   minSwellPeriod: 10,
@@ -202,10 +208,14 @@ export const directionInClockwiseRange = (actual: number, start: number, end: nu
   return span === 360 || offset <= span;
 };
 
+export const windIsCalm = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
+  hour.windSpeed !== null && hour.windSpeed >= 0 && calmWindThresholdKmh(criteria) > 0 &&
+  hour.windSpeed <= calmWindThresholdKmh(criteria) / 3.6;
+
 export const hourHasData = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
   (conditionSource(criteria) === "wind" ||
     (hour.swellHeight !== null && hour.swellPeriod !== null && hour.swellDirection !== null)) &&
-  (conditionSource(criteria) === "swell" || (hour.windSpeed !== null && hour.windDirection !== null));
+  (conditionSource(criteria) === "swell" || (hour.windSpeed !== null && (hour.windDirection !== null || windIsCalm(hour, criteria))));
 
 export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCriteria): boolean =>
   hourHasData(hour, criteria) &&
@@ -216,7 +226,7 @@ export const hourMatchesCriteria = (hour: HistoricalHour, criteria: HistoryCrite
     directionInClockwiseRange(hour.swellDirection!, criteria.swellFromStart, criteria.swellFromEnd))) &&
   (conditionSource(criteria) === "swell" || (
     hour.windSpeed! <= criteria.maxWindSpeed &&
-    directionInClockwiseRange(hour.windDirection!, criteria.windFromStart, criteria.windFromEnd)));
+    (windIsCalm(hour, criteria) || directionInClockwiseRange(hour.windDirection!, criteria.windFromStart, criteria.windFromEnd))));
 
 export const historyClock = (timezone: string): Intl.DateTimeFormat =>
   new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });

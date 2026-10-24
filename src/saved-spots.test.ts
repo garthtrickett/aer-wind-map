@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isSavedSpot, readSavedSpots, writeSavedSpots, type SavedSpot } from "./saved-spots.ts";
-import { defaultHistoryCriteria } from "./history.ts";
+import { calmWindThresholdKmh, defaultHistoryCriteria } from "./history.ts";
 
 const spot: SavedSpot = {
   id: "spot-1", name: "Wet season Bukit", point: { latitude: -8.78, longitude: 115.07 },
@@ -10,6 +10,18 @@ const spot: SavedSpot = {
     swellFromStart: 180, swellFromEnd: 270 },
   alertEnabled: true, alertMinDays: 3,
 };
+
+test("calm thresholds persist in km/h and older presets default to 2", () => {
+  for (const calmWindKmh of [0, 1.5, 2, 10]) {
+    const saved = { ...spot, criteria: { ...spot.criteria, calmWindKmh } };
+    const storage = { getItem: () => JSON.stringify({ version: 1, spots: [saved] }), setItem: () => undefined };
+    assert.deepEqual(readSavedSpots(() => storage), { ok: true, value: [saved] });
+  }
+  for (const calmWindKmh of [-1, 10.1, "2", null, NaN])
+    assert.equal(isSavedSpot({ ...spot, criteria: { ...spot.criteria, calmWindKmh } }), false);
+  const { calmWindKmh: _, ...legacy } = spot.criteria;
+  assert.equal(calmWindThresholdKmh(legacy), 2);
+});
 
 test("condition sources and links persist; invalid links are rejected while missing references remain repairable", () => {
   const saved = { ...spot, linkedSpotIds: ["coast"], criteria: { ...spot.criteria, conditions: "swell" as const } };

@@ -1,3 +1,4 @@
+import { conditionSource, conditionSourceLabel } from "./history.ts";
 import * as L from "leaflet";
 import maplibreGL from "@maplibre/maplibre-gl-leaflet";
 import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
@@ -103,8 +104,6 @@ export const createWindMap = (
   );
   const savedLinkRenderer = L.svg();
   const savedLayer = L.layerGroup().addTo(map);
-  const savedIcon = L.divIcon({ className: "saved-spot-icon", html: '<span aria-hidden="true"></span>',
-    iconSize: [28, 28], iconAnchor: [14, 27] });
   const setSavedSpots = (spots: readonly SavedSpot[]): void => {
     savedLayer.clearLayers();
     const drawn = new Set<string>();
@@ -120,8 +119,13 @@ export const createWindMap = (
     }
     for (const spot of spots) {
       const label = document.createElement("span");
-      label.textContent = spot.name;
-      L.marker([spot.point.latitude, spot.point.longitude], { icon: savedIcon, title: spot.name })
+      const source = conditionSource(spot.criteria);
+      const title = `${spot.name} · ${conditionSourceLabel(spot.criteria)}`;
+      label.textContent = title;
+      const icon = L.divIcon({ className: `saved-spot-icon saved-spot-${source}`,
+        html: `<span aria-hidden="true">${source === "both" ? "W+S" : source === "wind" ? "W" : "S"}</span>`,
+        iconSize: [34, 36], iconAnchor: [17, 35] });
+      L.marker([spot.point.latitude, spot.point.longitude], { icon, title })
         .bindTooltip(label, { direction: "top", offset: [0, -18] })
         .on("click", () => onSavedSpotSelect(spot.id))
         .addTo(savedLayer);

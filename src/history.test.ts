@@ -13,6 +13,33 @@ const hoursFor = (date: string, matching: readonly number[], direction = 355, av
     windDirection: hour < available ? direction : null,
   }));
 
+test("calm wind ignores direction through the inclusive km/h threshold, while other limits remain required", () => {
+  const criteria = { ...defaultHistoryCriteria, windFromStart: 315, windFromEnd: 45 };
+  const hour = { ...hoursFor("2025-01-01", [6])[6], windDirection: 180, windSpeed: 2 / 3.6 };
+  assert.equal(hourMatchesCriteria(hour, criteria), true);
+  assert.equal(hourMatchesCriteria({ ...hour, windSpeed: 2.01 / 3.6 }, criteria), false);
+  assert.equal(hourMatchesCriteria(hour, { ...criteria, calmWindKmh: 0 }), false);
+  assert.equal(hourMatchesCriteria(hour, { ...criteria, calmWindKmh: 1 }), false);
+  assert.equal(hourMatchesCriteria(hour, { ...criteria, maxWindSpeed: .1 }), false);
+  assert.equal(hourMatchesCriteria({ ...hour, swellHeight: .1 }, criteria), false);
+  assert.equal(hourMatchesCriteria({ ...hour, windDirection: null }, criteria), true);
+  assert.equal(hourMatchesCriteria({ ...hour, windSpeed: null }, criteria), false);
+  assert.equal(hourMatchesCriteria({ ...hour, windDirection: null, windSpeed: 1 }, criteria), false);
+});
+
+test("history and CSV both count light onshore hours, including presets without an explicit threshold", () => {
+  const { calmWindKmh: _, ...legacy } = defaultHistoryCriteria;
+  const criteria = { ...legacy, windFromStart: 315, windFromEnd: 45 };
+  const point = { latitude: -8.7, longitude: 115.1 };
+  const hours = hoursFor("2025-01-01", Array.from({ length: 24 }, (_, i) => i))
+    .map((hour) => ({ ...hour, windDirection: 180, windSpeed: .5 }));
+  const data = { startYear: 2025, endYear: 2025, timezone: "UTC", waveGrid: point, windGrid: point, hours };
+  assert.equal(summarizeHistory(data, criteria).months[0].qualifyingDays, 1);
+  assert.equal(summarizeHistory(data, { ...criteria, calmWindKmh: 0 }).months[0].qualifyingDays, 0);
+  assert.match(historyCsv(data, criteria).split("\n")[7], /,1$/);
+  assert.match(historyCsv(data, { ...criteria, calmWindKmh: 0 }).split("\n")[7], /,0$/);
+});
+
 test("wind-only and swell-only history download and score just the chosen source", async () => {
   const point = { latitude: -8.7, longitude: 115.1 };
   for (const conditions of ["wind", "swell"] as const) {

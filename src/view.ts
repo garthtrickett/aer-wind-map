@@ -1,3 +1,4 @@
+import { conditionSourceLabel } from "./history.ts";
 import { telegramView } from "./telegram-view.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
 import { describeWeatherError } from "./ecmwf.ts";
@@ -97,7 +98,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         return html`
         <div class="saved-spot-row">
           <button type="button" class="saved-spot-open" @click=${() => propose({ kind: "savedSpotOpened", id: spot.id })}>
-            <strong>${spot.name}</strong><span>${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
+            <strong>${spot.name}</strong><span>${conditionSourceLabel(spot.criteria)} · ${spotCoordinates(spot.point)} · ${spot.startYear}–${spot.endYear}</span>
             ${spot.linkedSpotIds?.length ? html`<small>Linked with ${spot.linkedSpotIds.map((id) => state.savedSpots.find((peer) => peer.id === id)?.name ?? "Missing spot").join(", ")}</small>` : nothing}
             ${spot.alertEnabled ? html`<small>${alert?.key === forecastAlertKey(spot, state.savedSpots) && alert.kind === "ready"
               ? `${alert.summary.matchingDays} of ${alert.summary.horizonDays} forecast days match · alert at ${alertRulesLabel(spot)}`

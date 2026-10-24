@@ -236,3 +236,13 @@ identity so a peer edit cannot mark an old forecast current or suppress a fresh
 alert. The nullable `deliveries.group_key` column is added idempotently to
 existing databases. Capability views return read-only linked snapshots;
 these live in the history panel until the user explicitly saves a preset.
+
+
+`HistoryCriteria.calmWindKmh` sets an inclusive direction exception (0–10 km/h,
+default 2 for both new and legacy presets; 0 disables it). `windIsCalm` converts
+the threshold to m/s before comparison. Shared availability and matching accept
+a missing wind direction only when known wind speed is calm. Wind speed and
+swell bounds still apply. All history and forecast consumers use that matcher,
+and alert keys include the saved threshold through criteria. Map pin text,
+colors, saved-list labels and tooltips derive from `criteria.conditions` rather
+than storing a separate marker type that could drift from the forecast checks.

@@ -53,6 +53,10 @@ server mounts the same routes and background implementation as production.
   each point must pass one of its own X-out-of-Y rows. The group uses the longest
   minimum window and shortest look-ahead. Missing dependencies prevent alerts.
   Historical charts remain specific to the selected point.
+- Calm wind defaults to ≤2 km/h, regardless of direction. Each marker can
+  adjust this threshold (0–10 km/h; 0 disables it). Wind speed limits and swell
+  conditions still apply. A known calm speed can pass with missing direction;
+  missing speed cannot. The threshold is included in synced conditions and messages.
 - Every selected condition must match: height range, minimum/optional maximum swell period,
   clockwise wind/swell source-direction ranges, maximum wind speed, consecutive
   samples. Day-count rules slide across the chosen look-ahead: for example,

@@ -167,8 +167,8 @@ without WebGL2 use reduced-resolution Canvas 2D color and arrows.
 
 ## Linking an offshore swell point with nearshore wind
 
-1. Save the offshore point with **Use this point for → Swell only**.
-2. Save the coastal point with **Wind only**. Set its X-out-of-Y rules; its own
+1. Save the offshore point with **Marker type → Swell only**.
+2. Save the coastal point with **Marker type → Wind only**. Set its X-out-of-Y rules; its own
    alert checkbox can stay off.
 3. Reopen the offshore point, select the coastal point under **Link conditions
    from other saved spots**, enable forecast checking and update the saved spot.
@@ -186,6 +186,20 @@ and CSVs score only the selected point and its chosen sources. Telegram stores
 required linked points even if their individual alerts are disabled. A shared
 phone link includes read-only linked settings without importing them into the
 recipient's saved spots.
+
+### Calm wind and marker types
+
+Saved map markers display **W** (wind), **S** (swell), or **W+S** (both).
+Change **Marker type** in the spot editor to select what the point checks;
+the saved-spots list and marker tooltip show the same type.
+
+**Wind direction ignored at or below** defaults to **2 km/h**, including older
+presets without this field. Adjust it from 0–10 km/h; 0 disables the exception.
+Only the wind direction check is bypassed. The maximum wind speed, all selected
+swell conditions, consecutive hours and linked day-count rules still apply.
+Known calm wind speed can pass when direction is missing; unknown wind speed
+cannot. This rule applies to history, CSVs, forecast previews and Telegram alerts.
+It is a filtering preference, not a guarantee of a glassy sea surface.
 
 ## Limits
 

@@ -1,4 +1,4 @@
-import { conditionSource } from "../../src/history.ts";
+import { calmWindThresholdKmh, conditionSource } from "../../src/history.ts";
 import { linkedSpotGroup } from "../../src/spot-links.ts";
 import { alertRulesFor } from "../../src/alert-rules.ts";
 import { evaluateForecastRules, forecastPeriodLabel, forecastSources, loadForecastAlerts, type ForecastAlertCheck, type ForecastAlertSummary } from "../../src/forecast-alerts.ts";
@@ -43,7 +43,9 @@ export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummar
         `Swell ${member.criteria.minSwellHeight}–${member.criteria.maxSwellHeight} m; period ${member.criteria.minSwellPeriod}–${member.criteria.maxSwellPeriod ?? "unlimited"} s.`,
         `Swell from ${member.criteria.swellFromStart}° → ${member.criteria.swellFromEnd}° clockwise.`]),
       ...(conditionSource(member.criteria) === "swell" ? [] : [
-        `Wind ≤${member.criteria.maxWindSpeed} m/s (${(member.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${member.criteria.windFromStart}° → ${member.criteria.windFromEnd}° clockwise.`]),
+        `Wind ≤${member.criteria.maxWindSpeed} m/s (${(member.criteria.maxWindSpeed * 3.6).toFixed(1)} km/h), from ${member.criteria.windFromStart}° → ${member.criteria.windFromEnd}° clockwise.`,
+        ...(calmWindThresholdKmh(member.criteria) > 0
+          ? [`Any wind direction passes at or below ${calmWindThresholdKmh(member.criteria)} km/h; the wind-speed limit still applies.`] : [])]),
     ]),
     `Selected daylight data available on ${summary.availableDays}/${summary.horizonDays} days.`,
     `Model estimates: ${sources.label} via Open-Meteo. ${sources.coverage} Distant forecasts can change; this is not a surf observation.`,

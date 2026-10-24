@@ -22,6 +22,20 @@ const coast: SavedSpot = { ...spot, id: "coast", name: "Nearshore wind", alertEn
   criteria: { ...spot.criteria, conditions: "wind" }, alertRules: [{ minDays: 2, withinDays: 4 }] };
 const at = new Date("2026-09-27T00:00:00Z");
 
+test("linked swell/wind alerts accept calm onshore or variable wind, without bypassing speed limits or day rules", () => {
+  const lightWind = { ...wind, first: time.map(() => .5), second: time.map(() => null) };
+  const data = { wave, wind, linked: [{ spot: coast, wave, wind: lightWind }] };
+  const summary = scoreForecastData(offshore, data, at)!;
+  assert.equal(summary.matchingDays, 14);
+  assert.equal(evaluateForecastRules(summary, offshore.alertRules!).matched, true);
+  assert.equal(scoreForecastData(offshore, { ...data, linked: [{ ...data.linked[0],
+    spot: { ...coast, criteria: { ...coast.criteria, calmWindKmh: 0 } } }] }, at), null);
+  assert.equal(scoreForecastData(offshore, { ...data, linked: [{ ...data.linked[0],
+    spot: { ...coast, criteria: { ...coast.criteria, maxWindSpeed: .1 } } }] }, at)?.matchingDays, 0);
+  assert.notEqual(forecastAlertKey(offshore, [coast]), forecastAlertKey(offshore,
+    [{ ...coast, criteria: { ...coast.criteria, calmWindKmh: 0 } }]));
+});
+
 test("linked swell and wind count shared UTC hours, including an overlap after an earlier daily window", () => {
   const swell = { ...wave, first: time.map((_, i) => [6, 7, 12, 13].includes(i % 24) ? 2 : 0) };
   const localWind = { ...wind, second: time.map((_, i) => [12, 13].includes(i % 24) ? 355 : 180) };

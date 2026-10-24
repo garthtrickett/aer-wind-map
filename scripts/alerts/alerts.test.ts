@@ -106,6 +106,7 @@ test("linked dependencies persist without their own alert, appear in phone links
     const notification = notificationFor(watch, joint, now, "https://aer.example");
     assert.ok(notification);
     assert.match(notification.text, /Linked: Nearshore wind/);
+    assert.match(notification.text, /Any wind direction passes at or below 2 km\/h/);
     f.store.checked(watch, joint, now, notification);
     const queued = f.store.pending(now).find((delivery) => delivery.spot_id === root.id)!;
     assert.ok(queued);
