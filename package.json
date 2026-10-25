@@ -7,10 +7,11 @@
     "prepare:decoder": "node scripts/copy-decoder.ts",
     "dev": "npm run prepare:decoder && vite --host 0.0.0.0",
     "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
-    "test": "node --test src/wind.test.ts src/wave.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts src/day-lookup.test.ts src/satellite.test.ts src/history-compass.test.ts src/saved-spots.test.ts src/forecast-alerts.test.ts src/observations.test.ts src/buoy-history.test.ts src/telegram-model.test.ts scripts/alerts/alerts.test.ts",
+    "test": "node --test src/wind.test.ts src/wave.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts src/day-lookup.test.ts src/satellite.test.ts src/wayback.test.ts src/history-compass.test.ts src/saved-spots.test.ts src/forecast-alerts.test.ts src/observations.test.ts src/buoy-history.test.ts src/telegram-model.test.ts scripts/alerts/alerts.test.ts",
     "smoke:live": "node tests/live-smoke.ts",
     "smoke:history": "node tests/history-smoke.ts",
     "smoke:day": "node tests/day-lookup-smoke.ts",
+    "smoke:wayback": "node tests/wayback-smoke.ts",
     "smoke:basemap": "node tests/basemap-smoke.ts",
     "smoke:zoom": "node tests/zoom-smoke.ts",
     "smoke:saved": "node tests/saved-spots-smoke.ts",
@@ -23,6 +24,7 @@
     "smoke:telegram": "node tests/telegram-smoke.ts"
   },
   "dependencies": {
+    "@esri/wayback-core": "1.1.0",
     "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "@meri-imperiumi/eccodes-wasm": "2.48.2",
     "leaflet": "^1.9.4",

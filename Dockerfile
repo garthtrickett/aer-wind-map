@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 ARG VITE_MAPTILER_API_KEY
+ARG VITE_ESRI_WAYBACK_ENABLED
 RUN npm run build
 
 FROM node:24-slim

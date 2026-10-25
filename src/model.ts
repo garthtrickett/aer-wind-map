@@ -10,6 +10,7 @@ import { forecastAlertKey, type ForecastData, type ForecastDataResult, type Fore
 import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 import { alignDayLookup, dayLookupEffect, initialDayLookup, presentDayLookup, type DayLookupEffect, type DayLookupPanel, type DayLookupProposal } from "./day-lookup-model.ts";
 import type { Basemap, SatelliteResult, Satellite } from "./satellite.ts";
+import { initialWayback, alignWayback, presentWayback, waybackEffect, type WaybackPanel, type WaybackProposal, type WaybackEffect } from "./wayback-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -51,6 +52,7 @@ export type HistoryPanel = Readonly<{
 
 export type State = Readonly<{
   basemap: Basemap;
+  wayback: WaybackPanel;
   weatherOverlay: boolean;
   satellite: Readonly<{ available: boolean; phase: "idle" | "needsData" | "loading" | "ready" | "failed"; data: Satellite | null; message: string | null }>;
   dayLookup: DayLookupPanel;
@@ -75,6 +77,7 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | WaybackProposal
   | { readonly kind: "basemapSelected"; readonly basemap: Basemap }
   | { readonly kind: "weatherOverlayChanged"; readonly visible: boolean }
   | { readonly kind: "satelliteStarted" }
@@ -131,7 +134,7 @@ export type Proposal =
   | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
-  basemap: "map", weatherOverlay: true,
+  basemap: "map", weatherOverlay: true, wayback: initialWayback,
   satellite: { available: false, phase: "idle", data: null, message: null },
   dayLookup: initialDayLookup,
   telegram: initialTelegram,
@@ -164,14 +167,20 @@ const selectionChanged = (state: State, point: Point): State => ({
 
 const presentApp = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
-    case "basemapSelected": return proposal.basemap === state.basemap || (proposal.basemap === "satellite" && !state.satellite.available) ? state
+    case "basemapSelected": return proposal.basemap === state.basemap || (proposal.basemap === "satellite" && !state.satellite.available) || (proposal.basemap === "wayback" && !state.wayback.available) ? state
       : { ...state, basemap: proposal.basemap, weatherOverlay: proposal.basemap === "map", satellite: {
         ...state.satellite, message: null, phase: proposal.basemap === "satellite" && !state.satellite.data && state.satellite.phase !== "loading" ? "needsData" : state.satellite.phase } };
+    case "imageryViewportChanged":
+    case "waybackRetry":
+    case "waybackStarted":
+    case "waybackCompleted":
+    case "waybackCaptureSelected":
+    case "waybackTilesFailed": return { ...state, wayback: presentWayback(state.wayback, proposal) };
     case "weatherOverlayChanged": return { ...state, weatherOverlay: proposal.visible };
     case "satelliteStarted": return state.satellite.phase === "needsData" ? { ...state, satellite: { ...state.satellite, phase: "loading" } } : state;
     case "satelliteCompleted": return state.satellite.phase !== "loading" ? state : proposal.result.ok
       ? { ...state, satellite: { ...state.satellite, phase: "ready", data: proposal.result.data, message: null } }
-      : { ...state, basemap: "map", weatherOverlay: true, satellite: { ...state.satellite, phase: "failed", data: null, message: proposal.result.message } };
+      : { ...state, ...(state.basemap === "satellite" ? { basemap: "map" as const, weatherOverlay: true } : {}), satellite: { ...state.satellite, phase: "failed", data: null, message: proposal.result.message } };
     case "satelliteTilesFailed": return state.basemap !== "satellite" ? state
       : { ...state, basemap: "map", weatherOverlay: true, satellite: { ...state.satellite, phase: "failed", data: null,
         message: "Satellite imagery is unavailable. Map view restored; try again." } };
@@ -398,10 +407,12 @@ const presentApp = (state: State, proposal: Proposal): State => {
 export const present = (state: State, proposal: Proposal): State => {
   const next = presentApp(state, proposal);
   const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
-  return dayLookup === next.dayLookup ? next : { ...next, dayLookup };
+  const wayback = alignWayback(next.wayback, next.selected, next.basemap === "wayback");
+  return dayLookup === next.dayLookup && wayback === next.wayback ? next : { ...next, dayLookup, wayback };
 };
 
 export type Effect =
+  | WaybackEffect
   | { readonly kind: "loadSatellite" }
   | DayLookupEffect
   | ObservationEffect
@@ -419,6 +430,8 @@ export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
 });
 
 export const nap = (state: State): Effect | null => {
+  const imagery = waybackEffect(state.wayback, state.basemap === "wayback");
+  if (imagery) return imagery;
   if (state.satellite.phase === "needsData") return { kind: "loadSatellite" };
   const day = dayLookupEffect(state.dayLookup, state.modalOpen || state.history.open);
   if (day) return day;

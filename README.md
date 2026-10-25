@@ -80,6 +80,47 @@ For the simulated-provider browser check, build with
 This tests controls and rendering without contacting MapTiler; it does not
 verify a real account's imagery access. Rebuild with the intended key before use.
 
+## Historical imagery
+
+The optional **Imagery history** button uses Esri World Imagery Wayback.
+Zoom into a coast (level 10 or closer), select a pin or use the map center,
+and choose a reported capture date. **View selected spot** zooms to detail
+when starting from a wide view. Older/Newer buttons switch available captures.
+Panning without a pin searches the new center; with a pin, dates stay tied to
+that point. Changing detail level searches again.
+
+The panel shows acquisition date, source/provider, source pixel resolution and
+archive release date separately under **Source & capture details**. Duplicate
+captures are collapsed, while
+unknown acquisition dates remain explicitly unknown. A release is a basemap
+mosaic: nearby tiles can come from other dates. Source resolution does not
+promise the same detail in every displayed tile. The forecast timeline and
+the daily weather lookup are independent of imagery dates.
+
+Before public activation, confirm an appropriate Esri licence/subscription
+under the [World Imagery usage terms](https://goto.arcgis.com/termsofuse/viewsummary).
+Set `VITE_ESRI_WAYBACK_ENABLED=true` in the build environment and rebuild.
+Without it the button is hidden and no Wayback data is requested. The flag
+is feature configuration, not an authentication credential. Current Wayback
+services are publicly accessible; that alone does not grant display rights.
+The app requests tiles directly for viewing; it does not proxy, persist,
+export or offer downloads of Esri imagery.
+
+For a private UI regression build:
+
+```sh
+VITE_ESRI_WAYBACK_ENABLED=true VITE_MAPTILER_API_KEY=test-only npm run build
+npm run smoke:wayback
+npm run smoke:basemap
+```
+
+The SDK's Apache licence ships at `/third-party/wayback-core-LICENSE.txt`.
+
+The smoke tests exercise the official SDK against simulated services on desktop,
+390 px and 320 px mobile, with WebGL and the fallback renderer. Rebuild with
+the intended production variables afterward. See [imagery research and deployment
+status](docs/satellite-imagery.md) for real-provider verification.
+
 ## Look up a particular day
 
 Open point details or a saved marker and expand **Look up a day**. Choose a date

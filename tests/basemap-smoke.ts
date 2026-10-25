@@ -77,6 +77,10 @@ try {
     await page.getByRole("button", { name: /^Saved spots / }).click();
     await page.locator(".saved-spot-open").click();
     await page.getByRole("button", { name: "Close history" }).click();
+    // Leaflet can finish its initial container resize after the saved-spot
+    // camera animation. Compare settled screen coordinates, not its startup size.
+    await expect.poll(async () => page.locator("#selected-flag").evaluate((element) =>
+      Math.abs(parseFloat(element.style.left) - innerWidth / 2) < 2 && Math.abs(parseFloat(element.style.top) - innerHeight / 2) < 2)).toBe(true);
     const position = await page.locator("#selected-flag").evaluate((element) => [element.style.left, element.style.top]);
     if (!raster) await page.locator(".maplibregl-canvas").evaluate((element) => element.setAttribute("data-original", "yes"));
     holdMetadata = true;

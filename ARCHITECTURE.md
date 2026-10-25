@@ -58,6 +58,23 @@
   Satellite hides weather graphics by default and offers an overlay checkbox.
   The imagery's provider credits and MapTiler logo accompany the active layer.
 
+- Esri imagery history is an independent, optional basemap. `wayback.ts` loads
+  the official `@esri/wayback-core` client lazily, finds changes for a point and
+  integer detail level, queries acquisition metadata with four bounded workers,
+  and deduplicates reported acquisition date and source combinations. Unknown dates
+  keep their release identity. Service timeouts and partial metadata failures
+  are explicit. The SDK does not propagate cancellation to every internal fetch;
+  bounded waits and request generations discard stale results, while already
+  started upstream reads may finish. Nothing is persisted or proxied.
+  `wayback-model.ts` owns viewport, target, request generation and date choice;
+  `wayback-view.ts` labels capture and release dates separately. Searches require
+  zoom 10+, cap archive detail at 19, debounce gestures, and use a selected pin
+  or map center. Loading/error states restore the street background. Imagery
+  sources have distinct generations so an old tile error cannot break a newer
+  date. Both renderers retain camera, markers and weather layers; source credits
+  change with the provider. The build flag defaults off until the operator has
+  confirmed appropriate Esri usage rights.
+
 - The particular-day lookup is separate from seasonal scoring and forecast
   alerts. `day-lookup.ts` requests one local calendar day of ECMWF IFS wind and
   MFWAM swell/combined waves, joins sources by UTC instant and preserves nulls

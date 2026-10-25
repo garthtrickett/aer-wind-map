@@ -1,7 +1,7 @@
 # Satellite imagery sources and historical views
 
-Research reference, checked 25 October 2026. A dated satellite layer has been
-investigated but is not implemented in Aer.
+Research reference, checked 25 October 2026. The dated Esri Wayback layer is implemented behind
+a build flag; public activation awaits confirmation of appropriate Esri usage rights.
 
 ## Sources
 
@@ -11,7 +11,7 @@ investigated but is not implemented in Aer.
 | Vantor (formerly Maxar), including WorldView | Paid detailed commercial imagery, available through marketplaces such as SkyFi | Finer coastal features, subject to the particular capture's resolution, clouds, tide and water clarity. |
 | Planet, including SkySat | Paid detailed commercial imagery, also available through SkyFi | Another source to search for detailed captures on useful dates. |
 | Google Earth | Satellite and aerial imagery from multiple providers, with historical views | Inspect the available detailed coastal images and compare dates manually. |
-| Esri World Imagery Wayback | Historical releases of Esri's satellite/aerial basemap, with tiles and capture metadata | A technically viable source for a detailed history layer, subject to Esri's usage terms and account requirements. |
+| Esri World Imagery Wayback | Historical releases of Esri's satellite/aerial basemap, with tiles and capture metadata | Implemented as an optional history layer, subject to Esri's usage terms and account requirements. |
 | MapTiler regular satellite | A regular satellite/aerial basemap with a provider API key | Live as a Map / Satellite switch; real imagery verified on desktop, mobile and the fallback renderer on 25 October 2026. |
 
 SkyFi is a marketplace: its free Sentinel-2 imagery comes from Copernicus;
@@ -78,7 +78,9 @@ Esri publishes an official [`@esri/wayback-core` library](https://github.com/Esr
 for release discovery, local changes and capture metadata. Its raster tiles
 fit Aer's Leaflet map. A real Chromium check from Aer's origin successfully
 fetched the catalogue, a tile, local-change data and capture metadata without
-an API key. The library was not installed in Aer and no imagery layer was deployed.
+an API key. Aer now uses the official library lazily for the optional history layer. Public
+activation is gated by `VITE_ESRI_WAYBACK_ENABLED=true` after confirming the
+app's Esri usage rights; anonymous API access is not treated as a licence.
 
 ### Sample coastal coverage
 
@@ -96,7 +98,70 @@ resolution in metadata is distinct from the map tile's delivered pixel scale.
 The sample tiles show much finer coastal detail than the free 10 m Sentinel-2
 images, but tide, water clarity and surface conditions still affect interpretation.
 
-### Requirements for a future layer
+### Implemented history controls
+
+- A separate **Imagery history** view and capture-date selector, with Older/Newer
+  controls, a zoom prompt, and explicit source/capture/release metadata.
+- Changes are queried at the selected pin, or at the map center when unpinned.
+  Capture identity uses the reported acquisition date and source, so provider
+  rebranding or a changed sampling resolution does not create a new capture. Missing metadata
+  stays unknown and does not silently become a capture date or zero resolution.
+- Searches follow location/detail changes with a debounce and stale-result guards.
+  The archive search caps native detail at 19 and supports map enlargement to 20.
+- Image load failures restore the street background with a visible message;
+  another capture or Refresh dates retries without affecting forecast time.
+- Esri/source credits and a terms link replace MapTiler credits for the history
+  layer. The existing regular satellite view remains separate. On mobile, the
+  compact picker docks above the forecast controls; source details expand on demand.
+- Services are accessed directly for interactive viewing. There is no tile
+  download/export feature, server proxy, persistent imagery cache or self-hosting.
+
+### Private preview verification, 25 October 2026
+
+The built application was loaded in an isolated Chromium preview using Aer's
+origin, with real Esri catalogue, local-change, metadata and imagery requests.
+This was a private test; the public history build flag remains disabled while
+an appropriate Esri account/licence is being confirmed.
+
+- Sanur, 8.700 S / 115.267 E, zoom 18: **8 reported capture dates** from
+  2017-09-09 through 2025-05-01. Desktop WebGL loaded and displayed real
+  imagery, switched to the next older capture and reported no page errors.
+- Jinzun coast, 22.953 N / 121.289 E, zoom 17: **6 reported capture dates**
+  from 2009-06-16 through 2021-07-25. A 390 px mobile fallback-renderer test
+  loaded the imagery and switched to 2020-06-04, with no page errors.
+- The inspected tiles returned HTTP 200. Dates and reported source resolution
+  came from point metadata, not from the archive release labels.
+- Rebranded provider names (Maxar/Vantor) and different reported sampling
+  resolutions for the same source/date were grouped as one capture.
+- Forecast requests were intentionally isolated in this preview. This imagery
+  check does not assert that historic imagery matches the weather timeline.
+
+### Account choice still unresolved
+
+Esri is the vendor; ArcGIS is its platform, not a competing licence.
+[ArcGIS Online Public accounts](https://doc.arcgis.com/en/arcgis-online/get-started/create-account.htm)
+are free for personal, noncommercial work. Their availability does not establish
+permission to embed these historical tiles in an independently hosted app.
+[ArcGIS Location Platform](https://location.arcgis.com/pricing/) has free
+allowances for standard basemap services, but its
+[Living Atlas licensing guidance](https://location.arcgis.com/help/licensing-and-attribution/)
+expressly requires a custom agreement for Living Atlas layers in an app using
+that platform. Do not represent the standard free basemap quota as a Wayback licence.
+A paid Personal Use subscription should not be recommended without confirming
+that its scope covers this independently hosted public application.
+
+Suggested question to Esri (draft only; not sent):
+
+> Aer is my personal, noncommercial surf-research website, hosted on Railway
+> using Leaflet/MapLibre and your official wayback-core library. I want to
+> display World Imagery Wayback WMTS tiles and point acquisition metadata,
+> requested directly from Esri, with full attribution. There is no tile
+> export, redistribution, server proxy or imagery hosting. Does a free
+> ArcGIS Online Public account cover this, or which licence is required?
+
+Public activation remains disabled until that usage permission is confirmed.
+
+### Constraints retained in the implementation
 
 - Discover local changes and deduplicate repeated captures; even byte-different
   tiles can share the same capture date. Changing the publication year alone

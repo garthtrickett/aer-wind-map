@@ -20,6 +20,8 @@ import { telegramRequest, telegramSpotsKey } from "./telegram-model.ts";
 import { isSavedSpot } from "./saved-spots.ts";
 import { loadDay } from "./day-lookup.ts";
 import { loadSatellite, mapTilerTileJson } from "./satellite.ts";
+import { loadWayback, waybackEnabled, waybackImagery } from "./wayback.ts";
+import { selectedCapture } from "./wayback-model.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -41,7 +43,7 @@ const flag = requireElement("selected-flag");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, ForecastField>();
 const satelliteUrl = mapTilerTileJson(import.meta.env.VITE_MAPTILER_API_KEY);
-let state: State = { ...initialState, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
+let state: State = { ...initialState, wayback: { ...initialState.wayback, available: waybackEnabled(import.meta.env.VITE_ESRI_WAYBACK_ENABLED) }, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
@@ -55,6 +57,8 @@ let miniMapZoom = defaultHistoryMapZoom;
 let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
 let dayController: AbortController | null = null;
 let dayRequest = -1;
+let waybackController: AbortController | null = null;
+let waybackRequest = -1;
 
 const syncMiniMap = (): void => {
   const element = ui.querySelector<HTMLElement>("#history-mini-map");
@@ -127,13 +131,14 @@ ui.addEventListener("keydown", (event) => {
 const windMap = createWindMap({ element: mapElement, flag,
   onSelect: (point) => dispatch({ kind: "locationSelected", point }),
   onSavedSpotSelect: (id) => dispatch({ kind: "savedSpotOpened", id }),
-  onSatelliteError: () => dispatch({ kind: "satelliteTilesFailed" }),
+  onSatelliteError: () => dispatch({ kind: state.basemap === "wayback" ? "waybackTilesFailed" : "satelliteTilesFailed" }),
 });
 const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
 const observationMarkers = createObservationMarkers(windMap.map, (id) => dispatch({ kind: "observationSelected", id }));
 let displayedObservations = state.observations;
 const observationViewport = (): void => {
   const bounds = windMap.map.getBounds();
+  dispatch({ kind: "imageryViewportChanged", center: windMap.center(), zoom: windMap.map.getZoom() });
   const normalize = (longitude: number): number => ((longitude + 180) % 360 + 360) % 360 - 180;
   dispatch({ kind: "observationViewportChanged", zoom: windMap.map.getZoom(), bounds: {
     south: Math.max(-90, bounds.getSouth()), north: Math.min(90, bounds.getNorth()),
@@ -208,6 +213,21 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadWayback") {
+    waybackController?.abort();
+    const controller = new AbortController();
+    waybackController = controller;
+    waybackRequest = effect.request;
+    dispatch({ kind: "waybackStarted", request: effect.request });
+    // Let successive zoom/pan gestures settle before searching the archive.
+    const timer = window.setTimeout(() => {
+      if (controller.signal.aborted) return;
+      void loadWayback(effect.point, effect.zoom, controller.signal).then((result) =>
+        dispatch({ kind: "waybackCompleted", request: effect.request, result }));
+    }, 350);
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+    return;
+  }
   if (effect.kind === "loadSatellite") {
     dispatch({ kind: "satelliteStarted" });
     void (satelliteUrl ? loadSatellite(satelliteUrl) : Promise.resolve({ ok: false as const, message: "Satellite is unavailable." }))
@@ -325,6 +345,7 @@ function dispatch(proposal: Proposal): void {
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (waybackController && state.wayback.request !== waybackRequest) { waybackController.abort(); waybackController = null; }
   if (dayController && state.dayLookup.request !== dayRequest) { dayController.abort(); dayController = null; }
   if (state.telegram.syncedKey !== previous.telegram.syncedKey) {
     try { window.localStorage.setItem("aer.telegram.synced.v1", state.telegram.syncedKey ?? ""); }
@@ -332,9 +353,12 @@ function dispatch(proposal: Proposal): void {
   }
   colorCanvas.hidden = windMap.maplibre !== null || !state.weatherOverlay;
   arrowsCanvas.hidden = state.layer === "waves" || !state.weatherOverlay;
-  if (state.basemap !== previous.basemap || state.satellite.data !== previous.satellite.data)
-    windMap.setBasemap(state.basemap, state.satellite.data);
-  render(view(state, dispatch, windMap.center, Date.now()), ui);
+  if (state.basemap !== previous.basemap || state.satellite.data !== previous.satellite.data ||
+    selectedCapture(state.wayback) !== selectedCapture(previous.wayback)) {
+    const capture = selectedCapture(state.wayback);
+    windMap.setBasemap(state.basemap, state.basemap === "wayback" ? capture ? waybackImagery(capture) : null : state.satellite.data);
+  }
+  render(view(state, dispatch, windMap.center, Date.now(), () => { windMap.focus(state.selected ?? windMap.center(), 17); }), ui);
   render(flagView(state, dispatch), flag);
   syncMiniMap();
   if (displayedObservations !== state.observations) {
@@ -414,7 +438,7 @@ const refreshTelegram = () => {
 };
 const telegramTimer = window.setInterval(refreshTelegram, 10_000);
 window.addEventListener("focus", refreshTelegram);
-window.addEventListener("pagehide", () => { dayController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
+window.addEventListener("pagehide", () => { dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
@@ -429,7 +453,7 @@ const startingBounds = windMap.map.getBounds();
 state = present(state, { kind: "observationViewportChanged", zoom: windMap.map.getZoom(), bounds: {
   south: Math.max(-90, startingBounds.getSouth()), north: Math.min(90, startingBounds.getNorth()), west: -180, east: 180,
 } });
-render(view(state, dispatch, windMap.center, Date.now()), ui);
+render(view(state, dispatch, windMap.center, Date.now(), () => { windMap.focus(state.selected ?? windMap.center(), 17); }), ui);
 render(flagView(state, dispatch), flag);
 const firstEffect = nap(state);
 if (firstEffect) runEffect(firstEffect);

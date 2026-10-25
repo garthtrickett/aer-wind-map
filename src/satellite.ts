@@ -1,5 +1,5 @@
-export type Basemap = "map" | "satellite";
-export type Satellite = Readonly<{ tiles: readonly string[]; attribution: string; minZoom: number; maxZoom: number; tileSize: number }>;
+export type Basemap = "map" | "satellite" | "wayback";
+export type Satellite = Readonly<{ provider?: "maptiler" | "esri"; tiles: readonly string[]; attribution: string; minZoom: number; maxZoom: number; tileSize: number }>;
 export type SatelliteResult = Readonly<{ ok: true; data: Satellite }> | Readonly<{ ok: false; message: string }>;
 
 export const mapTilerTileJson = (key: string | undefined): string | null => key?.trim()

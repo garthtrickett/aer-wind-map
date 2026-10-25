@@ -9,6 +9,7 @@ import { dayLookupView } from "./day-lookup-view.ts";
 import { alertRulesFor, alertRulesLabel } from "./alert-rules.ts";
 import { evaluateForecastRules, forecastPeriodLabel, forecastAlertKey, forecastSwell, forecastSwellCoverage } from "./forecast-alerts.ts";
 import type { Point, Proposal, State } from "./model.ts";
+import { waybackView } from "./wayback-view.ts";
 import { observationsView } from "./observations-view.ts";
 
 const dateLabel = (date: Date): string =>
@@ -48,7 +49,7 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
   `;
 };
 
-export const view = (state: State, propose: (proposal: Proposal) => void, center: () => Point, now: number): TemplateResult => {
+export const view = (state: State, propose: (proposal: Proposal) => void, center: () => Point, now: number, zoomToCoast: () => void = () => {}): TemplateResult => {
   const forecastTime = state.run ? dateLabel(validTime({ run: state.run, step: state.step })) : "Finding forecast";
   const wind = state.field?.kind === "wind" && state.selected
     ? sampleWind(state.field, state.selected.latitude, state.selected.longitude) : null;
@@ -89,16 +90,20 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           @click=${() => propose({ kind: "observationsToggled" })}>Observations</button></div>
     </header>
 
-    ${state.satellite.available ? html`<section class="basemap-tools" aria-label="Map background">
+    ${state.satellite.available || state.wayback.available ? html`<section class="basemap-tools" aria-label="Map background">
       <div class="layer-switch basemap-switch" role="group" aria-label="Map background selection">
         <button type="button" aria-pressed=${state.basemap === "map"} @click=${() => propose({ kind: "basemapSelected", basemap: "map" })}>Map</button>
-        <button type="button" aria-pressed=${state.basemap === "satellite"} @click=${() => propose({ kind: "basemapSelected", basemap: "satellite" })}>Satellite</button>
+        ${state.satellite.available ? html`<button type="button" aria-pressed=${state.basemap === "satellite"} @click=${() => propose({ kind: "basemapSelected", basemap: "satellite" })}>Satellite</button>` : nothing}
       </div>
-      ${state.basemap === "satellite" ? html`<label class="basemap-overlay"><input type="checkbox" .checked=${state.weatherOverlay}
+      ${state.wayback.available ? html`<button class="imagery-history-toggle" type="button" aria-pressed=${state.basemap === "wayback"}
+        @click=${() => propose({ kind: "basemapSelected", basemap: "wayback" })}>Imagery history</button>` : nothing}
+      ${state.basemap !== "map" ? html`<label class="basemap-overlay"><input type="checkbox" .checked=${state.weatherOverlay}
         @change=${(event: Event) => propose({ kind: "weatherOverlayChanged", visible: (event.target as HTMLInputElement).checked })} />Weather overlay</label>` : nothing}
       ${state.satellite.phase === "needsData" || state.satellite.phase === "loading" ? html`<p role="status">Loading imagery…</p>`
         : state.satellite.message ? html`<p role="status">${state.satellite.message}</p>` : nothing}
     </section>` : nothing}
+
+    ${state.basemap === "wayback" && !state.savedSpotsOpen && !state.observations.open ? waybackView(state.wayback, state.selected !== null, propose, zoomToCoast) : nothing}
 
     ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
       <div class="saved-spots-head"><strong>Saved spots</strong><button type="button" aria-label="Close saved spots"
