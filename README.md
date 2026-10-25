@@ -54,6 +54,22 @@ identify the source models and state partial data coverage. Matches use
 are confirmed as they approach. A notification link opens a read-only preview
 in a fresh phone browser. Disconnect in Aer or send `/stop` to the bot to stop.
 
+## Look up a particular day
+
+Open point details or a saved marker and expand **Look up a day**. Choose a date
+from 2022 onward and press **Load day**. The hourly table defaults to
+06:00–18:00, with the end hour excluded; choose 00:00–24:00 for the whole day.
+Changing the hour range filters the loaded data without downloading it again.
+
+Wind shows km/h, compass direction and degrees from ECMWF IFS. Swell and
+combined waves each show height, period and direction from Météo-France MFWAM.
+Combined waves include wind waves and swell; these heights are not surf-face
+heights. MFWAM's native three-hour values are interpolated to hourly by Open-Meteo.
+These are historical model estimates, not station measurements. Times are local
+to the displayed timezone, and the actual wind and wave grid coordinates are
+shown separately. Recent days may not yet be published. Missing values stay
+missing, and one source can still display when the other is unavailable.
+
 ## Measured wave and wind stations
 
 Open **Observations**, select **Wave buoys** or **Wind stations**, and zoom into

@@ -201,7 +201,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .secondary-button { margin-top: 13px; padding: 8px 12px; border: 0; border-radius: 8px; background: #133f4e; color: white; font-size: 11px; font-weight: 700; }
 
 .modal-scrim { position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(4,26,37,.46); backdrop-filter: blur(3px); }
-.details { width: min(420px, 100%); border-radius: 23px; background: #f8fbf8; color: #102e3a; box-shadow: 0 28px 90px rgba(0,20,32,.32); overflow: hidden; }
+.details { width: min(420px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; border-radius: 23px; background: #f8fbf8; color: #102e3a; box-shadow: 0 28px 90px rgba(0,20,32,.32); }
 .details-head { display: flex; align-items: start; justify-content: space-between; gap: 15px; padding: 23px 25px 0; }
 .details .eyebrow { color: #608b8d; }
 .details h2 { margin-top: 5px; font: 600 23px/1.15 "Outfit", sans-serif; letter-spacing: -.035em; }
@@ -220,6 +220,31 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .details-footer { display: flex; justify-content: space-between; gap: 10px; padding: 15px 25px; border-top: 1px solid #e2ebe9; color: #688489; font-size: 11px; }
 .history-open { display: block; margin: 0 25px 20px; padding: 10px 12px; border: 0; border-radius: 10px; background: #d6f1e8; color: #103f45; font-size: 12px; font-weight: 700; }
 .history-open:hover { background: #b8e7d9; }
+
+.day-lookup { min-width: 0; margin-bottom: 18px; border: 1px solid #c8ddd7; border-radius: 12px; background: #eff5f1; overflow: hidden; }
+.details > .day-lookup { margin: 0 20px 20px; }
+.day-lookup-toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 12px 14px; border: 0; background: transparent; color: #174550; text-align: left; font-size: 14px; font-weight: 700; }
+.day-lookup-toggle[aria-expanded="true"] { border-bottom: 1px solid #d4e4df; }
+.day-lookup-content { padding: 12px; }
+.day-lookup-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; }
+.day-lookup-controls label { display: grid; flex: 1; min-width: 80px; gap: 5px; color: #496b73; font-size: 12px; }
+.day-lookup-controls .day-lookup-date { flex: 2; min-width: 145px; }
+.day-lookup-controls input, .day-lookup-controls select { width: 100%; min-width: 0; min-height: 42px; border: 1px solid #b7d0c9; border-radius: 8px; padding: 8px; color: #173f49; background: white; font: inherit; }
+.day-lookup-controls button { min-height: 42px; padding: 10px 15px; border: 0; border-radius: 9px; background: #164e5b; color: white; font-size: 13px; font-weight: 700; }
+.day-lookup-controls button:active:not(:disabled) { transform: scale(.97); }
+.day-lookup-controls button:disabled { opacity: .65; cursor: wait; }
+.day-lookup-note, .day-lookup-status, .day-lookup-warning { color: #56747b; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.day-lookup-status { min-height: 20px; margin-block: 8px; }
+.day-lookup-warning { margin-block: 8px; color: #8a512c; }
+.day-lookup-note a { color: #176674; }
+.day-lookup-table { max-width: 100%; max-height: 370px; overflow: auto; margin: 12px 0; border: 1px solid #d4e2dd; border-radius: 8px; background: #fafffc; }
+.day-lookup-table table { width: 100%; min-width: 530px; border-collapse: collapse; color: #214c55; font-size: 12px; font-variant-numeric: tabular-nums; }
+.day-lookup-table caption { padding: 10px; text-align: left; color: #56747b; font-size: 11px; }
+.day-lookup-table th, .day-lookup-table td { padding: 10px; border-bottom: 1px solid #e0ebe7; text-align: left; white-space: nowrap; }
+.day-lookup-table thead th { position: sticky; top: 0; z-index: 1; background: #e5f0eb; font-weight: 700; }
+.day-lookup-table td strong { display: block; font-weight: 600; }
+.day-lookup-table td span { display: block; margin-top: 4px; color: #607d82; }
+.day-lookup :focus-visible { outline: 2px solid #177e91; outline-offset: 2px; }
 
 .history-scrim { padding: 18px; }
 .history-panel { width: min(790px, 100%); max-height: min(94vh, 920px); display: flex; flex-direction: column; overflow: hidden; border-radius: 22px; background: #f8fbf8; color: #102e3a; box-shadow: 0 28px 90px rgba(0,20,32,.32); }

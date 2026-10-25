@@ -48,6 +48,15 @@
 
 ## Coding decisions
 
+- The particular-day lookup is separate from seasonal scoring and forecast
+  alerts. `day-lookup.ts` requests one local calendar day of ECMWF IFS wind and
+  MFWAM swell/combined waves, joins sources by UTC instant and preserves nulls
+  and per-source failures. Wind is requested in km/h. `day-lookup-model.ts`
+  owns date, hour range and request generation; marker or date changes discard
+  stale results and abort superseded browser requests. Hour edits only filter
+  loaded data. The same `day-lookup-view.ts` appears in point details and saved
+  marker panels, with spot-local timezone and each source's actual grid cell.
+
 - Observations are separate immutable SAM state and effects. Map move-end
   events propose the visible bounds; enabled observation layers load only a
   bounded area at zoom 5+. Late responses from an earlier view are rejected.

@@ -6,6 +6,8 @@ import { linkedSpotGroup } from "./spot-links.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 import { historyCompassView } from "./history-compass.ts";
 import { draftSavedSpot, lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
+import { dayLookupView } from "./day-lookup-view.ts";
+import type { DayLookupPanel } from "./day-lookup-model.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -111,7 +113,7 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
   </fieldset>`;
 };
 
-export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[] = []): TemplateResult | typeof nothing => {
+export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
   const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
@@ -150,6 +152,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
           </div>
         </div>
         <div class="history-body">
+          ${dayLookupView(dayLookup, propose, now)}
           <div class="history-intro">A day qualifies when the selected conditions meet every rule for at least
             ${criteria.minConsecutiveHours} consecutive hourly samples between 06:00 and 18:00 at the spot's local time.
             The same local hours apply every day.

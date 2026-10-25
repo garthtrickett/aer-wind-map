@@ -8,6 +8,7 @@ import { linkedSpotGroup, validSpotLinks } from "./spot-links.ts";
 import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
 import { forecastAlertKey, type ForecastData, type ForecastDataResult, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
+import { alignDayLookup, dayLookupEffect, initialDayLookup, presentDayLookup, type DayLookupEffect, type DayLookupPanel, type DayLookupProposal } from "./day-lookup-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -48,6 +49,7 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  dayLookup: DayLookupPanel;
   telegram: TelegramPanel;
   observations: ObservationsState;
   phase: "idle" | "discovering" | "needsField" | "loading" | "ready" | "failed";
@@ -69,6 +71,7 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | DayLookupProposal
   | TelegramProposal
   | { readonly kind: "telegramSpotRestored"; readonly spot: SavedSpot; readonly linkedSpots?: readonly SavedSpot[]; readonly readOnly?: boolean }
   | ObservationProposal
@@ -119,6 +122,7 @@ export type Proposal =
   | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
+  dayLookup: initialDayLookup,
   telegram: initialTelegram,
   observations: initialObservations,
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
@@ -147,8 +151,17 @@ const selectionChanged = (state: State, point: Point): State => ({
     downloadRequested: false, savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
 });
 
-export const present = (state: State, proposal: Proposal): State => {
+const presentApp = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "dayLookupToggled":
+    case "dayLookupDateChanged":
+    case "dayLookupHoursChanged":
+    case "dayLookupRequested":
+    case "dayLookupStarted":
+    case "dayLookupCompleted": {
+      const dayLookup = presentDayLookup(state.dayLookup, proposal);
+      return dayLookup === state.dayLookup ? state : { ...state, dayLookup };
+    }
     case "telegramRequested":
     case "telegramStarted":
     case "telegramLoaded":
@@ -360,7 +373,14 @@ export const present = (state: State, proposal: Proposal): State => {
   }
 };
 
+export const present = (state: State, proposal: Proposal): State => {
+  const next = presentApp(state, proposal);
+  const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
+  return dayLookup === next.dayLookup ? next : { ...next, dayLookup };
+};
+
 export type Effect =
+  | DayLookupEffect
   | ObservationEffect
   | { readonly kind: "loadForecastPreview"; readonly point: Point; readonly spot: SavedSpot; readonly catalog: readonly SavedSpot[]; readonly request: number }
   | { readonly kind: "discover"; readonly layer: Layer }
@@ -376,6 +396,8 @@ export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
 });
 
 export const nap = (state: State): Effect | null => {
+  const day = dayLookupEffect(state.dayLookup, state.modalOpen || state.history.open);
+  if (day) return day;
   if (state.history.downloadRequested && state.history.data) {
     return { kind: "downloadHistory", data: state.history.data, criteria: state.history.criteria };
   }

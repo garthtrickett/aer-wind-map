@@ -18,6 +18,7 @@ import { loadBuoyHistory, buoyHistoryCsv } from "./buoy-history.ts";
 import { createObservationMarkers } from "./observations-map.ts";
 import { telegramRequest, telegramSpotsKey } from "./telegram-model.ts";
 import { isSavedSpot } from "./saved-spots.ts";
+import { loadDay } from "./day-lookup.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -50,6 +51,8 @@ let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 let miniMapZoom = defaultHistoryMapZoom;
 let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
+let dayController: AbortController | null = null;
+let dayRequest = -1;
 
 const syncMiniMap = (): void => {
   const element = ui.querySelector<HTMLElement>("#history-mini-map");
@@ -202,6 +205,15 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadDay") {
+    dayController?.abort();
+    dayController = new AbortController();
+    dayRequest = effect.request;
+    dispatch({ kind: "dayLookupStarted", request: effect.request });
+    void loadDay(effect.point, effect.date, fetch, dayController.signal).then((result) =>
+      dispatch({ kind: "dayLookupCompleted", request: effect.request, result }));
+    return;
+  }
   if (effect.kind === "loadBuoyHistory") {
     dispatch({ kind: "observationHistoryStarted", key: effect.key });
     void loadBuoyHistory(effect.station, effect.date).then((result) => dispatch(result.ok
@@ -304,6 +316,7 @@ function dispatch(proposal: Proposal): void {
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (dayController && state.dayLookup.request !== dayRequest) { dayController.abort(); dayController = null; }
   if (state.telegram.syncedKey !== previous.telegram.syncedKey) {
     try { window.localStorage.setItem("aer.telegram.synced.v1", state.telegram.syncedKey ?? ""); }
     catch { /* Sync status remains visible; server monitoring is already durable. */ }
@@ -373,7 +386,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Tab" || (!state.modalOpen && !state.history.open && !state.observations.selectedId)) return;
   const dialog = ui.querySelector<HTMLElement>("[role=dialog]");
   if (!dialog) return;
-  const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")];
+  const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")];
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   if (!first || !last) return;
@@ -388,7 +401,7 @@ const refreshTelegram = () => {
 };
 const telegramTimer = window.setInterval(refreshTelegram, 10_000);
 window.addEventListener("focus", refreshTelegram);
-window.addEventListener("pagehide", () => { forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
+window.addEventListener("pagehide", () => { dayController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
