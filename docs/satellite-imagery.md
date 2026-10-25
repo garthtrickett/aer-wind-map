@@ -136,6 +136,19 @@ an appropriate Esri account/licence is being confirmed.
 - Forecast requests were intentionally isolated in this preview. This imagery
   check does not assert that historic imagery matches the weather timeline.
 
+### Release and regression checks
+
+Implementation commit: `72b99fc`. Railway deployment
+`74c3ca13-0c82-4529-a406-f4d04dc49878` succeeded with public Wayback disabled.
+A fresh public-site mobile check confirmed the history control was absent,
+zero Esri requests were made, and regular satellite tiles, source credits,
+weather overlay and Map restoration worked without page errors.
+
+Validation passed: 111 unit tests; TypeScript/production build; imagery-history
+and regular-satellite browser checks at 1440, 390 and 320 px in both WebGL and
+fallback rendering; daily wind/wave lookup regression at desktop and mobile.
+The compact mobile history picker was also verified with real Jinzun imagery.
+
 ### Account choice still unresolved
 
 Esri is the vendor; ArcGIS is its platform, not a competing licence.
