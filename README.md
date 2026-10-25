@@ -233,3 +233,5 @@ read-only access to that spot/conditions for seven days, never account control.
 Saved presets remain local; monitor snapshots persist on the server.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.
+For imagery sources and Google Earth's historical imagery button, see the
+[satellite imagery research note](docs/satellite-imagery.md).
