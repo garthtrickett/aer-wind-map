@@ -1,3 +1,4 @@
+import { loadCompassForecast } from "./compass-forecast.ts";
 import "leaflet/dist/leaflet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
@@ -59,6 +60,8 @@ let dayController: AbortController | null = null;
 let dayRequest = -1;
 let waybackController: AbortController | null = null;
 let waybackRequest = -1;
+let compassController: AbortController | null = null;
+let compassRequest = -1;
 
 const syncMiniMap = (): void => {
   const element = ui.querySelector<HTMLElement>("#history-mini-map");
@@ -213,6 +216,15 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadCompassForecast") {
+    compassController?.abort();
+    const controller = new AbortController();
+    compassController = controller; compassRequest = effect.request;
+    dispatch({ kind: "compassForecastStarted", request: effect.request });
+    void loadCompassForecast(effect.point, effect.source, controller.signal).then((result) =>
+      dispatch({ kind: "compassForecastCompleted", request: effect.request, result, checkedAt: Date.now() }));
+    return;
+  }
   if (effect.kind === "loadWayback") {
     waybackController?.abort();
     const controller = new AbortController();
@@ -345,6 +357,7 @@ function dispatch(proposal: Proposal): void {
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (compassController && state.compassForecast.request !== compassRequest) { compassController.abort(); compassController = null; }
   if (waybackController && state.wayback.request !== waybackRequest) { waybackController.abort(); waybackController = null; }
   if (dayController && state.dayLookup.request !== dayRequest) { dayController.abort(); dayController = null; }
   if (state.telegram.syncedKey !== previous.telegram.syncedKey) {
@@ -431,6 +444,9 @@ document.addEventListener("keydown", (event) => {
   if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
 
+const refreshCompassClock = (): void => { if (state.history.open) dispatch({ kind: "compassClockTick", now: Date.now() }); };
+const compassClockTimer = window.setInterval(refreshCompassClock, 60_000);
+window.addEventListener("focus", refreshCompassClock);
 const alertTimer = window.setInterval(refreshForecastAlerts, 15 * 60 * 1000);
 const observationTimer = window.setInterval(() => { if (!document.hidden) dispatch({ kind: "observationsRefreshed" }); }, 5 * 60 * 1000);
 const refreshTelegram = () => {
@@ -438,7 +454,7 @@ const refreshTelegram = () => {
 };
 const telegramTimer = window.setInterval(refreshTelegram, 10_000);
 window.addEventListener("focus", refreshTelegram);
-window.addEventListener("pagehide", () => { dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
+window.addEventListener("pagehide", () => { compassController?.abort(); clearInterval(compassClockTimer); dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }

@@ -241,8 +241,8 @@ const loadForecastBatch = async (
 };
 
 export const loadForecastPoint = async (
-  point: SavedSpot["point"], fetcher: typeof fetch = fetch,
-): Promise<ForecastDataResult> => (await loadForecastBatch([point], fetcher))[0];
+  point: SavedSpot["point"], fetcher: typeof fetch = fetch, conditions: ConditionSource = "both",
+): Promise<ForecastDataResult> => (await loadForecastBatch([point], fetcher, conditions))[0];
 
 const loadSpotData = async (spots: readonly SavedSpot[], fetcher: typeof fetch): Promise<ReadonlyMap<string, ForecastDataResult>> => {
   const data = new Map<string, ForecastDataResult>();

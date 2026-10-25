@@ -84,6 +84,17 @@
   loaded data. The same `day-lookup-view.ts` appears in point details and saved
   marker panels, with spot-local timezone and each source's actual grid cell.
 
+- The marker compass has independent forecast state in `compass-forecast-model.ts`.
+  Opening a marker loads enabled wind/swell sources through the existing forecast
+  decoder, without opting into alerts. Marker/type changes abort and invalidate
+  old requests; criteria and time-mode changes reuse downloaded data. A minute
+  clock keeps Now on the current hour and refreshes data after 15 minutes.
+  Map-time mode follows the global forecast's valid instant. Exact hourly UTC
+  joins preserve missing values and partial failures. `compass-forecast-view.ts`
+  labels source, valid time and directional fit; `history-compass.ts` draws solid
+  configured wedges and read-only dashed from-bearing rays. No incoming forecast
+  mutates criteria, historical scores or saved presets.
+
 - Observations are separate immutable SAM state and effects. Map move-end
   events propose the visible bounds; enabled observation layers load only a
   bounded area at zoom 5+. Late responses from an earlier view are rejected.

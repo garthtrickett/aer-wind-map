@@ -215,7 +215,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
         </section>
       </div>` : nothing}
-    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now)}
+    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null)}
     ${observationsView(state.observations, propose, now)}
   `;
 };

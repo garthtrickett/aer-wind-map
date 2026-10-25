@@ -36,7 +36,7 @@ try {
   const archiveRequests: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (request) => {
-    if (request.url().includes("open-meteo.com/v1/")) archiveRequests.push(request.url());
+    if (request.url().includes("open-meteo.com/v1/") && new URL(request.url()).searchParams.has("start_date")) archiveRequests.push(request.url());
   });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.locator("#map").click({ position: { x: 430, y: 450 } });

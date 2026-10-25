@@ -66,7 +66,7 @@ test("historical results belong to the selected spot and criteria rescore cached
   assert.equal(ready.history.phase, "ready");
   const rescored = present(ready, { kind: "historyCriteriaChanged", criteria: { ...ready.history.criteria, maxWindSpeed: 3 } });
   assert.equal(rescored.history.data, data);
-  assert.equal(nap(rescored)?.kind, "discover");
+  assert.deepEqual(nap(rescored), { kind: "loadCompassForecast", point, source: "both", request: rescored.compassForecast.request });
 });
 
 test("switching a point to wind only invalidates paired history and in-flight forecast data", () => {

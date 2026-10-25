@@ -40,7 +40,7 @@ try {
         } }) }); return;
       }
       if (url.hostname.endsWith("open-meteo.com")) {
-        const day = url.searchParams.get("start_date") === url.searchParams.get("end_date");
+        const day = url.searchParams.has("start_date") && url.searchParams.get("start_date") === url.searchParams.get("end_date");
         if (day) dayRequests.push(url.toString());
         const marine = url.hostname.startsWith("marine");
         if (day && failWaves && marine) { await route.fulfill({ status: 503, body: "unavailable" }); return; }

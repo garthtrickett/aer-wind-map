@@ -534,3 +534,36 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .imagery-history-panel:has(.imagery-details:not([open])) .imagery-location { display: none; }
   .imagery-history-panel:has(.imagery-details:not([open])) .imagery-date-label { margin-top: 0; }
 }
+
+.history-compass-column { min-width: 0; }
+.compass-area.wind { fill: rgba(20,123,137,.14); }
+.compass-area.swell { fill: rgba(233,161,29,.15); }
+.compass-boundary { stroke-width: 2; }
+.compass-boundary.wind { stroke: #0c6473; }
+.compass-boundary.swell { stroke: #bb7310; }
+.compass-current { pointer-events: none; }
+.compass-current line { stroke-linecap: round; }
+.compass-current-halo { stroke: rgba(255,255,255,.9); stroke-width: 5; }
+.compass-current-ray { stroke-width: 2.5; }
+.compass-current.wind .compass-current-ray { stroke: #006a7b; stroke-dasharray: 7 5; }
+.compass-current.swell .compass-current-ray { stroke: #b56600; stroke-dasharray: 4 8; stroke-dashoffset: -7; }
+.compass-current-arrow { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.compass-current.wind .compass-current-arrow { stroke: #006a7b; }
+.compass-current.swell .compass-current-arrow { stroke: #b56600; }
+.compass-forecast { margin-top: 10px; padding: 11px; border: 1px solid #d1e0dc; border-radius: 10px; background: #f8fbf8; color: #244c58; font-size: 11px; text-align: left; }
+.compass-forecast-controls { display: flex; align-items: end; gap: 8px; }
+.compass-forecast-controls label { display: grid; gap: 4px; flex: 1; min-width: 0; font-weight: 600; }
+.compass-forecast-controls select { width: 100%; min-width: 0; min-height: 34px; padding: 5px; border: 1px solid #bad0d0; border-radius: 6px; color: #244c58; background: #fff; font: inherit; }
+.compass-forecast-controls button { flex-shrink: 0; min-height: 34px; min-width: 34px; border: 1px solid #bad0d0; border-radius: 6px; background: #fff; color: #0c6473; font-size: 20px; }
+.compass-forecast-controls button:active { transform: scale(.97); }
+.compass-forecast-time { margin-top: 8px; font-size: 10px; color: #58767c; }
+.compass-reading { display: grid; gap: 3px; margin-top: 9px; padding-top: 7px; border-top: 1px solid #dae5e1; font-variant-numeric: tabular-nums; }
+.compass-reading strong { font-size: 11px; }
+.compass-reading.wind strong { color: #006a7b; }
+.compass-reading.swell strong { color: #a25b00; }
+.compass-reading small { color: #58767c; font-size: 10px; }
+.compass-forecast-note { margin-top: 9px; color: #638087; font-size: 10px; line-height: 1.5; }
+.compass-forecast [role="status"] { margin-top: 8px; }
+
+.compass-current.wind .compass-current-halo { stroke-dasharray: 7 5; }
+.compass-current.swell .compass-current-halo { stroke-dasharray: 4 8; stroke-dashoffset: -7; }

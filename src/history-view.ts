@@ -1,3 +1,6 @@
+import { compassReadingAt } from "./compass-forecast.ts";
+import { compassForecastView } from "./compass-forecast-view.ts";
+import type { CompassForecast } from "./compass-forecast-model.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
 import { calmWindThresholdKmh, conditionSourceLabel, conditionSource, summarizeHistory, type ConditionSource, type HistoryCriteria } from "./history.ts";
 import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
@@ -113,12 +116,13 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
   </fieldset>`;
 };
 
-export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number): TemplateResult | typeof nothing => {
+export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number, compass: CompassForecast, mapTime: number | null): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
   const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
     id: asNew || !history.savedSpotId ? crypto.randomUUID() : history.savedSpotId });
   const criteria = history.criteria;
+  const reading = compassReadingAt(compass.data, compass.mode === "now" ? compass.nowHour : mapTime, criteria);
   const catalog = [...history.linkedCatalog, ...savedSpots];
   const group = linkedSpotGroup(draftSavedSpot(history), catalog);
   const linkOptions = catalog.filter((spot, index) => spot.id !== (history.savedSpotId ?? history.sourceSpotId) &&
@@ -168,7 +172,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
             </label>
             <p class="history-direction-note">Use a swell-only marker offshore and a wind-only marker near shore, then link them below.</p>
             <div class="history-settings-layout">
-              ${historyCompassView(criteria)}
+              <div class="history-compass-column">${historyCompassView(criteria, reading)}${compassForecastView(compass, reading, propose)}</div>
               <div class="history-settings-fields">
             <div class="history-controls">
               ${numberControl("Swell height from", criteria.minSwellHeight, 0, 15, .1,

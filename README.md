@@ -121,6 +121,24 @@ The smoke tests exercise the official SDK against simulated services on desktop,
 the intended production variables afterward. See [imagery research and deployment
 status](docs/satellite-imagery.md) for real-provider verification.
 
+## Compare forecast directions with your ranges
+
+Open a marker's **Find your season** panel. Its compass shows your selected
+wind and swell ranges as solid pie edges, with dashed lines pointing toward
+the directions the forecast wind and primary swell come **from**. Drag the
+range dots or edit the bearings to compare immediately; forecasts never change
+your saved criteria.
+
+**Now** shows the current hourly forecast. **Map forecast time** follows the
+main map's timeline. The card shows the local valid time, ECMWF wind in km/h,
+and MFWAM primary swell height and period. These are model forecasts, not live
+station measurements; MFWAM's three-hour values are interpolated to hourly.
+Inside/outside labels compare direction only, with your calm-wind override
+shown separately. Wind-only and swell-only markers request their chosen source.
+Missing directions produce no dashed line, and either source can remain usable
+if the other fails. Data loads without enabling alerts, refreshes after 15 minutes
+while the panel is open, and can be refreshed manually.
+
 ## Look up a particular day
 
 Open point details or a saved marker and expand **Look up a day**. Choose a date

@@ -30,3 +30,10 @@ export const clockwiseSectorPath = (start: number, end: number, inner: number, o
   return `M ${outerStart} A ${outer} ${outer} 0 ${large} 1 ${position(start + span, outer)} ` +
     `L ${position(start + span, inner)} A ${inner} ${inner} 0 ${large} 0 ${innerStart} Z`;
 };
+
+export const clockwiseWedgePath = (start: number, end: number, radius: number): string => {
+  const span = end >= start ? end - start : end - start + 360;
+  if (!span) return "";
+  if (span === 360) return `M ${position(start, radius)} A ${radius} ${radius} 0 1 1 ${position(start + 180, radius)} A ${radius} ${radius} 0 1 1 ${position(start, radius)} Z`;
+  return `M 140 140 L ${position(start, radius)} A ${radius} ${radius} 0 ${span > 180 ? 1 : 0} 1 ${position(end, radius)} Z`;
+};

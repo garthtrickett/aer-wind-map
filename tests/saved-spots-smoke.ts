@@ -94,6 +94,9 @@ try {
   await expect(minimumPeriod).toHaveValue("12");
   await expect(page.locator(".history-month").first()).toContainText("1/1 days");
   assert.equal(archiveRequests.length, 2, "period changes should rescore downloaded history");
+  // The compass loads its two sources independently of the opted-in alert preview.
+  const compassRequests = 2;
+  await expect.poll(() => forecastRequests).toBe(compassRequests);
   await page.getByLabel("Name this spot and season").fill("Wet season Bukit");
   await page.locator(".history-alert-option input").check();
   await page.getByLabel("Matching days for rule 1").fill("2");
@@ -109,7 +112,7 @@ try {
   await expect(preview).toContainText("Your alert threshold is met");
   await expect(preview.locator(".history-forecast-windows li")).toHaveCount(4);
   await expect(preview.locator(".history-forecast-windows li").first()).toContainText("06:00–18:00");
-  assert.equal(forecastRequests, 2);
+  assert.equal(forecastRequests, compassRequests + 2);
   await maximumPeriod.fill("11");
   await maximumPeriod.press("Tab");
   await expect(preview).toContainText("0 of 14 days match");
@@ -120,7 +123,7 @@ try {
   await page.getByLabel("Matching days for rule 1").press("Tab");
   await expect(preview).toContainText("4 of 14 days match");
   await expect(preview).toContainText("Your alert threshold is not met yet");
-  assert.equal(forecastRequests, 2, "condition and day-threshold edits reuse downloaded forecasts");
+  assert.equal(forecastRequests, compassRequests + 2, "condition and day-threshold edits reuse downloaded forecasts");
   await page.getByLabel("Matching days for rule 1").fill("2");
   await page.getByLabel("Matching days for rule 1").press("Tab");
   const lookAhead = page.getByLabel("Forecast look-ahead days");
@@ -157,7 +160,7 @@ try {
   await lookAhead.press("Tab");
   await expect(preview).toContainText("4 of 14 days match");
   await expect(preview).toContainText("Your alert threshold is met");
-  assert.equal(forecastRequests, 2, "sliding rules and look-ahead reuse the same downloaded hours");
+  assert.equal(forecastRequests, compassRequests + 2, "sliding rules and look-ahead reuse the same downloaded hours");
   responseMode = "network";
   await page.getByRole("button", { name: "Refresh forecast", exact: true }).click();
   await expect(preview).toContainText("The forecast could not be loaded");

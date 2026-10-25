@@ -1,3 +1,4 @@
+import { initialCompassForecast, alignCompassForecast, presentCompassForecast, compassForecastEffect, type CompassForecast, type CompassForecastProposal, type CompassForecastEffect } from "./compass-forecast-model.ts";
 import { alertRulesFor, forecastLookAhead, validForecastLookAhead, validAlertRules, type AlertDayRule } from "./alert-rules.ts";
 import { initialTelegram, presentTelegram, type TelegramPanel, type TelegramProposal } from "./telegram-model.ts";
 import type { WeatherError } from "./ecmwf.ts";
@@ -52,6 +53,7 @@ export type HistoryPanel = Readonly<{
 
 export type State = Readonly<{
   basemap: Basemap;
+  compassForecast: CompassForecast;
   wayback: WaybackPanel;
   weatherOverlay: boolean;
   satellite: Readonly<{ available: boolean; phase: "idle" | "needsData" | "loading" | "ready" | "failed"; data: Satellite | null; message: string | null }>;
@@ -77,6 +79,7 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | CompassForecastProposal
   | WaybackProposal
   | { readonly kind: "basemapSelected"; readonly basemap: Basemap }
   | { readonly kind: "weatherOverlayChanged"; readonly visible: boolean }
@@ -136,7 +139,7 @@ export type Proposal =
 export const initialState: State = {
   basemap: "map", weatherOverlay: true, wayback: initialWayback,
   satellite: { available: false, phase: "idle", data: null, message: null },
-  dayLookup: initialDayLookup,
+  dayLookup: initialDayLookup, compassForecast: initialCompassForecast,
   telegram: initialTelegram,
   observations: initialObservations,
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
@@ -176,6 +179,11 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "waybackCompleted":
     case "waybackCaptureSelected":
     case "waybackTilesFailed": return { ...state, wayback: presentWayback(state.wayback, proposal) };
+    case "compassTimeModeChanged":
+    case "compassForecastRefresh":
+    case "compassClockTick":
+    case "compassForecastStarted":
+    case "compassForecastCompleted": return { ...state, compassForecast: presentCompassForecast(state.compassForecast, proposal) };
     case "weatherOverlayChanged": return { ...state, weatherOverlay: proposal.visible };
     case "satelliteStarted": return state.satellite.phase === "needsData" ? { ...state, satellite: { ...state.satellite, phase: "loading" } } : state;
     case "satelliteCompleted": return state.satellite.phase !== "loading" ? state : proposal.result.ok
@@ -408,10 +416,12 @@ export const present = (state: State, proposal: Proposal): State => {
   const next = presentApp(state, proposal);
   const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
   const wayback = alignWayback(next.wayback, next.selected, next.basemap === "wayback");
-  return dayLookup === next.dayLookup && wayback === next.wayback ? next : { ...next, dayLookup, wayback };
+  const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : null, conditionSource(next.history.criteria));
+  return dayLookup === next.dayLookup && wayback === next.wayback && compassForecast === next.compassForecast ? next : { ...next, dayLookup, wayback, compassForecast };
 };
 
 export type Effect =
+  | CompassForecastEffect
   | WaybackEffect
   | { readonly kind: "loadSatellite" }
   | DayLookupEffect
@@ -446,6 +456,8 @@ export const nap = (state: State): Effect | null => {
     return { kind: "loadForecastPreview", point: state.history.point, spot: draftSavedSpot(state.history),
       catalog: [...state.history.linkedCatalog, ...state.savedSpots], request: state.history.forecastPreview.request };
   }
+  const compass = compassForecastEffect(state.compassForecast);
+  if (compass) return compass;
   if (state.phase === "idle") return { kind: "discover", layer: state.layer };
   if (state.phase === "needsField" && state.run) {
     return { kind: "load", run: state.run, step: state.step, key: fieldKey(state.run, state.step, state.layer), layer: state.layer };
