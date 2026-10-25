@@ -12,7 +12,7 @@ investigated but is not implemented in Aer.
 | Planet, including SkySat | Paid detailed commercial imagery, also available through SkyFi | Another source to search for detailed captures on useful dates. |
 | Google Earth | Satellite and aerial imagery from multiple providers, with historical views | Inspect the available detailed coastal images and compare dates manually. |
 | Esri World Imagery Wayback | Historical releases of Esri's satellite/aerial basemap, with tiles and capture metadata | A technically viable source for a detailed history layer, subject to Esri's usage terms and account requirements. |
-| MapTiler regular satellite | A regular satellite/aerial basemap with a provider API key | Implemented as an optional Map / Satellite switch; activation and live imagery verification require the operator's key. |
+| MapTiler regular satellite | A regular satellite/aerial basemap with a provider API key | Live as a Map / Satellite switch; real imagery verified on desktop, mobile and the fallback renderer on 25 October 2026. |
 
 SkyFi is a marketplace: its free Sentinel-2 imagery comes from Copernicus;
 its paid detailed imagery comes from commercial providers. We can access
@@ -34,8 +34,13 @@ layer. The regular satellite switch uses MapTiler while retaining OpenFreeMap
 for street view. This is separate from the dated-imagery investigation below.
 See the [README setup instructions](../README.md#map-and-satellite-backgrounds)
 for the domain-restricted `VITE_MAPTILER_API_KEY` build variable. The switch is
-hidden until configured. Tests use simulated provider responses; a real key
-is required to verify real imagery and enable it on the public app.
+hidden until configured. Automated regression tests use simulated provider
+responses. On 25 October 2026 the operator's domain-restricted key was configured
+in Railway and real imagery was verified from the public app on desktop,
+390 px mobile and the non-WebGL fallback renderer. All three checks loaded
+HTTP 200 imagery tiles, preserved the selected location, displayed provider
+credits, toggled the weather overlay and returned to Map without page errors.
+No key is stored in this repository.
 
 MapTiler's [Free plan](https://www.maptiler.com/cloud/pricing/) is suitable for
 testing, personal or noncommercial use, with usage caps and required logo/credits.
