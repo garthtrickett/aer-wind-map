@@ -54,6 +54,32 @@ identify the source models and state partial data coverage. Matches use
 are confirmed as they approach. A notification link opens a read-only preview
 in a fresh phone browser. Disconnect in Aer or send `/stop` to the bot to stop.
 
+## Map and satellite backgrounds
+
+With a MapTiler key configured, a **Map / Satellite** switch appears beside the
+zoom controls. Map uses the existing OpenFreeMap street style (OpenStreetMap
+raster on browsers without WebGL2). Satellite uses MapTiler's regular imagery
+basemap; it does not select historical capture dates. Changing backgrounds keeps
+the current location, zoom, saved markers, forecast and settings.
+
+Satellite starts with weather shading and arrows hidden for a clear view.
+Enable **Weather overlay** to show the current wind/wave field over the imagery.
+Returning to Map restores the weather overlay. MapTiler's logo and imagery
+credits appear in Satellite view. If imagery cannot load, Aer returns to Map.
+
+To enable it, create a MapTiler key restricted to the app's domain, set
+`VITE_MAPTILER_API_KEY` in Railway build variables, and redeploy. For local
+development set it in `.env.local`. The key is browser-visible by design;
+never use this variable for a bot token or other server credential. Without a
+key the satellite control stays hidden and Aer requests no MapTiler data.
+Choose a suitable [MapTiler plan](https://www.maptiler.com/cloud/pricing/);
+the Free plan is for testing, personal or noncommercial use and has usage caps.
+
+For the simulated-provider browser check, build with
+`VITE_MAPTILER_API_KEY=test-only npm run build`, then run `npm run smoke:basemap`.
+This tests controls and rendering without contacting MapTiler; it does not
+verify a real account's imagery access. Rebuild with the intended key before use.
+
 ## Look up a particular day
 
 Open point details or a saved marker and expand **Look up a day**. Choose a date

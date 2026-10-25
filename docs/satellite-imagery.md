@@ -12,6 +12,7 @@ investigated but is not implemented in Aer.
 | Planet, including SkySat | Paid detailed commercial imagery, also available through SkyFi | Another source to search for detailed captures on useful dates. |
 | Google Earth | Satellite and aerial imagery from multiple providers, with historical views | Inspect the available detailed coastal images and compare dates manually. |
 | Esri World Imagery Wayback | Historical releases of Esri's satellite/aerial basemap, with tiles and capture metadata | A technically viable source for a detailed history layer, subject to Esri's usage terms and account requirements. |
+| MapTiler regular satellite | A regular satellite/aerial basemap with a provider API key | Implemented as an optional Map / Satellite switch; activation and live imagery verification require the operator's key. |
 
 SkyFi is a marketplace: its free Sentinel-2 imagery comes from Copernicus;
 its paid detailed imagery comes from commercial providers. We can access
@@ -24,6 +25,21 @@ Sources:
 - [SkyFi's guide to Copernicus Sentinel-2 imagery](https://learn.skyfi.com/how-to/how-to-order-sentinel-2-open-data/)
 - [SkyFi products, including WorldView and SkySat](https://skyfi.com/en/products)
 - [Google's explanation of its imagery sources](https://blog.google/products-and-platforms/products/maps/how-do-satellite-images-work/)
+- [MapTiler satellite tiles](https://docs.maptiler.com/schema-raster/satellite/)
+
+## Regular satellite switch
+
+OpenFreeMap, Aer's street-map provider, does not offer a satellite imagery
+layer. The regular satellite switch uses MapTiler while retaining OpenFreeMap
+for street view. This is separate from the dated-imagery investigation below.
+See the [README setup instructions](../README.md#map-and-satellite-backgrounds)
+for the domain-restricted `VITE_MAPTILER_API_KEY` build variable. The switch is
+hidden until configured. Tests use simulated provider responses; a real key
+is required to verify real imagery and enable it on the public app.
+
+MapTiler's [Free plan](https://www.maptiler.com/cloud/pricing/) is suitable for
+testing, personal or noncommercial use, with usage caps and required logo/credits.
+Satellite imagery is a mosaic with variable acquisition dates, not live weather.
 
 ## Google Earth's history button
 

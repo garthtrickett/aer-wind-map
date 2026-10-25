@@ -48,6 +48,16 @@
 
 ## Coding decisions
 
+- The optional regular satellite basemap uses a domain-restricted browser
+  MapTiler key configured at build time. No key means no satellite control or
+  MapTiler requests. Metadata loads on first selection and stays in memory;
+  errors restore street view. MapLibre adds a raster source/layer to the existing
+  style and preserves original street-layer visibility, leaving the custom
+  weather layer and particle canvas intact. The Canvas fallback replaces only
+  Leaflet's base tile layer. Background changes preserve camera and markers;
+  Satellite hides weather graphics by default and offers an overlay checkbox.
+  The imagery's provider credits and MapTiler logo accompany the active layer.
+
 - The particular-day lookup is separate from seasonal scoring and forecast
   alerts. `day-lookup.ts` requests one local calendar day of ECMWF IFS wind and
   MFWAM swell/combined waves, joins sources by UTC instant and preserves nulls

@@ -89,6 +89,17 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           @click=${() => propose({ kind: "observationsToggled" })}>Observations</button></div>
     </header>
 
+    ${state.satellite.available ? html`<section class="basemap-tools" aria-label="Map background">
+      <div class="layer-switch basemap-switch" role="group" aria-label="Map background selection">
+        <button type="button" aria-pressed=${state.basemap === "map"} @click=${() => propose({ kind: "basemapSelected", basemap: "map" })}>Map</button>
+        <button type="button" aria-pressed=${state.basemap === "satellite"} @click=${() => propose({ kind: "basemapSelected", basemap: "satellite" })}>Satellite</button>
+      </div>
+      ${state.basemap === "satellite" ? html`<label class="basemap-overlay"><input type="checkbox" .checked=${state.weatherOverlay}
+        @change=${(event: Event) => propose({ kind: "weatherOverlayChanged", visible: (event.target as HTMLInputElement).checked })} />Weather overlay</label>` : nothing}
+      ${state.satellite.phase === "needsData" || state.satellite.phase === "loading" ? html`<p role="status">Loading imagery…</p>`
+        : state.satellite.message ? html`<p role="status">${state.satellite.message}</p>` : nothing}
+    </section>` : nothing}
+
     ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
       <div class="saved-spots-head"><strong>Saved spots</strong><button type="button" aria-label="Close saved spots"
         @click=${() => propose({ kind: "savedSpotsToggled" })}>×</button></div>

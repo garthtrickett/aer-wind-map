@@ -1,10 +1,11 @@
 import { conditionSource, conditionSourceLabel } from "./history.ts";
 import * as L from "leaflet";
 import maplibreGL from "@maplibre/maplibre-gl-leaflet";
-import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
+import { setWorkerUrl, type Map as MapLibreMap, type VisibilitySpecification } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Point } from "./model.ts";
 import type { SavedSpot } from "./saved-spots.ts";
+import type { Basemap, Satellite } from "./satellite.ts";
 
 export type WindMap = Readonly<{
   map: L.Map;
@@ -15,14 +16,16 @@ export type WindMap = Readonly<{
   pointAt: (position: Readonly<{ x: number; y: number }>) => Point;
   focus: (point: Point) => void;
   setSavedSpots: (spots: readonly SavedSpot[]) => void;
+  setBasemap: (basemap: Basemap, satellite: Satellite | null) => void;
 }>;
 
 const longitudeWithinWorld = (longitude: number): number =>
   ((longitude + 180) % 360 + 360) % 360 - 180;
 
 export const createWindMap = (
-  { element, flag, onSelect, onSavedSpotSelect }: Readonly<{
+  { element, flag, onSelect, onSavedSpotSelect, onSatelliteError }: Readonly<{
     element: HTMLElement; flag: HTMLElement; onSelect: (point: Point) => void; onSavedSpotSelect: (id: string) => void;
+    onSatelliteError: () => void;
   }>,
 ): WindMap => {
   setWorkerUrl(maplibreWorkerUrl);
@@ -58,11 +61,12 @@ export const createWindMap = (
 
   const webgl2 = Boolean(document.createElement("canvas").getContext("webgl2"));
   let maplibre: MapLibreMap | null = null;
+  let streetRaster: L.TileLayer | null = null;
   if (webgl2) {
     const layer = maplibreGL({ style: "https://tiles.openfreemap.org/styles/positron", attributionControl: false }).addTo(map);
     maplibre = layer.getMaplibreMap();
   } else {
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    streetRaster = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 20,
       maxNativeZoom: 19,
       updateWhenIdle: true,
@@ -77,6 +81,68 @@ export const createWindMap = (
   map.attributionControl.addAttribution(
     '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data">ECMWF IFS</a> · CC BY 4.0',
   );
+
+  let basemap: Basemap = "map";
+  let satellite: Satellite | null = null;
+  let satelliteRaster: L.TileLayer | null = null;
+  let streetLayers: readonly Readonly<{ id: string; visibility: VisibilitySpecification }>[] | null = null;
+  let renderedSatellite: Satellite | null = null;
+  let satelliteAttribution = "";
+  let showingStreetAttribution = webgl2;
+  const streetAttribution = '<a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const logo = L.DomUtil.create("a", "satellite-logo");
+  logo.href = "https://www.maptiler.com/"; logo.target = "_blank"; logo.rel = "noopener noreferrer"; logo.hidden = true;
+  const logoImage = L.DomUtil.create("img", "", logo);
+  logoImage.alt = "MapTiler"; logoImage.width = 100; logoImage.height = 25;
+  const LogoControl = L.Control.extend({ onAdd: () => logo });
+  new LogoControl({ position: "bottomleft" }).addTo(map);
+  L.DomEvent.disableClickPropagation(logo);
+  const applyBasemap = (): void => {
+    const active = basemap === "satellite" && satellite !== null;
+    logo.hidden = !active;
+    if (active && !logoImage.src) logoImage.src = "https://api.maptiler.com/resources/logo.svg";
+    if (maplibre && streetLayers) {
+      if (satellite && satellite !== renderedSatellite && maplibre.getSource("aer-satellite")) {
+        maplibre.removeLayer("aer-satellite"); maplibre.removeSource("aer-satellite");
+      }
+      if (satellite && !maplibre.getSource("aer-satellite")) {
+        maplibre.addSource("aer-satellite", { type: "raster", tiles: [...satellite.tiles], tileSize: satellite.tileSize,
+          minzoom: satellite.minZoom, maxzoom: satellite.maxZoom });
+        maplibre.addLayer({ id: "aer-satellite", type: "raster", source: "aer-satellite", layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+          maplibre.getLayer("aer-wind") ? "aer-wind" : undefined);
+      }
+      for (const layer of streetLayers) maplibre.setLayoutProperty(layer.id, "visibility", active ? "none" : layer.visibility);
+      if (maplibre.getLayer("aer-satellite")) maplibre.setLayoutProperty("aer-satellite", "visibility", active ? "visible" : "none");
+      if (active && showingStreetAttribution) { map.attributionControl.removeAttribution(streetAttribution); showingStreetAttribution = false; }
+      else if (!active && !showingStreetAttribution) { map.attributionControl.addAttribution(streetAttribution); showingStreetAttribution = true; }
+    } else if (streetRaster) {
+      if (active && satellite) {
+        if (satellite !== renderedSatellite) { satelliteRaster?.remove(); satelliteRaster = null; }
+        if (!satelliteRaster) satelliteRaster = L.tileLayer(satellite.tiles[0], { tileSize: satellite.tileSize,
+          zoomOffset: satellite.tileSize === 512 ? -1 : 0, maxZoom: 20, minNativeZoom: satellite.minZoom, maxNativeZoom: satellite.maxZoom,
+          updateWhenIdle: true, className: "satellite-tile" }).on("tileerror", () => { if (basemap === "satellite") onSatelliteError(); });
+        streetRaster.remove();
+        if (!map.hasLayer(satelliteRaster)) satelliteRaster.addTo(map);
+      } else {
+        satelliteRaster?.remove();
+        if (!map.hasLayer(streetRaster)) streetRaster.addTo(map);
+      }
+    }
+    if (satellite) renderedSatellite = satellite;
+    if (satelliteAttribution) map.attributionControl.removeAttribution(satelliteAttribution);
+    if (active && satellite) {
+      // Preserve provider credits as text, without injecting upstream markup.
+      const text = new DOMParser().parseFromString(satellite.attribution, "text/html").body.textContent ?? "";
+      satelliteAttribution = `<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">© MapTiler</a> · ${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}`;
+      map.attributionControl.addAttribution(satelliteAttribution);
+    }
+    element.dataset.basemap = active ? "satellite" : "map";
+  };
+  if (maplibre) {
+    maplibre.once("load", () => { streetLayers = maplibre!.getStyle().layers.filter((layer) => layer.id !== "aer-wind")
+      .map((layer) => ({ id: layer.id, visibility: layer.layout?.visibility ?? "visible" })); applyBasemap(); });
+    maplibre.on("error", (event) => { if (basemap === "satellite" && "sourceId" in event && event.sourceId === "aer-satellite") onSatelliteError(); });
+  }
 
   let selected: Point | null = null;
   const screenPoint = (point: Point): Readonly<{ x: number; y: number }> => {
@@ -136,6 +202,7 @@ export const createWindMap = (
     map,
     maplibre,
     setSavedSpots,
+    setBasemap: (next, data) => { basemap = next; satellite = data; applyBasemap(); },
     focus: (point) => map.setView([point.latitude, point.longitude], Math.max(map.getZoom(), 6), { animate: true }),
     center: () => ({ latitude: map.getCenter().lat, longitude: longitudeWithinWorld(map.getCenter().lng) }),
     screenPoint,

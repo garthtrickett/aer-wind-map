@@ -9,6 +9,7 @@ import type { SavedSpot, SavedSpotsError } from "./saved-spots.ts";
 import { forecastAlertKey, type ForecastData, type ForecastDataResult, type ForecastAlertCheck, type ForecastAlertError, type ForecastAlertSummary } from "./forecast-alerts.ts";
 import { initialObservations, observationEffect, presentObservations, type ObservationEffect, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 import { alignDayLookup, dayLookupEffect, initialDayLookup, presentDayLookup, type DayLookupEffect, type DayLookupPanel, type DayLookupProposal } from "./day-lookup-model.ts";
+import type { Basemap, SatelliteResult, Satellite } from "./satellite.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -49,6 +50,9 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  basemap: Basemap;
+  weatherOverlay: boolean;
+  satellite: Readonly<{ available: boolean; phase: "idle" | "needsData" | "loading" | "ready" | "failed"; data: Satellite | null; message: string | null }>;
   dayLookup: DayLookupPanel;
   telegram: TelegramPanel;
   observations: ObservationsState;
@@ -71,6 +75,11 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | { readonly kind: "basemapSelected"; readonly basemap: Basemap }
+  | { readonly kind: "weatherOverlayChanged"; readonly visible: boolean }
+  | { readonly kind: "satelliteStarted" }
+  | { readonly kind: "satelliteCompleted"; readonly result: SatelliteResult }
+  | { readonly kind: "satelliteTilesFailed" }
   | DayLookupProposal
   | TelegramProposal
   | { readonly kind: "telegramSpotRestored"; readonly spot: SavedSpot; readonly linkedSpots?: readonly SavedSpot[]; readonly readOnly?: boolean }
@@ -122,6 +131,8 @@ export type Proposal =
   | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
+  basemap: "map", weatherOverlay: true,
+  satellite: { available: false, phase: "idle", data: null, message: null },
   dayLookup: initialDayLookup,
   telegram: initialTelegram,
   observations: initialObservations,
@@ -153,6 +164,17 @@ const selectionChanged = (state: State, point: Point): State => ({
 
 const presentApp = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "basemapSelected": return proposal.basemap === state.basemap || (proposal.basemap === "satellite" && !state.satellite.available) ? state
+      : { ...state, basemap: proposal.basemap, weatherOverlay: proposal.basemap === "map", satellite: {
+        ...state.satellite, message: null, phase: proposal.basemap === "satellite" && !state.satellite.data && state.satellite.phase !== "loading" ? "needsData" : state.satellite.phase } };
+    case "weatherOverlayChanged": return { ...state, weatherOverlay: proposal.visible };
+    case "satelliteStarted": return state.satellite.phase === "needsData" ? { ...state, satellite: { ...state.satellite, phase: "loading" } } : state;
+    case "satelliteCompleted": return state.satellite.phase !== "loading" ? state : proposal.result.ok
+      ? { ...state, satellite: { ...state.satellite, phase: "ready", data: proposal.result.data, message: null } }
+      : { ...state, basemap: "map", weatherOverlay: true, satellite: { ...state.satellite, phase: "failed", data: null, message: proposal.result.message } };
+    case "satelliteTilesFailed": return state.basemap !== "satellite" ? state
+      : { ...state, basemap: "map", weatherOverlay: true, satellite: { ...state.satellite, phase: "failed", data: null,
+        message: "Satellite imagery is unavailable. Map view restored; try again." } };
     case "dayLookupToggled":
     case "dayLookupDateChanged":
     case "dayLookupHoursChanged":
@@ -380,6 +402,7 @@ export const present = (state: State, proposal: Proposal): State => {
 };
 
 export type Effect =
+  | { readonly kind: "loadSatellite" }
   | DayLookupEffect
   | ObservationEffect
   | { readonly kind: "loadForecastPreview"; readonly point: Point; readonly spot: SavedSpot; readonly catalog: readonly SavedSpot[]; readonly request: number }
@@ -396,6 +419,7 @@ export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
 });
 
 export const nap = (state: State): Effect | null => {
+  if (state.satellite.phase === "needsData") return { kind: "loadSatellite" };
   const day = dayLookupEffect(state.dayLookup, state.modalOpen || state.history.open);
   if (day) return day;
   if (state.history.downloadRequested && state.history.data) {

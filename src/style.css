@@ -85,6 +85,16 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .layer-switch button { flex: 1; padding: 7px 4px; border: 0; border-radius: 8px; background: transparent; color: #b9d6d7; font-size: 11px; font-weight: 700; }
 .layer-switch button[aria-pressed="true"] { background: #80dacd; color: #082e3b; box-shadow: 0 2px 9px rgba(0, 0, 0, .2); }
 .layer-switch button:hover:not([aria-pressed="true"]) { background: rgba(255,255,255,.12); color: #fff; }
+.basemap-tools { position: absolute; top: 24px; right: 76px; width: 160px; padding: 5px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; background: #103c49; box-shadow: 0 4px 16px rgba(0,20,30,.2); }
+.basemap-switch { margin-top: 0; padding: 2px; }
+.basemap-switch button { min-height: 34px; }
+.basemap-tools > p { padding: 7px; color: #e4d8b8; font-size: 11px; line-height: 1.5; }
+.basemap-overlay { display: flex; align-items: center; gap: 6px; padding: 8px 4px 4px; color: #d6eee8; font-size: 11px; }
+.basemap-overlay input { width: 16px; height: 16px; accent-color: #80dacd; }
+.satellite-logo { padding: 3px; border-radius: 4px; background: rgba(255,255,255,.85); }
+.satellite-logo[hidden] { display: none; }
+.satellite-logo img { display: block; }
+.leaflet-bottom .satellite-logo { margin-bottom: 2px; }
 .saved-spots-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.18); border-radius: 9px; background: rgba(255,255,255,.08); color: #d9eeec; font-size: 11px; font-weight: 700; text-align: left; }
 .saved-spots-toggle:hover, .saved-spots-toggle[aria-expanded="true"] { background: rgba(255,255,255,.16); }
 .saved-spots-toggle span { display: grid; place-items: center; min-width: 20px; height: 20px; border-radius: 6px; background: #e9b54a; color: #153943; }
@@ -371,6 +381,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .legend { bottom: 35px; }
 }
 @media (max-width: 680px) {
+  .basemap-tools { top: 84px; right: 12px; width: 126px; }
+  .basemap-overlay { font-size: 10px; gap: 4px; }
   .history-scrim { padding: 7px; }
   .history-panel { max-height: calc(100dvh - 14px); border-radius: 16px; }
   .history-head { padding: 15px 16px 13px; }
@@ -481,3 +493,9 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .history-delete-marker { min-height: 35px; padding: 7px 10px; border: 1px solid #d8b5ad; border-radius: 8px; background: transparent; color: #963e32; font-size: 11px; font-weight: 700; }
 .history-delete-marker:hover { background: #f9e8e4; }
+
+@media (max-width: 380px) {
+  .basemap-tools { width: 66px; }
+  .basemap-switch { flex-direction: column; }
+  .basemap-overlay { flex-direction: column; text-align: center; line-height: 1.4; }
+}

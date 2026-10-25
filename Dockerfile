@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+ARG VITE_MAPTILER_API_KEY
 RUN npm run build
 
 FROM node:24-slim

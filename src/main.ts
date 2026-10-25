@@ -19,6 +19,7 @@ import { createObservationMarkers } from "./observations-map.ts";
 import { telegramRequest, telegramSpotsKey } from "./telegram-model.ts";
 import { isSavedSpot } from "./saved-spots.ts";
 import { loadDay } from "./day-lookup.ts";
+import { loadSatellite, mapTilerTileJson } from "./satellite.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -39,7 +40,8 @@ const arrowsCanvas = requireCanvas("wind-arrows");
 const flag = requireElement("selected-flag");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, ForecastField>();
-let state: State = initialState;
+const satelliteUrl = mapTilerTileJson(import.meta.env.VITE_MAPTILER_API_KEY);
+let state: State = { ...initialState, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
@@ -125,6 +127,7 @@ ui.addEventListener("keydown", (event) => {
 const windMap = createWindMap({ element: mapElement, flag,
   onSelect: (point) => dispatch({ kind: "locationSelected", point }),
   onSavedSpotSelect: (id) => dispatch({ kind: "savedSpotOpened", id }),
+  onSatelliteError: () => dispatch({ kind: "satelliteTilesFailed" }),
 });
 const windRenderer = createWindRenderer(windMap.map, windMap.maplibre, colorCanvas, arrowsCanvas);
 const observationMarkers = createObservationMarkers(windMap.map, (id) => dispatch({ kind: "observationSelected", id }));
@@ -205,6 +208,12 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "loadSatellite") {
+    dispatch({ kind: "satelliteStarted" });
+    void (satelliteUrl ? loadSatellite(satelliteUrl) : Promise.resolve({ ok: false as const, message: "Satellite is unavailable." }))
+      .then((result) => dispatch({ kind: "satelliteCompleted", result }));
+    return;
+  }
   if (effect.kind === "loadDay") {
     dayController?.abort();
     dayController = new AbortController();
@@ -321,7 +330,10 @@ function dispatch(proposal: Proposal): void {
     try { window.localStorage.setItem("aer.telegram.synced.v1", state.telegram.syncedKey ?? ""); }
     catch { /* Sync status remains visible; server monitoring is already durable. */ }
   }
-  arrowsCanvas.hidden = state.layer === "waves";
+  colorCanvas.hidden = windMap.maplibre !== null || !state.weatherOverlay;
+  arrowsCanvas.hidden = state.layer === "waves" || !state.weatherOverlay;
+  if (state.basemap !== previous.basemap || state.satellite.data !== previous.satellite.data)
+    windMap.setBasemap(state.basemap, state.satellite.data);
   render(view(state, dispatch, windMap.center, Date.now()), ui);
   render(flagView(state, dispatch), flag);
   syncMiniMap();
@@ -333,8 +345,9 @@ function dispatch(proposal: Proposal): void {
     }
   }
 
-  if (displayedField !== state.field) {
-    displayedField = state.field;
+  const visibleField = state.weatherOverlay ? state.field : null;
+  if (displayedField !== visibleField) {
+    displayedField = visibleField;
     windRenderer.setField(displayedField);
   }
   if (selectedPoint !== state.selected) {
