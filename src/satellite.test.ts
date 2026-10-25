@@ -3,7 +3,7 @@ import test from "node:test";
 import { loadSatellite, mapTilerTileJson } from "./satellite.ts";
 import { initialState, nap, present } from "./model.ts";
 
-const metadata = { tiles: ["https://api.maptiler.com/tiles/satellite-v4/{z}/{x}/{y}.jpg?key=test-only"],
+const metadata = { tiles: ["https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=test-only"],
   attribution: "© MapTiler © Imagery provider", minzoom: 0, maxzoom: 22 };
 const fixture = (value: unknown, status = 200): typeof fetch => async () => new Response(JSON.stringify(value), { status });
 
@@ -12,6 +12,7 @@ test("satellite is opt-in and an unconfigured key does not enable it", async () 
   assert.equal(mapTilerTileJson(" "), null);
   const url = mapTilerTileJson("test-only")!;
   assert.equal(new URL(url).searchParams.get("key"), "test-only");
+  assert.equal(new URL(url).pathname, "/tiles/satellite-v2/tiles.json");
   assert.equal(present(initialState, { kind: "basemapSelected", basemap: "satellite" }), initialState);
   const result = await loadSatellite(url, fixture(metadata));
   assert.ok(result.ok);

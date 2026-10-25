@@ -49,7 +49,7 @@ try {
           metadataRequests++;
           if (holdMetadata) await new Promise<void>((resolve) => { releaseMetadata = resolve; });
           await route.fulfill({ status: failMetadata ? 403 : 200, contentType: "application/json", body: JSON.stringify({ tiles: [
-            "https://api.maptiler.com/tiles/satellite-v4/{z}/{x}/{y}.jpg?key=test-only"], minzoom: 0, maxzoom: 22, attribution: "© Imagery test provider" }) });
+            "https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=test-only"], minzoom: 0, maxzoom: 22, attribution: "© Imagery test provider" }) });
         } else {
           tileRequests++;
           const failed = failTiles && url.pathname.endsWith(".jpg");

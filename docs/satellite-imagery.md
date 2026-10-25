@@ -41,6 +41,12 @@ MapTiler's [Free plan](https://www.maptiler.com/cloud/pricing/) is suitable for
 testing, personal or noncommercial use, with usage caps and required logo/credits.
 Satellite imagery is a mosaic with variable acquisition dates, not live weather.
 
+The TileJSON endpoint uses `satellite-v2`, as listed in MapTiler's
+[satellite dataset definition](https://docs.maptiler.com/schema-raster/satellite/).
+On 25 October 2026, a real browser request from Aer returned HTTP 200 for
+`/tiles/satellite-v2/tiles.json`; the `satellite-v4` identifier appearing in
+some API examples returned HTTP 404. The endpoint is asserted in the unit test.
+
 ## Google Earth's history button
 
 Google Earth has a **Historical imagery** button that opens a timeline of

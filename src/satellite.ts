@@ -3,7 +3,7 @@ export type Satellite = Readonly<{ tiles: readonly string[]; attribution: string
 export type SatelliteResult = Readonly<{ ok: true; data: Satellite }> | Readonly<{ ok: false; message: string }>;
 
 export const mapTilerTileJson = (key: string | undefined): string | null => key?.trim()
-  ? `https://api.maptiler.com/tiles/satellite-v4/tiles.json?${new URLSearchParams({ key: key.trim() })}` : null;
+  ? `https://api.maptiler.com/tiles/satellite-v2/tiles.json?${new URLSearchParams({ key: key.trim() })}` : null;
 
 export const loadSatellite = async (url: string, fetcher: typeof fetch = fetch): Promise<SatelliteResult> => {
   try {
