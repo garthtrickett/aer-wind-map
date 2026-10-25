@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import type { WaybackPanel, WaybackProposal } from "./wayback-model.ts";
+import { displayDay } from "./dates.ts";
 
 export const waybackView = (panel: WaybackPanel, pinned: boolean, propose: (proposal: WaybackProposal) => void,
   zoomToCoast: () => void): TemplateResult => {
@@ -19,7 +20,7 @@ export const waybackView = (panel: WaybackPanel, pinned: boolean, propose: (prop
           <select aria-label="Imagery capture date" .value=${String(panel.release)}
             @change=${(event: Event) => propose({ kind: "waybackCaptureSelected", release: Number((event.target as HTMLSelectElement).value) })}>
             ${captures.map((entry) => html`<option value=${entry.release}>${entry.captured
-              ? `${entry.captured}${entry.source ? ` · ${entry.source}` : ""}` : `Unknown capture · release ${entry.released}`}</option>`)}
+              ? `${displayDay(entry.captured)}${entry.source ? ` · ${entry.source}` : ""}` : `Unknown capture · release ${displayDay(entry.released)}`}</option>`)}
           </select>
         </label>
         <div class="imagery-navigation">
@@ -29,8 +30,8 @@ export const waybackView = (panel: WaybackPanel, pinned: boolean, propose: (prop
         </div>
         <details class="imagery-details"><summary>Source &amp; capture details</summary>
         ${capture ? html`<dl class="imagery-metadata">
-          <div><dt>Captured</dt><dd>${capture.captured ?? "Unknown"}</dd></div>
-          <div><dt>Archive released</dt><dd>${capture.released}</dd></div>
+          <div><dt>Captured</dt><dd>${capture.captured ? displayDay(capture.captured) : "Unknown"}</dd></div>
+          <div><dt>Archive released</dt><dd>${displayDay(capture.released)}</dd></div>
           <div><dt>Source</dt><dd>${[capture.provider, capture.source].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
           <div><dt>Source resolution</dt><dd>${capture.resolution === null ? "Not reported" : `${Number(capture.resolution.toPrecision(3))} m/pixel`}</dd></div>
         </dl>` : nothing}

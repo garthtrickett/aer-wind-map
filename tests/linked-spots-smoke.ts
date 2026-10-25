@@ -78,6 +78,7 @@ try {
     await expect(page.locator(".history-forecast-heading")).toContainText("Your alert threshold is met.");
     await expect(page.locator(".history-linked-results")).toContainText("Nearshore wind: Met");
     await expect(page.locator(".history-forecast-windows li").first()).toContainText("08:00–10:00");
+    await expect(page.locator(".history-forecast-windows li span").first()).toHaveText(/\d{2}\/\d{2}\/\d{4}/);
     await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
     await page.getByRole("button", { name: "Close history" }).click();
     await expect(page.locator('path.saved-spot-link')).toHaveCount(1);

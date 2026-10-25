@@ -80,7 +80,7 @@ test("historical server selects a real station and date, caches yearly reads, an
   const provisional = await feed("nowphas:818", "2025-01-01");
   assert.ok(provisional.ok); assert.equal(provisional.value.status, "provisional");
   const recent = await feed("nowphas:818", "2026-10-01");
-  assert.equal(recent.ok, false); if (!recent.ok) assert.match(recent.error.message, /2026-05/);
+  assert.equal(recent.ok, false); if (!recent.ok) assert.match(recent.error.message, /05\/2026/);
   const taiwan = await feed("cwa-buoy:46761F", "2025-12-22");
   assert.ok(taiwan.ok); assert.equal(taiwan.value.readings.length, 3); assert.equal(taiwan.value.periodLabel, "Peak wave period");
   assert.match(buoyHistoryCsv(taiwan.value), /2025-12-21T16:00:00.000Z,2025-12-22T00:00:00,46761F,1.1,6.7,5.1,71/);

@@ -77,15 +77,15 @@ try{
   await expect(page.locator("#map")).toHaveAttribute("data-basemap","wayback");
   await page.locator(".imagery-details summary").click();
   await expect(page.locator(".imagery-metadata")).toBeVisible();
-  await expect(page.locator(".imagery-metadata")).toContainText("2025-05-01");
-  await expect(page.locator(".imagery-metadata")).toContainText("2026-09-24");
+  await expect(page.locator(".imagery-metadata")).toContainText("01/05/2025");
+  await expect(page.locator(".imagery-metadata")).toContainText("24/09/2026");
   await expect(page.locator(".leaflet-control-attribution")).toContainText("Powered by Esri");
   await expect(page.locator(".leaflet-control-attribution")).toContainText("Vantor");
   await expect(page.locator(".satellite-logo")).toBeHidden();
   const position=await page.locator("#selected-flag").evaluate(el=>[el.style.left,el.style.top]);
   await page.getByRole("button",{name:"← Older",exact:true}).click();
   await expect(picker).toHaveValue("1");
-  await expect(page.locator(".imagery-metadata")).toContainText("2023-03-18");
+  await expect(page.locator(".imagery-metadata")).toContainText("18/03/2023");
   await expect.poll(()=>tileReleases.has(1)).toBe(true);
   assert.deepEqual(await page.locator("#selected-flag").evaluate(el=>[el.style.left,el.style.top]),position);
   assert.equal(await page.locator(".forecast-time").innerText(),forecastTime);

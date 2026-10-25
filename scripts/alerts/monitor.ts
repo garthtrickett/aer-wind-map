@@ -5,12 +5,10 @@ import { evaluateForecastRules, forecastPeriodLabel, forecastSources, loadForeca
 import type { SavedSpot } from "../../src/saved-spots.ts";
 import { secret, type AlertStore, type WatchedSpot } from "./store.ts";
 import type { Telegram } from "./telegram.ts";
+import { displayDate } from "../../src/dates.ts";
 
 type ForecastLoader = (spots: readonly SavedSpot[], now: Date, catalog?: readonly SavedSpot[]) => Promise<readonly ForecastAlertCheck[]>;
 
-const dateText = (time: number, timezone: string): string => new Intl.DateTimeFormat("en-GB", {
-  timeZone: timezone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-}).format(new Date(time * 1000));
 const clockText = (time: number, timezone: string): string => new Intl.DateTimeFormat("en-GB", {
   timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 }).format(new Date(time * 1000));
@@ -35,7 +33,7 @@ export const notificationFor = (watch: WatchedSpot, summary: ForecastAlertSummar
     ...evaluation.linked.map((peer) => `Linked: ${peer.name} — ${peer.evaluation.matched ? "met" : "not met"}; ${peer.evaluation.rules.map((rule) => `${rule.matchingDays} matching days, need ${rule.minDays} in any ${rule.withinDays} days`).join(" or ")}.`),
     ...(evaluation.linked.length ? ["All linked conditions match during the same hours and dates."] : []),
     `At least ${summary.requiredHours} consecutive hourly samples, between 06:00 and 18:00.`,
-    ...evaluation.windows.map((window) => `${dateText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
+    ...evaluation.windows.map((window) => `${displayDate(window.start * 1000, summary.timezone)} ${clockText(window.start, summary.timezone)}–${clockText(window.end, summary.timezone)}`),
     `Local time: ${summary.timezone}.`,
     ...members.flatMap((member) => [
       ...(members.length > 1 ? [member.name + ":"] : []),

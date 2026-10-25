@@ -1,10 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 import type { TelegramPanel, TelegramProposal } from "./telegram-model.ts";
+import { displayDateTime } from "./dates.ts";
 
 export const telegramView = (panel: TelegramPanel, propose: (proposal: TelegramProposal) => void): TemplateResult => {
   const status = panel.status;
   const act = (action: "status" | "connect" | "sync" | "test" | "disconnect") => propose({ kind: "telegramRequested", action });
-  const time = (value: number) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(value);
+  const time = displayDateTime;
   const issues = {
     forecast: "Some forecast data could not be checked. The server will retry.",
     delivery: "A message could not be delivered. Check the bot connection.",

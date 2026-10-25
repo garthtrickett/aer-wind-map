@@ -54,6 +54,7 @@ try{
   await expect(page.locator(".compass-reading.swell")).toContainText("1.8 m · 14.0 s");
   await expect(page.locator(".compass-reading.wind")).toContainText("inside range");
   await expect(page.locator(".compass-forecast-time")).toContainText("model forecast");
+  await expect(page.locator(".compass-forecast-time")).toContainText(/\d{2}\/\d{2}\/\d{4}/);
   await expect(page.getByLabel("Compass forecast time")).toHaveValue("now");
   assert.ok(windCalls>0&&swellCalls>0,"Compass loads without enabling alerts");
   const end=await wind.locator(".compass-current-ray").evaluate(el=>({x:Number(el.getAttribute("x2")),y:Number(el.getAttribute("y2"))}));

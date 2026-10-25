@@ -11,12 +11,10 @@ import { evaluateForecastRules, forecastPeriodLabel, forecastAlertKey, forecastS
 import type { Point, Proposal, State } from "./model.ts";
 import { waybackView } from "./wayback-view.ts";
 import { observationsView } from "./observations-view.ts";
+import { displayDateTime } from "./dates.ts";
 
-const dateLabel = (date: Date): string =>
-  new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
-
-const runLabel = (date: Date): string =>
-  new Intl.DateTimeFormat("en", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(date);
+const dateLabel = displayDateTime;
+const runLabel = displayDateTime;
 
 const speedLabel = (speed: number): string => `${speed.toFixed(1)} m/s`;
 const spotCoordinates = (point: Point): string =>
@@ -141,10 +139,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             <span>${summary.matchingDays} of ${summary.horizonDays} days have at least ${summary.requiredHours} consecutive matching hourly samples, 06:00–18:00 local (alert at ${alertRulesLabel(spot)})</span>
             <small>${evaluation.rules.filter((rule) => rule.met)
               .map((rule) => `${rule.matchingDays} matching days in a ${rule.withinDays}-day period${rule.bestPeriod ? ` (${forecastPeriodLabel(rule.bestPeriod)})` : ""} (needs ${rule.minDays})`).join(" · ")}</small>
-            ${nextWindowStart === null ? nothing : html`<small>Next: ${new Intl.DateTimeFormat("en", {
-              timeZone: summary.timezone, weekday: "short", month: "short", day: "numeric",
-              hour: "numeric", minute: "2-digit", timeZoneName: "short",
-            }).format(new Date(nextWindowStart * 1000))}</small>`}
+            ${nextWindowStart === null ? nothing : html`<small>Next: ${displayDateTime(nextWindowStart * 1000, summary.timezone)}</small>`}
             ${summary.availableDays < summary.horizonDays ? html`<small>Paired data on ${summary.availableDays} of ${summary.horizonDays} days</small>` : nothing}
           </button>`)}</div>
         <p>Forecast estimates: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">${forecastSwell.label} primary swell</a>

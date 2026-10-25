@@ -11,6 +11,7 @@ import { historyCompassView } from "./history-compass.ts";
 import { draftSavedSpot, lastCompleteHistoryYear, type HistoryPanel, type Proposal } from "./model.ts";
 import { dayLookupView } from "./day-lookup-view.ts";
 import type { DayLookupPanel } from "./day-lookup-model.ts";
+import { displayDate, displayDay } from "./dates.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -50,7 +51,6 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
   const evaluation = evaluateForecastRules(summary, history.alertRules);
   const sources = forecastSources([history, ...(preview.data.linked ?? []).map((entry) => entry.spot)]);
-  const date = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, weekday: "short", day: "numeric", month: "short" });
   const clock = new Intl.DateTimeFormat("en", { timeZone: summary.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return html`<div class="history-forecast-preview">
     <div class="history-forecast-heading">
@@ -78,7 +78,7 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
     </div>` : nothing}
     ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next ${summary.horizonDays} days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
       ${summary.windows.map((window) => html`<li>
-        <span>${date.format(new Date(window.start * 1000))}</span>
+        <span>${displayDate(window.start * 1000, summary.timezone)}</span>
         <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong>
       </li>`)}
     </ul>` : html`<p>No days match your current conditions.</p>`}
@@ -295,7 +295,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                   <div class="history-days-head"><h3>${monthNames[selectedMonth]} windows</h3>
                     <span>${selectedDays.length} qualifying days across ${history.startYear}–${history.endYear}</span></div>
                   <div class="history-days">${selectedDays.length ? selectedDays.map((day) => html`
-                    <div class="history-day"><span>${day.day}</span><strong>${day.longestWindow} hourly samples</strong>
+                    <div class="history-day"><span>${displayDay(day.day)}</span><strong>${day.longestWindow} hourly samples</strong>
                       <span>from ${day.windowStart === null || !localClock ? "—" : localClock.format(new Date(day.windowStart * 1000))}</span></div>`)
                     : html`<p>No qualifying days in this month.</p>`}</div>`}
                 <p class="history-coverage">A usable day has at least 18 hours of data for the selected conditions.

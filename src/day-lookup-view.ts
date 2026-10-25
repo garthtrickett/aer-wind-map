@@ -2,6 +2,8 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import { dayHours, firstLookupDate, type DaySource } from "./day-lookup.ts";
 import type { DayLookupPanel, DayLookupProposal } from "./day-lookup-model.ts";
 import { compassDirection } from "./wind.ts";
+import { displayDay } from "./dates.ts";
+import { dateInput } from "./date-input.ts";
 
 const reading = (value: number | null, unit: string): string => value === null ? "—" : `${value.toFixed(1)} ${unit}`;
 const direction = (value: number | null): string => value === null ? "—" : `${compassDirection(value % 360)} ${Math.round(value)}°`;
@@ -20,9 +22,9 @@ export const dayLookupView = (panel: DayLookupPanel, propose: (proposal: DayLook
     ${panel.open ? html`<div id="day-lookup-content" class="day-lookup-content">
       <p class="day-lookup-note">Historical wind, swell and combined waves at this marker. Dates and hours are local to the spot; recent days may not yet be available.</p>
       <form class="day-lookup-controls" @submit=${(event: Event) => { event.preventDefault(); propose({ kind: "dayLookupRequested" }); }}>
-        <label class="day-lookup-date">Date<input type="date" aria-label="Lookup date" required min=${firstLookupDate}
-          max=${new Date(now).toISOString().slice(0, 10)} .value=${panel.date}
-          @change=${(event: Event) => propose({ kind: "dayLookupDateChanged", date: (event.target as HTMLInputElement).value })} /></label>
+        <div class="day-lookup-date date-control"><span>Date</span>${dateInput({ label: "Lookup date", value: panel.date,
+          min: firstLookupDate, max: new Date(now).toISOString().slice(0, 10),
+          change: (date) => propose({ kind: "dayLookupDateChanged", date }) })}</div>
         <label>From<select aria-label="Lookup start hour" .value=${String(panel.startHour)} @change=${(event: Event) => {
           const start = Number((event.target as HTMLSelectElement).value);
           propose({ kind: "dayLookupHoursChanged", start, end: Math.max(panel.endHour, start + 1) });
@@ -34,7 +36,7 @@ export const dayLookupView = (panel: DayLookupPanel, propose: (proposal: DayLook
         <button type="submit" ?disabled=${loading}>${loading ? "Loading…" : "Load day"}</button>
       </form>
       <div role="status" aria-live="polite" class="day-lookup-status">${loading ? "Loading hourly history…"
-        : panel.message ?? (data ? `${data.date} · ${data.timezone} · ${rows.length} hourly records · ${timeLabel(panel.startHour)}–${timeLabel(panel.endHour)} (end excluded)` : "Choose a date and load its hourly history.")}</div>
+        : panel.message ?? (data ? `${displayDay(data.date)} · ${data.timezone} · ${rows.length} hourly records · ${timeLabel(panel.startHour)}–${timeLabel(panel.endHour)} (end excluded)` : "Choose a date and load its hourly history.")}</div>
       ${data ? html`
         ${data.wind.issue ? html`<p class="day-lookup-warning">Wind: ${data.wind.issue}</p>` : nothing}
         ${data.waves.issue ? html`<p class="day-lookup-warning">Waves: ${data.waves.issue}</p>` : nothing}

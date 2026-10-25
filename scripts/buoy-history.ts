@@ -3,6 +3,7 @@ import { parseNowphasHistory, parseNowphasSites } from "../src/nowphas.ts";
 import { parseCwaArchiveSites, parseCwaWaveArchive } from "../src/cwa-wave-history.ts";
 import { validHistoryDate, type BuoyHistoryResult, type WaveReading } from "../src/buoy-history.ts";
 import { waveArchiveEntry } from "./wave-archive-zip.ts";
+import { displayDay, displayMonth } from "../src/dates.ts";
 
 const japan = "https://nowphas.mlit.go.jp";
 const taiwan = "https://ocean.cwa.gov.tw/V2/data_interface/download";
@@ -82,7 +83,7 @@ export const createBuoyHistoryFeed = (fetcher: typeof fetch = fetch, clock: () =
       if (!station) return unavailable("This station is not in the provider's accessible wave archive.");
       if (provider === "cwa-buoy") {
         const site = taiwaneseSites.find((site) => site.code === code)!;
-        if (date < site.start || date > site.end) return unavailable(`This station's published record covers ${site.start} to ${site.end}.`);
+        if (date < site.start || date > site.end) return unavailable(`This station's published record covers ${displayDay(site.start)} to ${displayDay(site.end)}.`);
         const rows = await cached(`${stationId}:${year}`, async () => {
           const parameters = new URLSearchParams({ dataset: "Wave-his", begin: String(year), end: String(year), factor: "w", download_type: "csv", station_id: code! });
           const bytes = await zip(await read(`${taiwan}/download_file?${parameters}`));
@@ -103,7 +104,7 @@ export const createBuoyHistoryFeed = (fetcher: typeof fetch = fetch, clock: () =
       const lastYear = Number(newest?.[1]), lastMonth = Number(newest?.[2]);
       const through = `${lastYear}-${String(lastMonth).padStart(2, "0")}`;
       if (!Number.isFinite(confirmed) || !Number.isFinite(lastYear) || !Number.isFinite(lastMonth)) throw new Error("Missing NOWPHAS publication dates");
-      if (year > confirmed && date.slice(0, 7) > through) return unavailable(`NOWPHAS archives are published through ${through}. More recent measurements are not yet in the downloadable archive.`);
+      if (year > confirmed && date.slice(0, 7) > through) return unavailable(`NOWPHAS archives are published through ${displayMonth(through)}. More recent measurements are not yet in the downloadable archive.`);
       const provisional = year > confirmed;
       const key = `${stationId}:${provisional ? date.slice(0, 7) : year}`;
       const rows = await cached(key, async () => {

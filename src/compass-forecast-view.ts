@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import { compassDirection } from "./wind.ts";
 import type { CompassForecast, CompassForecastProposal } from "./compass-forecast-model.ts";
 import type { CompassReading } from "./compass-forecast.ts";
+import { displayDateTime } from "./dates.ts";
 
 const direction = (bearing: number | null): string => bearing === null ? "Direction unavailable" : `${compassDirection(bearing)} ${Math.round(bearing)}°`;
 export const compassForecastView = (panel: CompassForecast, reading: CompassReading | null,
@@ -13,8 +14,7 @@ export const compassForecastView = (panel: CompassForecast, reading: CompassRead
         <option value="now">Now</option><option value="map">Map forecast time</option>
       </select></label>
       <button type="button" aria-label="Refresh compass forecast" @click=${() => propose({ kind: "compassForecastRefresh" })}>↻</button></div>
-    ${reading ? html`<p class="compass-forecast-time">${new Intl.DateTimeFormat("en", { timeZone: reading.timezone, month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(new Date(reading.time * 1000))} · model forecast</p>` : nothing}
+    ${reading ? html`<p class="compass-forecast-time">${displayDateTime(reading.time * 1000, reading.timezone)} · model forecast</p>` : nothing}
     ${panel.phase === "loading" || panel.phase === "needsData" ? html`<p role="status">Loading directions…</p>`
       : panel.phase === "failed" ? html`<p role="status">Direction forecasts unavailable. Try refreshing.</p>`
       : panel.mode === "map" && !reading ? html`<p role="status">Map forecast time is not available yet.</p>` : nothing}

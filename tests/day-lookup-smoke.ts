@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
-import { chromium, expect } from "@playwright/test";
+import { chromium, firefox, webkit, expect } from "@playwright/test";
 import { defaultHistoryCriteria } from "../src/history.ts";
 
 const root = resolve("dist");
@@ -18,7 +18,7 @@ const server = createServer(async (request, response) => {
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address(); assert.ok(address && typeof address !== "string");
 const base = process.env.SMOKE_BASE_URL ?? `http://127.0.0.1:${address.port}`;
-const browser = await chromium.launch({ headless: true });
+const browser = await (process.env.BROWSER === "webkit" ? webkit : process.env.BROWSER === "firefox" ? firefox : chromium).launch({ headless: true });
 const date = "2025-10-24";
 const time = Array.from({ length: 24 }, (_, hour) => Date.parse(`${date}T00:00:00+08:00`) / 1000 + hour * 3600);
 const spot = { id: "jinzun", name: "Jinzun test marker", point: { latitude: 22.952, longitude: 121.295 },
@@ -26,7 +26,7 @@ const spot = { id: "jinzun", name: "Jinzun test marker", point: { latitude: 22.9
 
 try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
-    const context = await browser.newContext({ viewport, timezoneId: "America/Los_Angeles" });
+    const context = await browser.newContext({ viewport, locale: "en-US", timezoneId: "America/Los_Angeles" });
     await context.addInitScript((spot) => {
       localStorage.setItem("aer.saved-spots.v1", JSON.stringify({ version: 1, spots: [spot] }));
     }, spot);
@@ -62,7 +62,22 @@ try {
     await expect(page.getByLabel("Lookup start hour")).toHaveValue("6");
     await expect(page.getByLabel("Lookup end hour")).toHaveValue("18");
     assert.equal(dayRequests.length, 0, "Opening the lookup must not download history automatically");
-    await page.getByLabel("Lookup date").fill(date);
+    const dateField = page.getByLabel("Lookup date", { exact: true });
+    await dateField.fill("31/02/2025");
+    await page.getByRole("button", { name: "Load day", exact: true }).click();
+    assert.equal(dayRequests.length, 0, "An impossible typed date must not load the previous valid day");
+    assert.equal(await dateField.evaluate((input: HTMLInputElement) => input.validity.valid), false);
+    await dateField.fill("11122025");
+    await expect(dateField).toHaveValue("11/12/2025");
+    await dateField.press("Tab");
+    await expect(page.locator(".day-lookup .date-input-native")).toHaveValue("2025-12-11");
+    // Selecting a date in the native calendar updates the fixed-format text and request day.
+    await page.locator(".day-lookup .date-input-native").evaluate((input: HTMLInputElement) => {
+      input.value = "2025-10-24"; input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(dateField).toHaveValue("24/10/2025");
+    await page.getByRole("button", { name: "Open calendar", exact: true }).click();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Load day", exact: true }).click();
     await expect(page.locator(".day-lookup-status")).toContainText("Asia/Taipei · 12 hourly records");
     await expect(page.locator(".day-lookup-table tbody tr")).toHaveCount(12);
@@ -74,6 +89,8 @@ try {
     await expect(first).toContainText("1.7 m · 6.0 s");
     await expect(page.locator(".day-lookup-content")).toContainText("22.9583, 121.3750");
     assert.equal(dayRequests.length, 2);
+    assert.ok(dayRequests.every((url) => new URL(url).searchParams.get("start_date") === date));
+    await expect(page.locator(".day-lookup-status")).toContainText("24/10/2025");
     await page.getByLabel("Lookup end hour").selectOption("9");
     await expect(page.locator(".day-lookup-table tbody tr")).toHaveCount(3);
     assert.equal(dayRequests.length, 2, "Hour filters must reuse the downloaded day");
@@ -95,7 +112,7 @@ try {
     await expect(page.locator(".day-lookup-warning")).toContainText("No usable values");
     await expect(page.locator(".day-lookup-table tbody tr").first()).not.toContainText("0.0");
 
-    await page.getByLabel("Lookup date").fill("2025-10-25");
+    await page.getByLabel("Lookup date").fill("25/10/2025");
     await expect(page.locator(".day-lookup-table")).toHaveCount(0);
     await page.getByRole("button", { name: "Close history" }).click();
     await page.getByRole("button", { name: "Open forecast details" }).click();
@@ -104,7 +121,7 @@ try {
     await page.getByRole("button", { name: "Load day", exact: true }).click();
     // The fixture times belong to the previous date: the loader must not relabel them.
     await expect(page.locator(".day-lookup-status")).toContainText("0 hourly records");
-    await page.getByLabel("Lookup date").fill(date);
+    await page.getByLabel("Lookup date").fill("24/10/2025");
     await page.getByRole("button", { name: "Load day", exact: true }).click();
     await expect(page.locator(".day-lookup-table tbody tr")).toHaveCount(3);
     await page.screenshot({ path: `/tmp/aer-day-details-${viewport.width}.png`, fullPage: true });

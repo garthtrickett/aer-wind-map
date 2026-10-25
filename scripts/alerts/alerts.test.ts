@@ -366,7 +366,7 @@ test("Telegram monitoring uses sliding rules, persists them, and rejects scatter
     const later = summary(["2026-10-30", "2026-11-02", "2026-11-04", "2026-11-05"]);
     const sliding = notificationFor(watch, later, now, "https://aer.example/");
     assert.ok(sliding, "the screenshot's later qualifying period triggers Telegram too");
-    assert.match(sliding.text, /30 Oct–5 Nov/);
+    assert.match(sliding.text, /30\/10\/2026–05\/11\/2026/);
     assert.equal(notificationFor(watch, { ...later, horizonDays: 7 }, now, "https://aer.example/"), null);
 
     // Mark an actual alert as delivered, then verify that losing the short-window match re-arms it.

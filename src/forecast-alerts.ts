@@ -2,6 +2,7 @@ import { alertRulesFor, forecastLookAhead, maxForecastDays, type AlertDayRule } 
 import { conditionSource, hourHasData, historyClock, withinHistoryHours, hourMatchesCriteria, type ConditionSource, type HistoricalHour } from "./history.ts";
 import { linkedSpotGroup } from "./spot-links.ts";
 import type { SavedSpot } from "./saved-spots.ts";
+import { displayDay } from "./dates.ts";
 
 export const forecastAlertDays = maxForecastDays;
 export const forecastSwell = { model: "meteofrance_wave", label: "Météo-France MFWAM", days: 10 } as const;
@@ -147,8 +148,7 @@ export const scoreForecastData = (spot: SavedSpot, data: ForecastData, now: Date
 };
 
 export const forecastPeriodLabel = (period: Readonly<{ startDay: string; endDay: string }>): string => {
-  const format = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-  return `${format.format(new Date(`${period.startDay}T00:00:00Z`))}–${format.format(new Date(`${period.endDay}T00:00:00Z`))}`;
+  return `${displayDay(period.startDay)}–${displayDay(period.endDay)}`;
 };
 
 /** Scan every complete N-day period wholly inside the look-ahead horizon. Any rule can trigger. */

@@ -32,7 +32,7 @@ try {
   assert.ok(ready);
   for (const mobile of [false, true]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 },
-      timezoneId: "Europe/London", isMobile: mobile, hasTouch: mobile });
+      locale: "en-US", timezoneId: "Europe/London", isMobile: mobile, hasTouch: mobile });
     context.setDefaultTimeout(15_000);
     const spots = stations.map((station) => ({ id: station.id, name: station.name, point: { latitude: station.latitude, longitude: station.longitude },
       startYear: 2025, endYear: 2025, criteria: defaultHistoryCriteria, alertEnabled: false, alertMinDays: 2 }));
@@ -50,7 +50,7 @@ try {
       const params = new URL(route.request().url()).searchParams, id = params.get("station"), date = params.get("date")!;
       const japanese = id === "nowphas:818", offset = japanese ? "+09:00" : "+08:00";
       const station = stations.find((station) => station.id === id)!;
-      if (date === "2026-10-01") return route.fulfill({ status: 404, json: { ok: false, error: { kind: "unavailable", message: "NOWPHAS archives are published through 2026-05." } } });
+      if (date === "2026-10-01") return route.fulfill({ status: 404, json: { ok: false, error: { kind: "unavailable", message: "NOWPHAS archives are published through 05/2026." } } });
       return route.fulfill({ json: { ok: true, value: { station: { code: station.historyCode, name: station.name, source: station.source }, date,
         timezone: japanese ? "Asia/Tokyo" : "Asia/Taipei", status: japanese ? "confirmed" : "archived", publishedThrough: japanese ? "2026-05" : null,
         periodLabel: japanese ? "Significant wave period" : "Peak wave period", note: "Measured waves; gaps are not interpolated.", sourceUrl: station.sourceUrl,
@@ -75,7 +75,7 @@ try {
       assert.match(await dialog.innerText(), station.id.startsWith("nowphas") ? /no current report/ : /1.8 m/);
       await page.getByRole("button", { name: "Wave history", exact: true }).click();
       await page.getByRole("button", { name: "Download measured-wave CSV" }).waitFor();
-      await page.getByLabel("Wave observation date").fill("2024-01-01");
+      await page.getByLabel("Wave observation date").fill("01/01/2024");
       await page.getByRole("button", { name: "Load date", exact: true }).click();
       await page.getByRole("button", { name: "Download measured-wave CSV" }).waitFor();
       assert.equal(await dialog.locator("tbody tr").count(), 3);
@@ -87,13 +87,13 @@ try {
       const box = await dialog.boundingBox();
       assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= (mobile ? 390 : 1280));
       await page.screenshot({ path: `/tmp/aer-buoy-history-${mobile ? "mobile" : "desktop"}-${station.source}.png` });
-      await page.getByLabel("Wave observation date").fill("2024-01-02");
+      await page.getByLabel("Wave observation date").fill("02/01/2024");
       await page.getByRole("button", { name: "Load date", exact: true }).click();
       await page.getByText("Missing data does not mean flat waves.", { exact: false }).waitFor();
       if (station.id.startsWith("nowphas")) {
-        await page.getByLabel("Wave observation date").fill("2026-10-01");
+        await page.getByLabel("Wave observation date").fill("01/10/2026");
         await page.getByRole("button", { name: "Load date", exact: true }).click();
-        await page.getByText("NOWPHAS archives are published through 2026-05.", { exact: true }).waitFor();
+        await page.getByText("NOWPHAS archives are published through 05/2026.", { exact: true }).waitFor();
       }
       await page.keyboard.press("Escape");
       await dialog.waitFor({ state: "hidden" });

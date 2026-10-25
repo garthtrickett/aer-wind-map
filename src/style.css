@@ -237,7 +237,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .day-lookup-toggle[aria-expanded="true"] { border-bottom: 1px solid #d4e4df; }
 .day-lookup-content { padding: 12px; }
 .day-lookup-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; }
-.day-lookup-controls label { display: grid; flex: 1; min-width: 80px; gap: 5px; color: #496b73; font-size: 12px; }
+.day-lookup-controls label, .day-lookup-controls .date-control { display: grid; flex: 1; min-width: 80px; gap: 5px; color: #496b73; font-size: 12px; }
 .day-lookup-controls .day-lookup-date { flex: 2; min-width: 145px; }
 .day-lookup-controls input, .day-lookup-controls select { width: 100%; min-width: 0; min-height: 42px; border: 1px solid #b7d0c9; border-radius: 8px; padding: 8px; color: #173f49; background: white; font: inherit; }
 .day-lookup-controls button { min-height: 42px; padding: 10px 15px; border: 0; border-radius: 9px; background: #164e5b; color: white; font-size: 13px; font-weight: 700; }
@@ -369,6 +369,13 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .buoy-history-table th { position: sticky; top: 0; background: #e8f2ee; text-align: left; font-size: 11px; }
 .buoy-history-table th, .buoy-history-table td { padding: 9px 10px; border-bottom: 1px solid #dbe7e2; }
 .buoy-history-controls button:disabled { opacity: .65; cursor: wait; }
+
+.date-control { display: grid; gap: 5px; min-width: 0; color: #496b73; font-size: 13px; }
+.date-input { display: block; position: relative; min-width: 0; }
+.date-input .date-input-text { width: 100%; min-width: 0; padding-right: 44px; font-variant-numeric: tabular-nums; }
+.date-input .date-input-calendar { display: grid; place-items: center; position: absolute; right: 1px; top: 1px; bottom: 1px; width: 40px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0 7px 7px 0; background: transparent; color: #607f87; }
+.date-input .date-input-calendar:hover { background: #edf5f1; color: #174550; }
+.date-input .date-input-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 
 .leaflet-control-zoom { border: 0 !important; box-shadow: 0 8px 24px rgba(3,29,40,.18) !important; }
 .leaflet-control-zoom a { border: 0 !important; color: #153c48 !important; }

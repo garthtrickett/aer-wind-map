@@ -72,8 +72,8 @@ try {
   if (!fieldRunId) throw new Error("Could not identify the loaded ECMWF run");
   const runStart = new Date(`${fieldRunId.slice(0, 4)}-${fieldRunId.slice(4, 6)}-${fieldRunId.slice(6, 8)}T${fieldRunId.slice(8, 10)}:00:00Z`);
   const localOptions = { timeZone: "Asia/Tokyo", hourCycle: "h23" as const, timeZoneName: "short" as const };
-  const expectedForecast = new Intl.DateTimeFormat("en", { ...localOptions, weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(runStart.getTime() + 3 * 3_600_000));
-  const expectedRun = new Intl.DateTimeFormat("en", { ...localOptions, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(runStart);
+  const expectedForecast = new Intl.DateTimeFormat("en-GB", { ...localOptions, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(runStart.getTime() + 3 * 3_600_000));
+  const expectedRun = new Intl.DateTimeFormat("en-GB", { ...localOptions, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(runStart);
   const shownForecast = await page.locator(".forecast-time").innerText();
   const shownRun = await page.locator(".timeline-foot").innerText();
   if (shownForecast !== expectedForecast || !shownRun.includes(`Run ${expectedRun}`)) {

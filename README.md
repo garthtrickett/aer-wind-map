@@ -10,6 +10,11 @@ height as map color, with mean wave period in the flag and details panel. These
 are not primary swell partition values. The timeline steps through the first
 72 forecast hours. Displayed times use the browser's local timezone.
 
+Dates throughout the app and Telegram alerts use **DD/MM/YYYY**, with 24-hour
+times. The day and wave-history controls accept that format directly and retain
+a calendar button, regardless of the browser's language or regional settings.
+Archive publication months use MM/YYYY. APIs, saved data and CSV timestamps use ISO.
+
 Click a point, open its details, and choose **Explore historical swell and wind**
 to compare up to five complete years. Set a swell-height range, minimum and optional
 maximum swell period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and

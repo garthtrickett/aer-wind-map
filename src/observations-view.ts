@@ -2,10 +2,9 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import { observationDirection as compassDirection } from "./observations.ts";
 import { observationQuery, type ObservationProposal, type ObservationsState } from "./observations-model.ts";
 import { buoyHistoryView } from "./buoy-history-view.ts";
+import { displayDateTime } from "./dates.ts";
 
-const timeLabel = (instant: string): string => new Intl.DateTimeFormat("en", {
-  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short",
-}).format(new Date(instant));
+const timeLabel = (instant: string): string => displayDateTime(new Date(instant));
 export const observationsView = (state: ObservationsState, propose: (proposal: ObservationProposal) => void, now: number): TemplateResult => {
   const station = state.data?.stations.find((item) => item.id === state.selectedId);
   const active = state.buoys || state.wind;

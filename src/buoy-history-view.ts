@@ -2,6 +2,8 @@ import { html, svg, nothing, type TemplateResult } from "lit-html";
 import type { ObservationProposal, ObservationsState } from "./observations-model.ts";
 import type { BuoyHistory } from "./buoy-history.ts";
 import { observationDirection } from "./observations.ts";
+import { displayDay, displayMonth } from "./dates.ts";
+import { dateInput } from "./date-input.ts";
 
 const reading = (value: number | null, units: string): string => value === null ? "—" : `${value.toFixed(1)} ${units}`;
 const chart = (data: BuoyHistory): TemplateResult => {
@@ -9,7 +11,7 @@ const chart = (data: BuoyHistory): TemplateResult => {
   const offset = data.timezone === "Asia/Tokyo" ? 9 : 8;
   const midnight = Date.parse(`${data.date}T00:00:00+${String(offset).padStart(2, "0")}:00`);
   const height = (value: number): number => value / maximum * 74;
-  return html`<svg class="buoy-history-chart" viewBox="0 0 440 114" role="img" aria-label=${`Measured significant wave height on ${data.date}; maximum ${maximum.toFixed(1)} metres`}>
+  return html`<svg class="buoy-history-chart" viewBox="0 0 440 114" role="img" aria-label=${`Measured significant wave height on ${displayDay(data.date)}; maximum ${maximum.toFixed(1)} metres`}>
     <text x="2" y="12">${maximum.toFixed(1)} m</text>
     <line x1="44" x2="420" y1="88" y2="88" />
     ${data.readings.map((row) => {
@@ -30,13 +32,15 @@ export const buoyHistoryView = (state: ObservationsState, propose: (proposal: Ob
   const loading = history.phase === "loading" || history.phase === "needsData";
   const usable = data?.readings.filter((row) => row.height !== null).length ?? 0;
   return html`<div class="buoy-history">
-    <div class="buoy-history-controls"><label>Observation date<input aria-label="Wave observation date" type="date" min=${japanese ? "1970-01-01" : "1990-01-01"}
-      max=${today} .value=${history.date} @change=${(event: Event) => propose({ kind: "observationHistoryDateChanged", date: (event.target as HTMLInputElement).value })} /></label>
-      <button ?disabled=${loading} @click=${() => propose({ kind: "observationHistoryRequested" })}>${loading ? "Loading…" : "Load date"}</button></div>
+    <form class="buoy-history-controls" @submit=${(event: Event) => { event.preventDefault(); propose({ kind: "observationHistoryRequested" }); }}>
+      <div class="date-control"><span>Observation date</span>${dateInput({ label: "Wave observation date", value: history.date,
+        min: japanese ? "1970-01-01" : "1990-01-01", max: today,
+        change: (date) => propose({ kind: "observationHistoryDateChanged", date }) })}</div>
+      <button type="submit" ?disabled=${loading}>${loading ? "Loading…" : "Load date"}</button></form>
     <p class="observation-note">Dates and times below are local to the station: ${zone}.</p>
     <div role="status" aria-live="polite">${loading ? html`<p>Loading measured wave history… The first request downloads an archive; nearby dates are then cached.</p>`
       : history.error ? html`<p class="observation-warning">${history.error}</p>`
-      : data ? html`<p>${usable} usable wave-height readings · ${data.status} record${data.publishedThrough ? ` · archive published through ${data.publishedThrough}` : ""}</p>`
+      : data ? html`<p>${usable} usable wave-height readings · ${data.status} record${data.publishedThrough ? ` · archive published through ${displayMonth(data.publishedThrough)}` : ""}</p>`
       : html`<p>Choose a date and load the station record.</p>`}</div>
     ${data && !loading ? html`
       ${usable ? chart(data) : html`<p class="history-message">No usable wave-height measurements for this date. The station may have been offline, or this period may not be published yet. Missing data does not mean flat waves.</p>`}
