@@ -104,6 +104,10 @@
   selected background. Removing it guards late metadata replies from touching
   the replacement marker. The zoom control and bearing overlay are independent
   of imagery loading.
+  The circular-map zoom is draft SAM state in `history.mapZoom`, validated by
+  shared map settings and persisted as optional `SavedSpot.mapZoom` on save.
+  Older presets default to 11. Zoom changes preserve downloaded forecast/history
+  data and alert keys; opening each preset restores its own saved zoom.
   Opening a marker loads enabled wind/swell sources through the existing forecast
   decoder, without opting into alerts. Marker/type changes abort and invalidate
   old requests; criteria and time-mode changes reuse downloaded data. A minute

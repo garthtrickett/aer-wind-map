@@ -13,6 +13,7 @@ import { alignDayLookup, dayLookupEffect, initialDayLookup, presentDayLookup, ty
 import type { Basemap, SatelliteResult, Satellite } from "./satellite.ts";
 import { initialWayback, alignWayback, presentWayback, waybackEffect, type WaybackPanel, type WaybackProposal, type WaybackEffect } from "./wayback-model.ts";
 import { initialPlaceSearch, dismissPlaceSearch, presentPlaceSearch, placeSearchEffect, type PlaceSearch, type PlaceSearchProposal, type PlaceSearchEffect } from "./place-search-model.ts";
+import { defaultHistoryMapZoom, validHistoryMapZoom } from "./history-map-settings.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -32,6 +33,7 @@ export type HistoryPanel = Readonly<{
   open: boolean;
   phase: "needsData" | "loading" | "ready" | "failed";
   point: Point | null;
+  mapZoom: number;
   startYear: number;
   endYear: number;
   criteria: HistoryCriteria;
@@ -112,6 +114,7 @@ export type Proposal =
   | { readonly kind: "historyClosed" }
   | { readonly kind: "historyYearsChanged"; readonly startYear: number; readonly endYear: number }
   | { readonly kind: "historyCriteriaChanged"; readonly criteria: HistoryCriteria }
+  | { readonly kind: "historyMapZoomChanged"; readonly zoom: number }
   | { readonly kind: "historyMonthSelected"; readonly month: number }
   | { readonly kind: "historyLoadStarted"; readonly key: string }
   | { readonly kind: "historyLoaded"; readonly key: string; readonly data: HistoricalData }
@@ -151,7 +154,7 @@ export const initialState: State = {
   savedSpots: [], savedSpotsOpen: false, savedSpotsError: null,
   forecastAlerts: {}, forecastAlertsDismissed: false,
   history: {
-    open: false, phase: "needsData", point: null,
+    open: false, phase: "needsData", point: null, mapZoom: defaultHistoryMapZoom,
     startYear: Math.max(2022, lastCompleteHistoryYear - 2), endYear: lastCompleteHistoryYear,
     criteria: defaultHistoryCriteria, requestedKey: null, data: null, error: null, selectedMonth: null, downloadRequested: false,
     savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null,
@@ -169,7 +172,7 @@ const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
   observations: { ...state.observations, selectedId: null },
   history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview), open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
-    downloadRequested: false, savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
+    downloadRequested: false, savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", mapZoom: defaultHistoryMapZoom, alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
 });
 
 const presentApp = (state: State, proposal: Proposal): State => {
@@ -238,7 +241,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "telegramSpotRestored": {
       if (proposal.readOnly) return { ...state, selected: proposal.spot.point, modalOpen: false, savedSpotsOpen: false,
         history: { ...state.history, open: true, point: proposal.spot.point, phase: "needsData", data: null,
-          startYear: proposal.spot.startYear, endYear: proposal.spot.endYear, criteria: proposal.spot.criteria,
+          startYear: proposal.spot.startYear, endYear: proposal.spot.endYear, criteria: proposal.spot.criteria, mapZoom: proposal.spot.mapZoom ?? defaultHistoryMapZoom,
           requestedKey: null, error: null, selectedMonth: null, savedSpotId: null,
           linkedSpotIds: proposal.spot.linkedSpotIds ?? [], linkedCatalog: proposal.linkedSpots ?? [], downloadRequested: false, sourceSpotId: proposal.spot.id,
           forecastPreview: resetForecastPreview(state.history.forecastPreview), saveName: proposal.spot.name, alertEnabled: false, alertRules: alertRulesFor(proposal.spot), alertLookAheadDays: forecastLookAhead(proposal.spot), saveFeedback: null } };
@@ -315,7 +318,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
         conditionSource(state.history.criteria) === conditionSource(spot.criteria);
       return { ...state, selected: spot.point, modalOpen: false, savedSpotsOpen: false, history: {
         ...state.history, open: true, point: spot.point, forecastPreview: resetForecastPreview(state.history.forecastPreview), startYear: spot.startYear, endYear: spot.endYear,
-        criteria: spot.criteria, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
+        criteria: spot.criteria, mapZoom: spot.mapZoom ?? defaultHistoryMapZoom, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
         requestedKey: null, error: null, selectedMonth: null, downloadRequested: false,
         savedSpotId: spot.id, linkedSpotIds: spot.linkedSpotIds ?? [], linkedCatalog: [], sourceSpotId: null, saveName: spot.name, alertEnabled: spot.alertEnabled, alertRules: alertRulesFor(spot), alertLookAheadDays: forecastLookAhead(spot), saveFeedback: null,
       } };
@@ -340,7 +343,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
       const name = history.saveName.trim();
       if (!name || name.length > 80) return { ...state, history: { ...history, saveFeedback: "nameRequired" } };
       const spot: SavedSpot = { id: proposal.id, name, point: history.point,
-        startYear: history.startYear, endYear: history.endYear, criteria: history.criteria,
+        startYear: history.startYear, endYear: history.endYear, criteria: history.criteria, mapZoom: history.mapZoom,
         alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays, alertRules: history.alertRules, alertLookAheadDays: history.alertLookAheadDays, linkedSpotIds: history.linkedSpotIds.filter((id) => id !== proposal.id) };
       // Shared phone links remain ephemeral until an explicit save. Preserve the
       // linked conditions then, without opting those dependency points into alerts.
@@ -418,6 +421,9 @@ const presentApp = (state: State, proposal: Proposal): State => {
         ...(changedSource ? { phase: "needsData", requestedKey: null, data: null, error: null,
           forecastPreview: resetForecastPreview(state.history.forecastPreview) } : {}) } };
     }
+    case "historyMapZoomChanged":
+      return state.history.open && validHistoryMapZoom(proposal.zoom) && proposal.zoom !== state.history.mapZoom
+        ? { ...state, history: { ...state.history, mapZoom: proposal.zoom, saveFeedback: null } } : state;
     case "historyMonthSelected":
       return proposal.month >= 0 && proposal.month < 12
         ? { ...state, history: { ...state.history, selectedMonth: proposal.month } } : state;
@@ -463,7 +469,7 @@ export type Effect =
 
 export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
   id: history.savedSpotId ?? history.sourceSpotId ?? "draft", name: history.saveName || "This spot",
-  point: history.point!, criteria: history.criteria, startYear: history.startYear, endYear: history.endYear,
+  point: history.point!, criteria: history.criteria, startYear: history.startYear, endYear: history.endYear, mapZoom: history.mapZoom,
   alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays,
   alertRules: history.alertRules, alertLookAheadDays: history.alertLookAheadDays, linkedSpotIds: history.linkedSpotIds,
 });

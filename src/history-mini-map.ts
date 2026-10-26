@@ -1,6 +1,7 @@
 import * as L from "leaflet";
 import type { Point } from "./model.ts";
 import { loadSatellite, type SatelliteResult } from "./satellite.ts";
+import { minHistoryMapZoom, maxHistoryMapZoom } from "./history-map-settings.ts";
 
 const imageryRequests = new Map<string, Promise<SatelliteResult>>();
 const imageryFor = (url: string): Promise<SatelliteResult> => {
@@ -20,7 +21,7 @@ export const createHistoryMiniMap = (element: HTMLElement, credits: HTMLElement,
   const map = L.map(element, {
     zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,
     doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false,
-    zoomSnap: 0, minZoom: 6, maxZoom: 20,
+    zoomSnap: 0, minZoom: minHistoryMapZoom, maxZoom: maxHistoryMapZoom,
   }).setView([point.latitude, point.longitude], zoom);
   const attribution = L.control.attribution({ prefix: false }).addTo(map);
   const attributionElement = attribution.getContainer()!;
@@ -42,7 +43,7 @@ export const createHistoryMiniMap = (element: HTMLElement, credits: HTMLElement,
     element.dataset.basemap = "map";
     notice.textContent = message;
     layer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      minZoom: 0, maxZoom: 20, maxNativeZoom: 19,
+      minZoom: 0, maxZoom: maxHistoryMapZoom, maxNativeZoom: 19,
       attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
     }).addTo(map);
   };
@@ -58,7 +59,7 @@ export const createHistoryMiniMap = (element: HTMLElement, credits: HTMLElement,
       const provider = document.createElement("span");
       provider.textContent = new DOMParser().parseFromString(data.attribution, "text/html").body.textContent ?? "";
       layer = L.tileLayer(data.tiles[0], {
-        minZoom: 0, maxZoom: 20, minNativeZoom: data.minZoom, maxNativeZoom: Math.min(data.maxZoom, 20), tileSize: data.tileSize,
+        minZoom: 0, maxZoom: maxHistoryMapZoom, minNativeZoom: data.minZoom, maxNativeZoom: Math.min(data.maxZoom, maxHistoryMapZoom), tileSize: data.tileSize,
         zoomOffset: data.tileSize === 512 ? -1 : 0,
         attribution: `<a href="https://www.maptiler.com/" target="_blank" rel="noopener noreferrer">© MapTiler</a> · ${provider.innerHTML}`,
       });

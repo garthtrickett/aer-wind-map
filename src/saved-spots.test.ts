@@ -11,6 +11,18 @@ const spot: SavedSpot = {
   alertEnabled: true, alertMinDays: 3,
 };
 
+test("map zoom round-trips with a saved spot while legacy spots remain valid", () => {
+  for (const mapZoom of [6, 11, 15.25, 20]) {
+    const saved = { ...spot, mapZoom };
+    let text: string | null = null;
+    const storage = { getItem: () => text, setItem: (_key: string, value: string) => { text = value; } };
+    assert.equal(isSavedSpot(saved), true);
+    assert.deepEqual(writeSavedSpots(() => storage, [saved, { ...spot, id: "legacy" }]), { ok: true });
+    assert.deepEqual(readSavedSpots(() => storage), { ok: true, value: [saved, { ...spot, id: "legacy" }] });
+  }
+  for (const mapZoom of [5.99, 20.01, NaN, Infinity, "15", null]) assert.equal(isSavedSpot({ ...spot, mapZoom }), false);
+});
+
 test("calm thresholds persist in km/h and older presets default to 2", () => {
   for (const calmWindKmh of [0, 1.5, 2, 10]) {
     const saved = { ...spot, criteria: { ...spot.criteria, calmWindKmh } };

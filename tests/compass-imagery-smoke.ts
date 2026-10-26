@@ -25,10 +25,12 @@ const time = Array.from({ length: 48 }, (_, i) => current + (i - 12) * 3600);
 try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ viewport });
-    await context.addInitScript((criteria) => localStorage.setItem("aer.saved-spots.v1", JSON.stringify({ version: 1, spots: [{
+    await context.addInitScript((criteria) => { if (!localStorage.getItem("aer.saved-spots.v1")) localStorage.setItem("aer.saved-spots.v1", JSON.stringify({ version: 1, spots: [{
       id: "test", name: "Coastal satellite", point: { latitude: -8.7, longitude: 115.267 }, startYear: 2025, endYear: 2025,
       criteria, alertEnabled: false, alertMinDays: 2,
-    }] })), defaultHistoryCriteria);
+    }, { id: "close", name: "Close-up satellite", point: { latitude: -8.7, longitude: 115.267 }, startYear: 2025, endYear: 2025,
+      criteria, alertEnabled: false, alertMinDays: 2, mapZoom: 13.5,
+    }] })); }, defaultHistoryCriteria);
     let metadataRequests = 0, failMetadata = false, failTiles = false, holdMetadata = false;
     let releaseMetadata: (() => void) | null = null;
     await context.route("**/*", async (route) => {
@@ -63,14 +65,15 @@ try {
     });
     const page = await context.newPage();
     const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
-    const open = async () => {
+    const open = async (name = "Coastal satellite") => {
       await page.getByRole("button", { name: /^Saved spots / }).click();
-      await page.locator(".saved-spot-open").click();
+      await page.locator(".saved-spot-open").filter({ hasText: name }).click();
     };
     const mini = page.locator("#history-mini-map");
     await page.goto(base);
     assert.equal(metadataRequests, 0, "The compass must not load imagery before opening");
     await open();
+    await expect(page.getByLabel("Map zoom", { exact: true })).toHaveValue("11");
     await expect(mini).toHaveAttribute("data-basemap", "satellite");
     await expect(mini.locator("img.leaflet-tile-loaded").first()).toBeVisible();
     await expect(page.locator(".history-map-logo")).toBeVisible();
@@ -80,6 +83,14 @@ try {
     await page.getByLabel("Map zoom", { exact: true }).press("End");
     await expect(page.locator("#history-map-zoom-value")).toHaveText("20");
     await expect.poll(() => mini.locator('img.leaflet-tile-loaded[src*="/satellite-v2/18/"]').count()).toBeGreaterThan(0);
+    const setZoom = async (zoom: string) => page.getByLabel("Map zoom", { exact: true }).evaluate((element, zoom) => {
+      (element as HTMLInputElement).value = zoom; element.dispatchEvent(new Event("input", { bubbles: true }));
+    }, zoom);
+    await setZoom("15.25");
+    await expect(page.locator("#history-map-zoom-value")).toHaveText("15.25");
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0].mapZoom), undefined);
+    await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0].mapZoom), 15.25);
     await page.getByLabel(/^Wind from/).fill("20");
     await page.getByLabel(/^Wind from/).press("Tab");
     await expect(mini).toHaveAttribute("data-basemap", "satellite");
@@ -89,7 +100,17 @@ try {
     await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute("aria-pressed", "true");
     await open();
     await expect(mini).toHaveAttribute("data-basemap", "satellite");
+    await expect(page.getByLabel("Map zoom", { exact: true })).toHaveValue("15.25");
+    await expect.poll(() => mini.locator('img.leaflet-tile-loaded[src*="/satellite-v2/15/"]').count()).toBeGreaterThan(0);
     assert.equal(metadataRequests, 1, "Reopening reuses cached metadata");
+    await setZoom("19");
+    await page.getByRole("button", { name: "Close history" }).click(); await open();
+    await expect(page.getByLabel("Map zoom", { exact: true })).toHaveValue("15.25");
+    await page.getByRole("button", { name: "Close history" }).click(); await open("Close-up satellite");
+    await expect(page.getByLabel("Map zoom", { exact: true })).toHaveValue("13.5");
+    await page.reload(); await open();
+    await expect(page.getByLabel("Map zoom", { exact: true })).toHaveValue("15.25");
+    await expect.poll(() => mini.locator('img.leaflet-tile-loaded[src*="/satellite-v2/15/"]').count()).toBeGreaterThan(0);
     failTiles = true;
     await page.reload(); await open();
     await expect(mini).toHaveAttribute("data-basemap", "map");
@@ -113,6 +134,6 @@ try {
     assert.deepEqual(errors, [], "A late imagery reply must not touch a removed map");
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await context.close();
-    console.log(`Compass satellite passed: ${viewport.width}px; native detail, credits, cache, controls, failures and panel lifecycle.`);
+    console.log(`Compass satellite passed: ${viewport.width}px; saved per-spot zoom, reload, native detail, credits, cache, controls, failures and panel lifecycle.`);
   }
 } finally { await browser.close(); await new Promise<void>((resolve) => server.close(() => resolve())); }

@@ -2,6 +2,7 @@ import { html, svg, nothing, type TemplateResult } from "lit-html";
 import { conditionSource, type HistoryCriteria } from "./history.ts";
 import type { CompassReading } from "./compass-forecast.ts";
 import { bearingAt, bearingPoint, clockwiseSectorPath, clockwiseWedgePath } from "./history-compass-geometry.ts";
+import { defaultHistoryMapZoom, minHistoryMapZoom, maxHistoryMapZoom } from "./history-map-settings.ts";
 
 export const bearingFromPointer = (event: PointerEvent, svg: SVGSVGElement): number => {
   const rect = svg.getBoundingClientRect();
@@ -9,8 +10,6 @@ export const bearingFromPointer = (event: PointerEvent, svg: SVGSVGElement): num
 };
 
 export type BearingHandle = "windFromStart" | "windFromEnd" | "swellFromStart" | "swellFromEnd";
-export const defaultHistoryMapZoom = 11;
-const maxHistoryMapZoom = 20;
 
 const handle = (kind: BearingHandle, bearing: number, radius: number, label: string, visualBearing = bearing): TemplateResult => {
   const point = bearingPoint(visualBearing, radius);
@@ -36,7 +35,7 @@ const current = (kind: "wind" | "swell", direction: number | null | undefined, r
   </g>`;
 };
 
-export const historyCompassView = (criteria: HistoryCriteria, reading: CompassReading | null = null): TemplateResult => html`
+export const historyCompassView = (criteria: HistoryCriteria, reading: CompassReading | null = null, mapZoom = defaultHistoryMapZoom): TemplateResult => html`
   <div class="history-compass" aria-label="Map and selected wind and swell directions">
     <div class="history-compass-stage">
       <div id="history-mini-map" class="history-mini-map" aria-hidden="true"></div>
@@ -61,9 +60,9 @@ export const historyCompassView = (criteria: HistoryCriteria, reading: CompassRe
     </div>
     <div class="history-compass-key"><span><i class="wind"></i>Wind from</span><span><i class="swell"></i>Swell from</span></div>
     <p>Drag a dot to change a bearing</p>
-    <div class="history-map-zoom-head"><label for="history-map-zoom">Map zoom</label><output id="history-map-zoom-value" for="history-map-zoom">11</output></div>
+    <div class="history-map-zoom-head"><label for="history-map-zoom">Map zoom</label><output id="history-map-zoom-value" for="history-map-zoom">${mapZoom}</output></div>
     <div class="history-map-zoom-control"><span aria-hidden="true">−</span>
-      <input id="history-map-zoom" type="range" min="6" max=${String(maxHistoryMapZoom)} step="0.25" value="11" />
+      <input id="history-map-zoom" type="range" min=${String(minHistoryMapZoom)} max=${String(maxHistoryMapZoom)} step="0.25" .value=${String(mapZoom)} />
       <span aria-hidden="true">+</span></div>
     <div class="history-map-credit"></div>
   </div>`;

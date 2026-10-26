@@ -181,7 +181,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
             </label>
             <p class="history-direction-note">Use a swell-only marker offshore and a wind-only marker near shore, then link them below.</p>
             <div class="history-settings-layout">
-              <div class="history-compass-column">${historyCompassView(criteria, reading)}${compassForecastView(compass, reading, propose)}</div>
+              <div class="history-compass-column">${historyCompassView(criteria, reading, history.mapZoom)}${compassForecastView(compass, reading, propose)}</div>
               <div class="history-settings-fields">
             <div class="history-controls">
               ${numberControl("Swell height from", criteria.minSwellHeight, 0, 15, .1,

@@ -8,6 +8,39 @@ import type { WindField } from "./wind.ts";
 const run = { date: "20260925", hour: 18, id: "2026092518", startedAt: "2026-09-25T18:00:00Z" };
 const field: WindField = { kind: "wind", run, step: 3, width: 1, height: 1, firstLatitude: 0, firstLongitude: 0, increment: 1, u: new Float32Array([1]), v: new Float32Array([0]), gust: null };
 
+test("map zoom stays a draft until save, restores per spot and does not invalidate conditions", () => {
+  let state = present(present(initialState, { kind: "locationSelected", point: { latitude: 11, longitude: 119 } }), { kind: "historyOpened" });
+  state = present(state, { kind: "savedSpotNameChanged", name: "Coast" });
+  state = present(state, { kind: "savedSpotSaved", id: "coast" });
+  const original = state;
+  for (const zoom of [5, 21, NaN, Infinity]) assert.equal(present(state, { kind: "historyMapZoomChanged", zoom }), state);
+  state = present(state, { kind: "historyMapZoomChanged", zoom: 15.25 });
+  assert.equal(state.history.mapZoom, 15.25);
+  assert.equal(state.savedSpots, original.savedSpots, "Zooming does not write the saved preset");
+  assert.equal(state.history.criteria, original.history.criteria);
+  assert.equal(state.history.data, original.history.data);
+  assert.equal(state.history.forecastPreview, original.history.forecastPreview);
+  assert.equal(state.compassForecast, original.compassForecast);
+  assert.equal(forecastAlertKey(draftSavedSpot(state.history)), forecastAlertKey(draftSavedSpot(original.history)));
+  state = present(state, { kind: "savedSpotSaved", id: "coast" });
+  assert.equal(state.savedSpots[0].mapZoom, 15.25);
+  state = present(state, { kind: "savedSpotSaved", id: "copy" });
+  assert.equal(state.savedSpots[1].mapZoom, 15.25, "Save as new retains zoom too");
+  state = present(state, { kind: "historyMapZoomChanged", zoom: 18 });
+  state = present(state, { kind: "savedSpotSaved", id: "copy" });
+  state = present(state, { kind: "savedSpotOpened", id: "coast" });
+  assert.equal(state.history.mapZoom, 15.25);
+  state = present(state, { kind: "savedSpotOpened", id: "copy" });
+  assert.equal(state.history.mapZoom, 18);
+  state = present(state, { kind: "locationSelected", point: { latitude: 12, longitude: 120 } });
+  assert.equal(state.history.mapZoom, 11, "New markers start at the default");
+  const { mapZoom: _, ...legacy } = original.savedSpots[0];
+  state = present({ ...state, savedSpots: [legacy] }, { kind: "savedSpotOpened", id: legacy.id });
+  assert.equal(state.history.mapZoom, 11, "Existing markers without a saved zoom remain compatible");
+  state = present(state, { kind: "telegramSpotRestored", spot: { ...legacy, mapZoom: 16 }, readOnly: true });
+  assert.equal(state.history.mapZoom, 16, "Shared forecast links retain the saved view");
+});
+
 test("SAM loading accepts only the requested forecast", () => {
   const readyToLoad = present(initialState, { kind: "runFound", run, layer: "wind" });
   assert.deepEqual(nap(readyToLoad), { kind: "load", run, step: 3, key: fieldKey(run, 3), layer: "wind" });

@@ -46,7 +46,10 @@ a matching window between 06:00 and 18:00 in the spot's local timezone, shows
 qualifying dates, and exports the paired hourly data
 as CSV. A circular map in the history panel centers the selected spot; drag the
 teal wind dots or amber swell dots around it to set each clockwise bearing
-range, or enter degrees directly. The preview starts at zoom level 11; its slider
+range, or enter degrees directly. The preview starts at zoom level 11 for new
+spots. **Update saved spot** and **Save as new** store the current circular-map
+zoom with that spot and restore it when reopened, including after a page reload.
+Unsaved zoom changes leave the stored view unchanged. Its slider
 reaches level 20 and changes only the map scale. With the configured MapTiler
 key, the circular preview defaults to satellite imagery, with provider credits
 below the circle. It uses the same imagery source as the main map and keeps

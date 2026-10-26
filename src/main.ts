@@ -5,7 +5,7 @@ import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
-import { bearingFromPointer, defaultHistoryMapZoom, type BearingHandle } from "./history-compass.ts";
+import { bearingFromPointer, type BearingHandle } from "./history-compass.ts";
 import { createHistoryMiniMap } from "./history-mini-map.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
@@ -56,8 +56,7 @@ let alertGeneration = 0;
 let overlayKind: "details" | "history" | "observation" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
-let miniMapZoom = defaultHistoryMapZoom;
-let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
+let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; zoom: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
 let dayController: AbortController | null = null;
 let dayRequest = -1;
 let waybackController: AbortController | null = null;
@@ -74,21 +73,18 @@ const syncMiniMap = (): void => {
     miniMap.remove();
     miniMap = null;
   }
-  if (!point) miniMapZoom = defaultHistoryMapZoom;
+  const zoom = state.history.mapZoom;
   const credits = ui.querySelector<HTMLElement>(".history-map-credit");
-  if (element && credits && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, credits, point, miniMapZoom, satelliteUrl) };
-  const slider = ui.querySelector<HTMLInputElement>("#history-map-zoom");
-  const output = ui.querySelector<HTMLOutputElement>("#history-map-zoom-value");
-  if (slider) slider.value = String(miniMapZoom);
-  if (output) output.value = String(miniMapZoom);
+  if (element && credits && point && !miniMap) miniMap = { element, ...point, zoom, ...createHistoryMiniMap(element, credits, point, zoom, satelliteUrl) };
+  if (miniMap && miniMap.zoom !== zoom) {
+    miniMap.setZoom(zoom);
+    miniMap = { ...miniMap, zoom };
+  }
 };
 
 ui.addEventListener("input", (event) => {
   if (!(event.target instanceof HTMLInputElement) || event.target.id !== "history-map-zoom") return;
-  miniMapZoom = Number(event.target.value);
-  miniMap?.setZoom(miniMapZoom);
-  const output = ui.querySelector<HTMLOutputElement>("#history-map-zoom-value");
-  if (output) output.value = String(miniMapZoom);
+  dispatch({ kind: "historyMapZoomChanged", zoom: Number(event.target.value) });
 });
 
 let compassDrag: Readonly<{ pointerId: number; handle: SVGCircleElement; field: BearingHandle }> | null = null;
