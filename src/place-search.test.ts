@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { searchPlaces, type Place } from "./place-search.ts";
+import { coordinateSearch, searchPlaces, type Place } from "./place-search.ts";
 import { initialState, present, nap, type State } from "./model.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 
@@ -12,6 +12,51 @@ const readySearch = (state: State): State => {
   state = present(state, { kind: "placeSearchStarted", request: state.placeSearch.request });
   return present(state, { kind: "placeSearchCompleted", request: state.placeSearch.request, result: { ok: true, places: [place] } });
 };
+
+test("decimal latitude/longitude pairs keep their precision and never contact geocoding", async () => {
+  let calls = 0;
+  const fetcher = (async () => { calls++; throw new Error("Coordinates should not fetch"); }) as typeof fetch;
+  for (const [query, point] of [
+    ["11.350744113186904, 119.46119075878524", { latitude: 11.350744113186904, longitude: 119.46119075878524 }],
+    ["  -8.65, +115.12  ", { latitude: -8.65, longitude: 115.12 }],
+    ["0, 0", { latitude: 0, longitude: 0 }],
+    [".5, -180", { latitude: .5, longitude: -180 }],
+  ] as const) {
+    const result = await searchPlaces(query, "", new AbortController().signal, fetcher);
+    assert.ok(result.ok);
+    assert.equal(result.places.length, 1);
+    assert.deepEqual(result.places[0].point, point);
+  }
+  for (const query of ["91, 119", "11, 181", "119.461, 11.350", "86, 0", "11,", "11, 119, 1", "11 119", "11, invalid"]) {
+    const result = await searchPlaces(query, "", new AbortController().signal, fetcher);
+    assert.equal(result.ok, false, query);
+  }
+  assert.equal(calls, 0);
+  for (const query of ["San Juan, La Union", "12 Main Street, London", "90210"]) assert.equal(coordinateSearch(query), null);
+});
+
+test("coordinate submission moves a draft immediately without an API key and rejects stale search results", () => {
+  let state = present(initialState, { kind: "placeSearchQueryChanged", query: "11.350744113186904, 119.46119075878524" });
+  assert.equal(state.selected, null, "Typing must not move the marker");
+  state = present(state, { kind: "placeSearchRequested" });
+  assert.deepEqual(state.selected, { latitude: 11.350744113186904, longitude: 119.46119075878524 });
+  assert.equal(state.placeSearch.phase, "idle");
+  assert.notEqual(nap(state)?.kind, "searchPlaces");
+  const query = present(state, { kind: "placeSearchQueryChanged", query: "119, 11" });
+  const invalid = present(query, { kind: "placeSearchRequested" });
+  assert.equal(invalid.selected, state.selected);
+  assert.equal(invalid.placeSearch.phase, "failed");
+  assert.match(invalid.placeSearch.message!, /latitude first/);
+
+  let pending = present(searchState(), { kind: "placeSearchQueryChanged", query: "San Juan" });
+  pending = present(pending, { kind: "placeSearchRequested" });
+  const oldRequest = pending.placeSearch.request;
+  pending = present(pending, { kind: "placeSearchStarted", request: oldRequest });
+  pending = present(pending, { kind: "placeSearchQueryChanged", query: "-8.65, 115.12" });
+  const moved = present(pending, { kind: "placeSearchRequested" });
+  assert.deepEqual(moved.selected, { latitude: -8.65, longitude: 115.12 });
+  assert.equal(present(moved, { kind: "placeSearchCompleted", request: oldRequest, result: { ok: true, places: [place] } }), moved);
+});
 
 test("place lookup encodes the full query, validates coordinates and disambiguates results", async () => {
   let requested: URL | null = null;

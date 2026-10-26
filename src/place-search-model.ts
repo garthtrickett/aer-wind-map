@@ -1,4 +1,4 @@
-import { validPlaceQuery, type Place, type PlaceSearchResult } from "./place-search.ts";
+import { coordinateSearch, validPlaceQuery, type Place, type PlaceSearchResult } from "./place-search.ts";
 
 export type PlaceSearch = Readonly<{
   available: boolean;
@@ -24,9 +24,16 @@ export const dismissPlaceSearch = (search: PlaceSearch): PlaceSearch => search.p
 export const presentPlaceSearch = (search: PlaceSearch, proposal: PlaceSearchProposal): PlaceSearch => {
   switch (proposal.kind) {
     case "placeSearchQueryChanged": return { ...search, query: proposal.query.slice(0, 120), request: search.request + 1, phase: "idle", places: [], message: null };
-    case "placeSearchRequested": return !search.available || search.phase === "loading" || search.phase === "needsData" ? search
-      : { ...search, request: search.request + 1, places: [], phase: validPlaceQuery(search.query) ? "needsData" : "failed",
-        message: validPlaceQuery(search.query) ? null : "Enter at least two characters to search." };
+    case "placeSearchRequested": {
+      if (search.phase === "loading" || search.phase === "needsData") return search;
+      const coordinates = coordinateSearch(search.query);
+      if (coordinates) return coordinates.ok
+        ? { ...search, request: search.request + 1, places: coordinates.places, phase: "ready", message: null }
+        : { ...search, request: search.request + 1, places: [], phase: "failed", message: coordinates.message };
+      return { ...search, request: search.request + 1, places: [], phase: search.available && validPlaceQuery(search.query) ? "needsData" : "failed",
+        message: !search.available ? "Enter coordinates as latitude, longitude. Place-name search is not configured."
+          : validPlaceQuery(search.query) ? null : "Enter at least two characters to search." };
+    }
     case "placeSearchStarted": return search.request === proposal.request && search.phase === "needsData" ? { ...search, phase: "loading" } : search;
     case "placeSearchCompleted": return search.request !== proposal.request || search.phase !== "loading" ? search
       : proposal.result.ok ? { ...search, phase: "ready", places: proposal.result.places, message: null }

@@ -404,11 +404,12 @@ function dispatch(proposal: Proposal): void {
     selectedPoint = state.selected;
     windMap.select(selectedPoint);
   }
-  if (proposal.kind === "placeSearchResultSelected" && state.selected !== previous.selected) {
-    const place = previous.placeSearch.places[proposal.index];
-    windMap.map.setView([place.point.latitude, place.point.longitude], place.zoom, { animate: false });
+  const coordinatesSelected = proposal.kind === "placeSearchRequested" && state.selected !== previous.selected;
+  if ((proposal.kind === "placeSearchResultSelected" || coordinatesSelected) && state.selected && state.selected !== previous.selected) {
+    const zoom = proposal.kind === "placeSearchResultSelected" ? previous.placeSearch.places[proposal.index].zoom : 14;
+    windMap.map.setView([state.selected.latitude, state.selected.longitude], zoom, { animate: false });
   }
-  if (proposal.kind === "placeSearchResultSelected" || proposal.kind === "placeSearchDismissed") {
+  if (proposal.kind === "placeSearchResultSelected" || proposal.kind === "placeSearchDismissed" || coordinatesSelected) {
     // Selecting a result removes its button; keep keyboard focus on the search field.
     ui.querySelector<HTMLInputElement>("#place-search-query")?.focus({ preventScroll: true });
   }

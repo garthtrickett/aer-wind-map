@@ -6,6 +6,24 @@ export type PlaceSearchResult = Readonly<{ ok: true; places: readonly Place[] }>
 
 export const validPlaceQuery = (query: string): boolean => query.trim().length >= 2 && query.trim().length <= 120;
 
+/** Null means a place-name query; coordinate-like input is handled locally, including errors. */
+export const coordinateSearch = (query: string): PlaceSearchResult | null => {
+  const text = query.trim();
+  const decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+  const parts = text.split(",").map((part) => part.trim());
+  const coordinateLike = (parts.length > 1 && decimal.test(parts[0])) || (/^[+\-\d.\s,]+$/.test(text) && /[,\s]/.test(text));
+  if (!coordinateLike) return null;
+  if (parts.length !== 2 || !parts.every((part) => decimal.test(part))) {
+    return { ok: false, message: "Enter coordinates as latitude, longitude (for example 11.350744, 119.461191)." };
+  }
+  const [latitude, longitude] = parts.map(Number);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return { ok: false, message: "Latitude must be between −90 and 90; longitude between −180 and 180. Enter latitude first." };
+  }
+  if (Math.abs(latitude) > 85.05112878) return { ok: false, message: "This map supports latitudes between 85.051°S and 85.051°N." };
+  return { ok: true, places: [{ name: "Coordinates", label: `${latitude}, ${longitude}`, point: { latitude, longitude }, zoom: 14 }] };
+};
+
 const decodePlaces = (data: unknown): readonly Place[] => {
   if (!data || typeof data !== "object" || !("features" in data) || !Array.isArray(data.features)) {
     throw new Error("Invalid place search response");
@@ -31,6 +49,8 @@ const decodePlaces = (data: unknown): readonly Place[] => {
 export const searchPlaces = async (
   query: string, key: string, signal: AbortSignal, fetcher: typeof fetch = fetch,
 ): Promise<PlaceSearchResult> => {
+  const coordinates = coordinateSearch(query);
+  if (coordinates) return coordinates;
   if (!validPlaceQuery(query)) return { ok: false, message: "Enter a place name between 2 and 120 characters." };
   if (!key.trim()) return { ok: false, message: "Place search is not configured." };
   const url = new URL(`https://api.maptiler.com/geocoding/${encodeURIComponent(query.trim())}.json`);

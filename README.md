@@ -17,7 +17,7 @@ Archive publication months use MM/YYYY. APIs, saved data and CSV timestamps use 
 
 ## Find a place
 
-Use **Find a place** on the main map, point details or **Find your season**.
+Use **Find a place or coordinates** on the main map, point details or **Find your season**.
 Enter a town, beach or landmark (add the region/country for ambiguous names),
 press **Search** or Enter, then choose a result to move the forecast marker and
 center the map. You can drag the flag afterward to refine the location.
@@ -26,9 +26,16 @@ Search results are approximate map locations, not verified surf peaks.
 Searching from a saved marker keeps its name, conditions, years and linked spots
 in the editor. The stored marker and Telegram monitor move only after
 **Update saved spot**. Previously loaded weather/history is cleared on relocation.
-Place search uses the existing `VITE_MAPTILER_API_KEY`; no additional key is
+
+Paste decimal coordinates in **latitude, longitude** order, for example
+`11.350744113186904, 119.46119075878524`, and press Enter or Search to move the
+marker immediately. Coordinates retain their full precision, are validated
+locally and work without an API key. Invalid pairs leave the marker unchanged.
+
+Place-name search uses the existing `VITE_MAPTILER_API_KEY`; no additional key is
 needed. It requests MapTiler geocoding only on submission, not on every keystroke,
-and counts toward the account's API usage. Without a key the search is hidden.
+and counts toward the account's API usage. Without a key, coordinate entry
+remains available.
 Provider failures and empty results leave the marker where it is.
 
 Click a point, open its details, and choose **Explore historical swell and wind**

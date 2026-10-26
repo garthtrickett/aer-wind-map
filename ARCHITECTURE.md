@@ -53,9 +53,12 @@
   request generations, and `place-search-view.ts` is shared by the map and marker
   dialogs. It reuses the configured browser MapTiler key and supplies source
   attribution. Typing never starts a request. Query changes, dismissal and marker
-  navigation abort/invalidate pending requests. Only choosing a current result
-  moves the forecast flag and camera. Relocating a saved marker preserves the
-  editor's settings and links, invalidates weather/history for its old point,
+  navigation abort/invalidate pending requests. Decimal latitude/longitude pairs
+  are parsed locally, retain full precision and move the flag/camera on submission
+  through the same relocation path; coordinate entry also works without a key.
+  Malformed or out-of-range pairs leave the marker unchanged. Place names
+  move the flag only after choosing a current result. Relocating a saved marker
+  preserves the editor's settings and links, invalidates weather/history for its old point,
   and updates persistent presets/Telegram only through the existing save action.
 
 - The optional regular satellite basemap uses a domain-restricted browser

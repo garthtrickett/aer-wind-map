@@ -180,7 +180,10 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "placeSearchCompleted":
     case "placeSearchDismissed": {
       const placeSearch = presentPlaceSearch(state.placeSearch, proposal);
-      return placeSearch === state.placeSearch ? state : { ...state, placeSearch };
+      const next = placeSearch === state.placeSearch ? state : { ...state, placeSearch };
+      // Coordinates have a single exact result, so submission can move the marker immediately.
+      return proposal.kind === "placeSearchRequested" && placeSearch.phase === "ready"
+        ? presentApp(next, { kind: "placeSearchResultSelected", index: 0 }) : next;
     }
     case "placeSearchResultSelected": {
       const place = state.placeSearch.phase === "ready" && Number.isInteger(proposal.index) ? state.placeSearch.places[proposal.index] : null;
