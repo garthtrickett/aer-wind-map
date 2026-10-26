@@ -25,11 +25,10 @@ export const loadCompassForecast = async (point: Point, source: ConditionSource,
   return data.wind || data.swell ? { ok: true, data } : { ok: false };
 };
 
-export const compassReadingAt = (data: CompassForecastData | null, time: number | null, criteria: HistoryCriteria): CompassReading | null => {
+export const forecastReadingAt = (data: CompassForecastData | null, time: number | null, criteria: HistoryCriteria): CompassReading | null => {
   if (!data || time === null || !Number.isFinite(time)) return null;
-  const hour = Math.floor(time / 3600) * 3600;
-  const windAt = data.wind?.time.indexOf(hour) ?? -1;
-  const swellAt = data.swell?.time.indexOf(hour) ?? -1;
+  const windAt = data.wind?.time.indexOf(time) ?? -1;
+  const swellAt = data.swell?.time.indexOf(time) ?? -1;
   let wind: CompassReading["wind"] = null, swell: CompassReading["swell"] = null;
   if (data.wind && windAt >= 0) {
     const speed = positive(data.wind.first[windAt]);
@@ -45,5 +44,8 @@ export const compassReadingAt = (data: CompassForecastData | null, time: number 
     swell = { direction, height, period: positive(data.swell.second[swellAt]),
       fits: direction !== null && directionInClockwiseRange(direction, criteria.swellFromStart, criteria.swellFromEnd) };
   }
-  return { time: hour, timezone: data.wind?.timezone ?? data.swell?.timezone ?? "UTC", wind, swell };
+  return { time, timezone: data.wind?.timezone ?? data.swell?.timezone ?? "UTC", wind, swell };
 };
+
+export const compassReadingAt = (data: CompassForecastData | null, time: number | null, criteria: HistoryCriteria): CompassReading | null =>
+  forecastReadingAt(data, time === null ? null : Math.floor(time / 3600) * 3600, criteria);

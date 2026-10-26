@@ -65,6 +65,16 @@ in data coverage. A matching day needs at least two consecutive hours (or the
 larger minimum window set in the conditions). The look-ahead starts today in
 the spot's local timezone. Existing saved spots default to 14 days.
 
+Each matching day also shows the forecast conditions during its displayed
+matching window: wind speed in km/h and source directions, plus primary swell
+height, period and source directions. Values that vary show minimum–maximum
+ranges for those hours, not whole-day averages. Expand **Hourly forecast** for
+each hourly value and direction in degrees; the window's end time is excluded.
+Linked markers have separate named readings and tables, so an offshore swell
+point is not confused with the nearshore wind point. This reuses the downloaded
+forecast without additional API requests. These are model forecasts, not station
+measurements or breaking-wave heights.
+
 The on-screen alert appears in the top-right corner, shows the matching-day
 count and next window belonging to a qualifying period, and opens the
 spot when clicked. **Saved spots → Telegram alerts** can also connect a private

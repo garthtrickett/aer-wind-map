@@ -105,6 +105,15 @@
   configured wedges and read-only dashed from-bearing rays. No incoming forecast
   mutates criteria, historical scores or saved presets.
 
+- Matching-day conditions are derived by `forecast-window.ts` from the existing
+  preview data and the exact UTC interval returned by alert scoring. Each linked
+  point keeps its enabled source and its own values. The shared exact-timestamp
+  reader preserves nulls and converts m/s to km/h; compass lookups retain their
+  existing hour rounding. `forecast-window-view.ts` displays per-window numeric
+  ranges and distinct forecast compass sectors, with expandable hourly tables in
+  the root spot's timezone. No direction averaging, new fetch, scoring change or
+  summary payload expansion is involved.
+
 - Observations are separate immutable SAM state and effects. Map move-end
   events propose the visible bounds; enabled observation layers load only a
   bounded area at zoom 5+. Late responses from an earlier view are rejected.

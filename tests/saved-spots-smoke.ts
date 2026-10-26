@@ -112,6 +112,16 @@ try {
   await expect(preview).toContainText("Your alert threshold is met");
   await expect(preview.locator(".history-forecast-windows li")).toHaveCount(4);
   await expect(preview.locator(".history-forecast-windows li").first()).toContainText("06:00–18:00");
+  const firstWindow = preview.locator(".history-forecast-windows > li").first();
+  await expect(firstWindow.locator(".forecast-window-wind")).toContainText("10.8 km/h · E");
+  await expect(firstWindow.locator(".forecast-window-swell")).toContainText("2.0 m · 12.0 s · SW");
+  await firstWindow.getByText("Hourly forecast", { exact: true }).click();
+  await expect(firstWindow.locator("tbody tr")).toHaveCount(12);
+  await expect(firstWindow.locator("tbody tr").first()).toContainText("06:00");
+  await expect(firstWindow.locator("tbody tr").first()).toContainText("E 90°");
+  await expect(firstWindow.locator("tbody tr").first()).toContainText("SW 220°");
+  await expect(firstWindow.locator("tbody tr").last()).toContainText("17:00");
+  await firstWindow.getByText("Hourly forecast", { exact: true }).click();
   assert.equal(forecastRequests, compassRequests + 2);
   await maximumPeriod.fill("11");
   await maximumPeriod.press("Tab");

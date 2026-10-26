@@ -14,6 +14,8 @@ import { draftSavedSpot, lastCompleteHistoryYear, type HistoryPanel, type Propos
 import { dayLookupView } from "./day-lookup-view.ts";
 import type { DayLookupPanel } from "./day-lookup-model.ts";
 import { displayDate, displayDay } from "./dates.ts";
+import { forecastWindowConditions } from "./forecast-window.ts";
+import { forecastWindowView } from "./forecast-window-view.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -47,7 +49,8 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
     <div class="history-forecast-preview"><p role="status">The forecast could not be loaded for this point or a linked point. Check the links and try again.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
   // Draft edits rescore the downloaded hours immediately, without saving or refetching.
-  const summary = scoreForecastData(draftSavedSpot(history), preview.data, new Date(preview.checkedAt));
+  const spot = draftSavedSpot(history);
+  const summary = scoreForecastData(spot, preview.data, new Date(preview.checkedAt));
   if (!summary) return html`
     <div class="history-forecast-preview"><p role="status">No usable forecast is available for all selected conditions and linked spots.</p>
       <button type="button" class="secondary-button" @click=${refresh}>Retry forecast</button></div>`;
@@ -80,10 +83,13 @@ const forecastPreviewView = (history: HistoryPanel, propose: (proposal: Proposal
     </div>` : nothing}
     ${summary.windows.length ? html`<p class="history-forecast-caption">All matching days in the next ${summary.horizonDays} days</p><ul class="history-forecast-windows" aria-label="Matching forecast days">
       ${summary.windows.map((window) => html`<li>
-        <span>${displayDate(window.start * 1000, summary.timezone)}</span>
-        <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong>
+        <div class="forecast-window-heading"><span>${displayDate(window.start * 1000, summary.timezone)}</span>
+          <strong>${clock.format(new Date(window.start * 1000))}–${clock.format(new Date(window.end * 1000))}</strong></div>
+        ${forecastWindowView(forecastWindowConditions(spot, preview.data, window), summary.timezone)}
       </li>`)}
     </ul>` : html`<p>No days match your current conditions.</p>`}
+    ${summary.windows.length ? html`<p class="forecast-window-note">Ranges cover the matching hours shown, not the whole day. Directions are where wind and swell come from.
+      These are model forecasts; swell height is not breaking-wave height.</p>` : nothing}
     ${summary.availableDays < summary.horizonDays ? html`<p>Usable forecast for ${summary.availableDays} of ${summary.horizonDays} days. The remaining days are unknown.</p>` : nothing}
     <small>Times are local to the spot (${summary.timezone}). ${sources.label}.
       ${sources.coverage} Checked ${clock.format(new Date(summary.checkedAt))}.</small>
