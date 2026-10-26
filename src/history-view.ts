@@ -2,6 +2,8 @@ import { compassReadingAt } from "./compass-forecast.ts";
 import { compassForecastView } from "./compass-forecast-view.ts";
 import type { CompassForecast } from "./compass-forecast-model.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
+import { placeSearchView } from "./place-search-view.ts";
+import type { PlaceSearch } from "./place-search-model.ts";
 import { calmWindThresholdKmh, conditionSourceLabel, conditionSource, summarizeHistory, type ConditionSource, type HistoryCriteria } from "./history.ts";
 import { maxAlertRules, maxForecastDays, type AlertDayRule } from "./alert-rules.ts";
 import { evaluateForecastRules, forecastPeriodLabel, forecastSources, scoreForecastData } from "./forecast-alerts.ts";
@@ -116,7 +118,7 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
   </fieldset>`;
 };
 
-export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number, compass: CompassForecast, mapTime: number | null): TemplateResult | typeof nothing => {
+export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number, compass: CompassForecast, mapTime: number | null, placeSearch: PlaceSearch): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
   const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
@@ -156,6 +158,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
           </div>
         </div>
         <div class="history-body">
+          ${placeSearchView(placeSearch, propose)}
           ${dayLookupView(dayLookup, propose, now)}
           <div class="history-intro">A day qualifies when the selected conditions meet every rule for at least
             ${criteria.minConsecutiveHours} consecutive hourly samples between 06:00 and 18:00 at the spot's local time.

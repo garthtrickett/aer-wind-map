@@ -48,6 +48,16 @@
 
 ## Coding decisions
 
+- Place lookup is an independent SAM feature: `place-search.ts` validates bounded
+  MapTiler geocoding results, `place-search-model.ts` owns explicit submissions and
+  request generations, and `place-search-view.ts` is shared by the map and marker
+  dialogs. It reuses the configured browser MapTiler key and supplies source
+  attribution. Typing never starts a request. Query changes, dismissal and marker
+  navigation abort/invalidate pending requests. Only choosing a current result
+  moves the forecast flag and camera. Relocating a saved marker preserves the
+  editor's settings and links, invalidates weather/history for its old point,
+  and updates persistent presets/Telegram only through the existing save action.
+
 - The optional regular satellite basemap uses a domain-restricted browser
   MapTiler key configured at build time. No key means no satellite control or
   MapTiler requests. Metadata loads on first selection and stays in memory;

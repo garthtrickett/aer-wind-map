@@ -12,6 +12,7 @@ import type { Point, Proposal, State } from "./model.ts";
 import { waybackView } from "./wayback-view.ts";
 import { observationsView } from "./observations-view.ts";
 import { displayDateTime } from "./dates.ts";
+import { placeSearchView } from "./place-search-view.ts";
 
 const dateLabel = displayDateTime;
 const runLabel = displayDateTime;
@@ -86,6 +87,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         @click=${() => propose({ kind: "savedSpotsToggled" })}>Saved spots <span>${state.savedSpots.length}</span></button>
         <button class="saved-spots-toggle observations-toggle" type="button" aria-expanded=${state.observations.open}
           @click=${() => propose({ kind: "observationsToggled" })}>Observations</button></div>
+      ${!state.modalOpen && !state.history.open && !state.savedSpotsOpen && !state.observations.open && !state.observations.selectedId
+        ? placeSearchView(state.placeSearch, propose) : nothing}
     </header>
 
     ${state.satellite.available || state.wayback.available ? html`<section class="basemap-tools" aria-label="Map background">
@@ -193,6 +196,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             <button class="close-button" aria-label="Close details" @click=${() => propose({ kind: "modalClosed" })}>×</button>
           </div>
           <div class="coordinates">${Math.abs(state.selected.latitude).toFixed(2)}°${state.selected.latitude >= 0 ? "N" : "S"} · ${Math.abs(state.selected.longitude).toFixed(2)}°${state.selected.longitude >= 0 ? "E" : "W"}</div>
+          ${placeSearchView(state.placeSearch, propose)}
           ${wind ? html`
             <div class="primary-reading"><strong>${wind.speed.toFixed(1)}</strong><span>m/s<br />10 m wind</span></div>
             <div class="detail-grid">
@@ -210,7 +214,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
         </section>
       </div>` : nothing}
-    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null)}
+    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null, state.placeSearch)}
     ${observationsView(state.observations, propose, now)}
   `;
 };

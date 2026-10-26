@@ -12,6 +12,7 @@ import { initialObservations, observationEffect, presentObservations, type Obser
 import { alignDayLookup, dayLookupEffect, initialDayLookup, presentDayLookup, type DayLookupEffect, type DayLookupPanel, type DayLookupProposal } from "./day-lookup-model.ts";
 import type { Basemap, SatelliteResult, Satellite } from "./satellite.ts";
 import { initialWayback, alignWayback, presentWayback, waybackEffect, type WaybackPanel, type WaybackProposal, type WaybackEffect } from "./wayback-model.ts";
+import { initialPlaceSearch, dismissPlaceSearch, presentPlaceSearch, placeSearchEffect, type PlaceSearch, type PlaceSearchProposal, type PlaceSearchEffect } from "./place-search-model.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -52,6 +53,7 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  placeSearch: PlaceSearch;
   basemap: Basemap;
   compassForecast: CompassForecast;
   wayback: WaybackPanel;
@@ -79,6 +81,7 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | PlaceSearchProposal
   | CompassForecastProposal
   | WaybackProposal
   | { readonly kind: "basemapSelected"; readonly basemap: Basemap }
@@ -137,6 +140,7 @@ export type Proposal =
   | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
+  placeSearch: initialPlaceSearch,
   basemap: "map", weatherOverlay: true, wayback: initialWayback,
   satellite: { available: false, phase: "idle", data: null, message: null },
   dayLookup: initialDayLookup, compassForecast: initialCompassForecast,
@@ -170,6 +174,23 @@ const selectionChanged = (state: State, point: Point): State => ({
 
 const presentApp = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "placeSearchQueryChanged":
+    case "placeSearchRequested":
+    case "placeSearchStarted":
+    case "placeSearchCompleted":
+    case "placeSearchDismissed": {
+      const placeSearch = presentPlaceSearch(state.placeSearch, proposal);
+      return placeSearch === state.placeSearch ? state : { ...state, placeSearch };
+    }
+    case "placeSearchResultSelected": {
+      const place = state.placeSearch.phase === "ready" && Number.isInteger(proposal.index) ? state.placeSearch.places[proposal.index] : null;
+      if (!place) return state;
+      const next = state.history.open ? { ...state, selected: place.point, history: {
+        ...state.history, point: place.point, phase: "needsData" as const, requestedKey: null, data: null, error: null,
+        selectedMonth: null, downloadRequested: false, saveFeedback: null, forecastPreview: resetForecastPreview(state.history.forecastPreview),
+      } } : { ...selectionChanged(state, place.point), modalOpen: state.modalOpen };
+      return { ...next, placeSearch: dismissPlaceSearch(state.placeSearch), savedSpotsOpen: false };
+    }
     case "basemapSelected": return proposal.basemap === state.basemap || (proposal.basemap === "satellite" && !state.satellite.available) || (proposal.basemap === "wayback" && !state.wayback.available) ? state
       : { ...state, basemap: proposal.basemap, weatherOverlay: proposal.basemap === "map", satellite: {
         ...state.satellite, message: null, phase: proposal.basemap === "satellite" && !state.satellite.data && state.satellite.phase !== "loading" ? "needsData" : state.satellite.phase } };
@@ -413,7 +434,11 @@ const presentApp = (state: State, proposal: Proposal): State => {
 };
 
 export const present = (state: State, proposal: Proposal): State => {
-  const next = presentApp(state, proposal);
+  let next = presentApp(state, proposal);
+  if (["locationSelected", "locationDragged", "selectionCleared", "savedSpotOpened", "telegramSpotRestored", "modalClosed", "historyClosed", "savedSpotsToggled", "observationsToggled"].includes(proposal.kind)) {
+    const placeSearch = dismissPlaceSearch(next.placeSearch);
+    if (placeSearch !== next.placeSearch) next = { ...next, placeSearch };
+  }
   const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
   const wayback = alignWayback(next.wayback, next.selected, next.basemap === "wayback");
   const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : null, conditionSource(next.history.criteria));
@@ -421,6 +446,7 @@ export const present = (state: State, proposal: Proposal): State => {
 };
 
 export type Effect =
+  | PlaceSearchEffect
   | CompassForecastEffect
   | WaybackEffect
   | { readonly kind: "loadSatellite" }
@@ -440,6 +466,8 @@ export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
 });
 
 export const nap = (state: State): Effect | null => {
+  const search = placeSearchEffect(state.placeSearch);
+  if (search) return search;
   const imagery = waybackEffect(state.wayback, state.basemap === "wayback");
   if (imagery) return imagery;
   if (state.satellite.phase === "needsData") return { kind: "loadSatellite" };

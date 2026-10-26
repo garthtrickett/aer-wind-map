@@ -100,6 +100,34 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .saved-spots-toggle span { display: grid; place-items: center; min-width: 20px; height: 20px; border-radius: 6px; background: #e9b54a; color: #153943; }
 .map-tools { display: flex; gap: 6px; }
 .map-tools .saved-spots-toggle { flex: 1; min-width: 0; gap: 4px; padding-inline: 7px; }
+.place-search { min-width: 0; margin: 16px 0; color: #174550; }
+.place-search-form > label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; }
+.place-search-inputs { display: flex; gap: 7px; }
+.place-search-inputs input { flex: 1; width: 0; min-width: 0; min-height: 42px; border: 1px solid #b7d0c9; border-radius: 9px; padding: 9px 10px; color: #173f49; background: #fff; font-size: 14px; }
+.place-search-inputs > button { min-height: 42px; padding: 9px 12px; border: 0; border-radius: 9px; background: #164e5b; color: #fff; font-size: 12px; font-weight: 700; }
+.place-search-results > p { margin-top: 10px; font-size: 12px; line-height: 1.5; }
+.place-search-results[hidden] { display: none; }
+.place-search-results ul { display: grid; gap: 5px; list-style: none; margin: 10px 0 0; padding: 0; max-height: min(280px, 32dvh); overflow-y: auto; }
+.place-search-results li > button { display: block; width: 100%; min-height: 52px; padding: 10px; border: 1px solid #c8ddd7; border-radius: 9px; background: #eff5f1; color: #173f49; text-align: left; overflow-wrap: anywhere; }
+.place-search-results li > button:hover { background: #d9eee6; }
+.place-search-results strong, .place-search-results span { display: block; }
+.place-search-results strong { font-size: 13px; }
+.place-search-results span { margin-top: 4px; font-size: 11px; line-height: 1.45; }
+.place-search-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.place-search-footer small { font-size: 10px; line-height: 1.5; }
+.place-search-footer a { color: inherit; }
+.place-search-footer > button { min-height: 34px; padding: 6px 8px; border: 1px solid #b7d0c9; border-radius: 7px; background: transparent; color: inherit; font-size: 11px; }
+.masthead .place-search { position: relative; margin: 13px 0 0; color: #d9eeec; }
+.masthead:has(.place-search-results:not([hidden])) { z-index: 7; }
+.masthead .place-search-form > label { font-size: 11px; }
+.masthead .place-search-inputs input { font-size: 13px; }
+.masthead .place-search-inputs > button { padding-inline: 10px; background: #80dacd; color: #082e3b; }
+.masthead .place-search-results { position: absolute; z-index: 8; top: calc(100% + 10px); left: -20px; right: -20px; padding: 4px 12px 12px; border: 1px solid #466872; border-radius: 12px; background: #0c3442; box-shadow: 0 14px 40px #031d2852; }
+.masthead .place-search-results li > button { background: #174b54; border-color: #56857f; color: #e8f7f2; }
+.masthead .place-search-results li > button:hover { background: #235f68; }
+.details > .place-search { margin: 18px 25px; }
+.history-body > .place-search { margin: 0 0 18px; }
+.masthead:has(.place-search) ~ .error-card { top: 320px; }
 .observations-toggle { justify-content: center; }
 .observations-panel > p, .observation-status { margin-top: 11px; font-size: 11px; line-height: 1.45; color: #b9d7d6; }
 .observations-panel > label { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -388,6 +416,9 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .legend { bottom: 35px; }
 }
 @media (max-width: 680px) {
+  .masthead .place-search-results { left: -14px; right: -14px; }
+  .masthead:has(.place-search) ~ .error-card { top: 285px; }
+  .place-search-inputs input, .masthead .place-search-inputs input { font-size: 16px; }
   .basemap-tools { top: 84px; right: 12px; width: 126px; }
   .basemap-overlay { font-size: 10px; gap: 4px; }
   .history-scrim { padding: 7px; }

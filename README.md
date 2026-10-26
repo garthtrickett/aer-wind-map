@@ -15,6 +15,22 @@ times. The day and wave-history controls accept that format directly and retain
 a calendar button, regardless of the browser's language or regional settings.
 Archive publication months use MM/YYYY. APIs, saved data and CSV timestamps use ISO.
 
+## Find a place
+
+Use **Find a place** on the main map, point details or **Find your season**.
+Enter a town, beach or landmark (add the region/country for ambiguous names),
+press **Search** or Enter, then choose a result to move the forecast marker and
+center the map. You can drag the flag afterward to refine the location.
+Search results are approximate map locations, not verified surf peaks.
+
+Searching from a saved marker keeps its name, conditions, years and linked spots
+in the editor. The stored marker and Telegram monitor move only after
+**Update saved spot**. Previously loaded weather/history is cleared on relocation.
+Place search uses the existing `VITE_MAPTILER_API_KEY`; no additional key is
+needed. It requests MapTiler geocoding only on submission, not on every keystroke,
+and counts toward the account's API usage. Without a key the search is hidden.
+Provider failures and empty results leave the marker where it is.
+
 Click a point, open its details, and choose **Explore historical swell and wind**
 to compare up to five complete years. Set a swell-height range, minimum and optional
 maximum swell period, maximum wind speed, clockwise wind-from and swell-from bearing ranges, and
@@ -233,6 +249,7 @@ npm run smoke:live
 npm run smoke:history
 npm run smoke:zoom
 npm run smoke:saved
+npm run smoke:places
 npm run smoke:forecast
 npm run smoke:linked
 BROWSER=firefox npm run smoke:live

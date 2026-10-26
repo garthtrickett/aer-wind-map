@@ -23,6 +23,7 @@ import { loadDay } from "./day-lookup.ts";
 import { loadSatellite, mapTilerTileJson } from "./satellite.ts";
 import { loadWayback, waybackEnabled, waybackImagery } from "./wayback.ts";
 import { selectedCapture } from "./wayback-model.ts";
+import { searchPlaces } from "./place-search.ts";
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -44,7 +45,7 @@ const flag = requireElement("selected-flag");
 const forecastWorker = createForecastWorker();
 const cache = new Map<string, ForecastField>();
 const satelliteUrl = mapTilerTileJson(import.meta.env.VITE_MAPTILER_API_KEY);
-let state: State = { ...initialState, wayback: { ...initialState.wayback, available: waybackEnabled(import.meta.env.VITE_ESRI_WAYBACK_ENABLED) }, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
+let state: State = { ...initialState, placeSearch: { ...initialState.placeSearch, available: satelliteUrl !== null }, wayback: { ...initialState.wayback, available: waybackEnabled(import.meta.env.VITE_ESRI_WAYBACK_ENABLED) }, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
@@ -62,6 +63,8 @@ let waybackController: AbortController | null = null;
 let waybackRequest = -1;
 let compassController: AbortController | null = null;
 let compassRequest = -1;
+let placeController: AbortController | null = null;
+let placeRequest = -1;
 
 const syncMiniMap = (): void => {
   const element = ui.querySelector<HTMLElement>("#history-mini-map");
@@ -216,6 +219,15 @@ flag.addEventListener("lostpointercapture", (event) => {
 });
 
 const runEffect = (effect: Effect): void => {
+  if (effect.kind === "searchPlaces") {
+    placeController?.abort();
+    const controller = new AbortController();
+    placeController = controller; placeRequest = effect.request;
+    dispatch({ kind: "placeSearchStarted", request: effect.request });
+    void searchPlaces(effect.query, import.meta.env.VITE_MAPTILER_API_KEY ?? "", controller.signal).then((result) =>
+      dispatch({ kind: "placeSearchCompleted", request: effect.request, result }));
+    return;
+  }
   if (effect.kind === "loadCompassForecast") {
     compassController?.abort();
     const controller = new AbortController();
@@ -357,6 +369,7 @@ function dispatch(proposal: Proposal): void {
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (placeController && state.placeSearch.request !== placeRequest) { placeController.abort(); placeController = null; }
   if (compassController && state.compassForecast.request !== compassRequest) { compassController.abort(); compassController = null; }
   if (waybackController && state.wayback.request !== waybackRequest) { waybackController.abort(); waybackController = null; }
   if (dayController && state.dayLookup.request !== dayRequest) { dayController.abort(); dayController = null; }
@@ -390,6 +403,14 @@ function dispatch(proposal: Proposal): void {
   if (selectedPoint !== state.selected) {
     selectedPoint = state.selected;
     windMap.select(selectedPoint);
+  }
+  if (proposal.kind === "placeSearchResultSelected" && state.selected !== previous.selected) {
+    const place = previous.placeSearch.places[proposal.index];
+    windMap.map.setView([place.point.latitude, place.point.longitude], place.zoom, { animate: false });
+  }
+  if (proposal.kind === "placeSearchResultSelected" || proposal.kind === "placeSearchDismissed") {
+    // Selecting a result removes its button; keep keyboard focus on the search field.
+    ui.querySelector<HTMLInputElement>("#place-search-query")?.focus({ preventScroll: true });
   }
   if (displayedSavedSpots !== state.savedSpots) {
     displayedSavedSpots = state.savedSpots;
@@ -454,7 +475,7 @@ const refreshTelegram = () => {
 };
 const telegramTimer = window.setInterval(refreshTelegram, 10_000);
 window.addEventListener("focus", refreshTelegram);
-window.addEventListener("pagehide", () => { compassController?.abort(); clearInterval(compassClockTimer); dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
+window.addEventListener("pagehide", () => { placeController?.abort(); compassController?.abort(); clearInterval(compassClockTimer); dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
