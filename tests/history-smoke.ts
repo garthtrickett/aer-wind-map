@@ -59,11 +59,12 @@ try {
     .some((image) => (image as HTMLImageElement).naturalWidth > 0), null, { timeout: 15_000 });
   const zoomSlider = page.getByRole("slider", { name: "Map zoom" });
   assert.equal(await zoomSlider.inputValue(), "11");
+  const originalTiles = await page.locator("#history-mini-map .leaflet-tile").evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src));
   await zoomSlider.focus();
   await zoomSlider.press("End");
   assert.equal(await page.locator("#history-map-zoom-value").innerText(), "20");
-  await page.waitForFunction(() => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
-    .some((image) => (image as HTMLImageElement).src.includes("tile.openstreetmap.org/19/") && (image as HTMLImageElement).naturalWidth > 0));
+  await page.waitForFunction((original) => Array.from(document.querySelectorAll("#history-mini-map .leaflet-tile"))
+    .some((image) => !original.includes((image as HTMLImageElement).src) && (image as HTMLImageElement).naturalWidth > 0), originalTiles);
   await zoomSlider.evaluate((element) => {
     (element as HTMLInputElement).value = "11";
     element.dispatchEvent(new Event("input", { bubbles: true }));

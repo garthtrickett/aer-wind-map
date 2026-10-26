@@ -1,8 +1,6 @@
-import * as L from "leaflet";
 import { html, svg, nothing, type TemplateResult } from "lit-html";
 import { conditionSource, type HistoryCriteria } from "./history.ts";
 import type { CompassReading } from "./compass-forecast.ts";
-import type { Point } from "./model.ts";
 import { bearingAt, bearingPoint, clockwiseSectorPath, clockwiseWedgePath } from "./history-compass-geometry.ts";
 
 export const bearingFromPointer = (event: PointerEvent, svg: SVGSVGElement): number => {
@@ -67,18 +65,5 @@ export const historyCompassView = (criteria: HistoryCriteria, reading: CompassRe
     <div class="history-map-zoom-control"><span aria-hidden="true">−</span>
       <input id="history-map-zoom" type="range" min="6" max=${String(maxHistoryMapZoom)} step="0.25" value="11" />
       <span aria-hidden="true">+</span></div>
-    <a class="history-map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
+    <div class="history-map-credit"></div>
   </div>`;
-
-export const createHistoryMiniMap = (element: HTMLElement, point: Point, zoom: number): Readonly<{ remove: () => void; setZoom: (zoom: number) => void }> => {
-  const map = L.map(element, {
-    zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,
-    doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false,
-    zoomSnap: 0, minZoom: 6, maxZoom: maxHistoryMapZoom,
-  }).setView([point.latitude, point.longitude], zoom);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    minZoom: 0, maxZoom: maxHistoryMapZoom, maxNativeZoom: 19,
-  }).addTo(map);
-  requestAnimationFrame(() => map.invalidateSize());
-  return { remove: () => map.remove(), setZoom: (next) => map.setZoom(next, { animate: false }) };
-};

@@ -5,7 +5,8 @@ import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
-import { bearingFromPointer, createHistoryMiniMap, defaultHistoryMapZoom, type BearingHandle } from "./history-compass.ts";
+import { bearingFromPointer, defaultHistoryMapZoom, type BearingHandle } from "./history-compass.ts";
+import { createHistoryMiniMap } from "./history-mini-map.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
@@ -74,7 +75,8 @@ const syncMiniMap = (): void => {
     miniMap = null;
   }
   if (!point) miniMapZoom = defaultHistoryMapZoom;
-  if (element && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, point, miniMapZoom) };
+  const credits = ui.querySelector<HTMLElement>(".history-map-credit");
+  if (element && credits && point && !miniMap) miniMap = { element, ...point, ...createHistoryMiniMap(element, credits, point, miniMapZoom, satelliteUrl) };
   const slider = ui.querySelector<HTMLInputElement>("#history-map-zoom");
   const output = ui.querySelector<HTMLOutputElement>("#history-map-zoom-value");
   if (slider) slider.value = String(miniMapZoom);

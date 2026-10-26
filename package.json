@@ -11,6 +11,7 @@
     "smoke:places": "node tests/place-search-smoke.ts",
     "smoke:live": "node tests/live-smoke.ts",
     "smoke:compass": "node tests/compass-forecast-smoke.ts",
+    "smoke:compass-imagery": "node tests/compass-imagery-smoke.ts",
     "smoke:history": "node tests/history-smoke.ts",
     "smoke:day": "node tests/day-lookup-smoke.ts",
     "smoke:wayback": "node tests/wayback-smoke.ts",

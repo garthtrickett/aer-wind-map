@@ -98,6 +98,12 @@
   marker panels, with spot-local timezone and each source's actual grid cell.
 
 - The marker compass has independent forecast state in `compass-forecast-model.ts`.
+  `history-mini-map.ts` owns the clipped Leaflet map, satellite metadata cache,
+  provider credits outside the circle, and local street fallback. It uses the
+  existing MapTiler configuration and decoder, without changing the main map's
+  selected background. Removing it guards late metadata replies from touching
+  the replacement marker. The zoom control and bearing overlay are independent
+  of imagery loading.
   Opening a marker loads enabled wind/swell sources through the existing forecast
   decoder, without opting into alerts. Marker/type changes abort and invalidate
   old requests; criteria and time-mode changes reuse downloaded data. A minute

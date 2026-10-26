@@ -108,7 +108,7 @@ try {
     await expect(page.locator("#map")).toHaveAttribute("data-basemap", "map");
     await expect(page.locator(".satellite-logo")).toBeHidden();
     await page.getByRole("button", { name: "Satellite", exact: true }).click();
-    assert.equal(metadataRequests, 1, "Background switches reuse metadata");
+    assert.equal(metadataRequests, 2, "Main background switches reuse metadata; the compass has its own cached imagery");
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     await page.screenshot({ path: `/tmp/aer-satellite-${raster ? "raster" : "webgl"}-${viewport.width}.png`, fullPage: true });
     failMetadata = true;

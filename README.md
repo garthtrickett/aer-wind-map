@@ -47,8 +47,13 @@ qualifying dates, and exports the paired hourly data
 as CSV. A circular map in the history panel centers the selected spot; drag the
 teal wind dots or amber swell dots around it to set each clockwise bearing
 range, or enter degrees directly. The preview starts at zoom level 11; its slider
-reaches level 20 and changes only the map scale. Raster maps use level-19 tiles
-at the closest zoom. Historical days use the selected spot's local
+reaches level 20 and changes only the map scale. With the configured MapTiler
+key, the circular preview defaults to satellite imagery, with provider credits
+below the circle. It uses the same imagery source as the main map and keeps
+direction handles and forecast rays above the image. If imagery is unavailable,
+it shows the street map instead. Imagery metadata is reused when reopening or
+moving the marker. Tiles respect the provider's native detail limit; street tiles
+are capped at level 19. Historical days use the selected spot's local
 timezone. Eligible hourly samples run from 06:00 through 17:00; 18:00 is
 excluded. This fixed surf window does not track seasonal sunrise and sunset.
 The CSV retains all hours, with nighttime rows marked as not meeting conditions.
