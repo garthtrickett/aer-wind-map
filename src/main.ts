@@ -7,6 +7,7 @@ import { discoverLatest } from "./ecmwf.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
 import { bearingFromPointer, type BearingHandle } from "./history-compass.ts";
 import { createHistoryMiniMap } from "./history-mini-map.ts";
+import { shoreHandleBearing, shoreNormalFromHandle, type ShoreHandle } from "./shore-reference.ts";
 import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
@@ -87,20 +88,28 @@ ui.addEventListener("input", (event) => {
   dispatch({ kind: "historyMapZoomChanged", zoom: Number(event.target.value) });
 });
 
-let compassDrag: Readonly<{ pointerId: number; handle: SVGCircleElement; field: BearingHandle }> | null = null;
-const setCompassBearing = (event: PointerEvent, field: BearingHandle): void => {
+type CompassHandle = BearingHandle | ShoreHandle;
+const isShoreHandle = (field: CompassHandle): field is ShoreHandle => field === "shoreLineStart" || field === "shoreLineEnd";
+const changeCompassBearing = (field: CompassHandle, bearing: number): void => {
+  if (isShoreHandle(field)) {
+    if (state.history.shoreNormal !== null) dispatch({ kind: "historyShoreNormalChanged", normal: shoreNormalFromHandle(bearing, field) });
+  } else if (state.history.criteria[field] !== bearing) {
+    dispatch({ kind: "historyCriteriaChanged", criteria: { ...state.history.criteria, [field]: bearing } });
+  }
+};
+let compassDrag: Readonly<{ pointerId: number; handle: SVGCircleElement; field: CompassHandle }> | null = null;
+const setCompassBearing = (event: PointerEvent, field: CompassHandle): void => {
   const svg = ui.querySelector<SVGSVGElement>(".history-compass-overlay");
   if (!svg) return;
   const bearing = bearingFromPointer(event, svg);
-  if (state.history.criteria[field] === bearing) return;
-  dispatch({ kind: "historyCriteriaChanged", criteria: { ...state.history.criteria, [field]: bearing } });
+  changeCompassBearing(field, bearing);
 };
 
 ui.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !(event.target instanceof Element)) return;
-  const handle = event.target.closest("[data-bearing-handle]");
+  const handle = event.target.closest("[data-bearing-handle], [data-shore-handle]");
   if (!(handle instanceof SVGCircleElement)) return;
-  const field = handle.dataset.bearingHandle as BearingHandle;
+  const field = (handle.dataset.bearingHandle ?? handle.dataset.shoreHandle) as CompassHandle;
   compassDrag = { pointerId: event.pointerId, handle, field };
   handle.setPointerCapture(event.pointerId);
   event.preventDefault();
@@ -123,12 +132,12 @@ ui.addEventListener("pointercancel", (event) => {
 });
 ui.addEventListener("keydown", (event) => {
   if (!(event.target instanceof SVGCircleElement)) return;
-  const field = event.target.dataset.bearingHandle as BearingHandle | undefined;
+  const field = (event.target.dataset.bearingHandle ?? event.target.dataset.shoreHandle) as CompassHandle | undefined;
   if (!field || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
-  const current = state.history.criteria[field];
-  const next = event.key === "Home" ? 0 : event.key === "End" ? field.endsWith("End") ? 360 : 359
+  const current = isShoreHandle(field) ? shoreHandleBearing(state.history.shoreNormal ?? 0, field) : state.history.criteria[field];
+  const next = event.key === "Home" ? 0 : event.key === "End" ? !isShoreHandle(field) && field.endsWith("End") ? 360 : 359
     : (current + (event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1) + 360) % 360;
-  dispatch({ kind: "historyCriteriaChanged", criteria: { ...state.history.criteria, [field]: next } });
+  changeCompassBearing(field, next);
   event.preventDefault();
 });
 

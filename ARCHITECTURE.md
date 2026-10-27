@@ -108,6 +108,12 @@
   shared map settings and persisted as optional `SavedSpot.mapZoom` on save.
   Older presets default to 11. Zoom changes preserve downloaded forecast/history
   data and alert keys; opening each preset restores its own saved zoom.
+  The optional `shoreNormal` is the seaward normal of a user-aligned beach/reef
+  line. `shore-reference.ts` handles signed offsets, reciprocal wind/swell
+  references and clockwise widths; `shore-reference-view.ts` draws the editable
+  line and reports relative endpoint angles. Reference edits preserve compass
+  criteria and cached data. Save/restore and shared links retain the alignment;
+  older spots begin unset. Full-circle and single-bearing selections stay distinct.
   Opening a marker loads enabled wind/swell sources through the existing forecast
   decoder, without opting into alerts. Marker/type changes abort and invalidate
   old requests; criteria and time-mode changes reuse downloaded data. A minute

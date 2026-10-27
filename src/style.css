@@ -337,6 +337,30 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-map-logo img { display: block; }
 .history-map-notice { margin: 4px 0 0; font-size: 10px; }
 .history-map-notice:empty { display: none; }
+.shore-reference-overlay { pointer-events: none; }
+.shore-line-halo { stroke: #fff; stroke-width: 5; opacity: .9; }
+.shore-line { stroke: #8154a8; stroke-width: 2.5; }
+.shore-normal { stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 4; filter: drop-shadow(0 0 1px #173e49); }
+.shore-sea-arrow { stroke: #fff; stroke-width: 2; fill: none; filter: drop-shadow(0 0 1px #173e49); }
+.shore-sea-label { fill: #fff; font-size: 7px; font-weight: 800; paint-order: stroke; stroke: #314952; stroke-width: 2px; stroke-linejoin: round; }
+.shore-handle { fill: #8154a8; stroke: #fff; stroke-width: 3; cursor: grab; pointer-events: all; touch-action: none; }
+.shore-handle:active { cursor: grabbing; }
+.shore-handle:focus-visible { outline: none; stroke: #172e3a; stroke-width: 4; }
+.shore-reference-controls { margin-top: 10px; padding: 10px; border: 1px solid #d1e0dc; border-radius: 10px; color: #244c58; background: #f8fbf8; font-size: 11px; text-align: left; }
+.shore-reference-controls button { padding: 6px 8px; border: 1px solid #bad0d0; border-radius: 6px; color: #654389; background: #fff; font: inherit; cursor: pointer; }
+.shore-reference-heading, .shore-reference-inputs { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.shore-reference-heading h4 { margin: 0; font-size: 12px; }
+.shore-reference-heading button { padding: 4px 6px; font-size: 10px; }
+.shore-reference-controls p { margin: 8px 0; color: #58767c; font-size: 10px; line-height: 1.5; }
+.shore-reference-inputs label { display: grid; gap: 4px; font-weight: 600; }
+.shore-reference-inputs label span { display: flex; align-items: center; gap: 4px; }
+.shore-reference-inputs input { width: 76px; min-height: 32px; padding: 4px 6px; border: 1px solid #bad0d0; border-radius: 6px; color: #244c58; background: #fff; font: inherit; }
+.shore-relative-ranges { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.shore-relative-ranges caption { padding: 3px 0 8px; text-align: left; font-weight: 600; }
+.shore-relative-ranges th, .shore-relative-ranges td { padding: 7px 3px; border-top: 1px solid #dae5e1; text-align: left; overflow-wrap: anywhere; }
+.shore-relative-ranges thead th { color: #58767c; font-size: 10px; }
+.shore-relative-ranges [data-relative-range="wind"] th { color: #006a7b; }
+.shore-relative-ranges [data-relative-range="swell"] th { color: #a25b00; }
 .history-control { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: #4c6870; font-size: 11px; font-weight: 600; }
 .history-control input, .history-control select, .history-years select { width: 100%; height: 33px; padding: 5px 8px; border: 1px solid #bfd3d0; border-radius: 8px; background: white; color: #153d46; font-size: 12px; }
 .history-input-wrap { position: relative; }

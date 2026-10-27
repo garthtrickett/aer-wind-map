@@ -49,8 +49,20 @@ teal wind dots or amber swell dots around it to set each clockwise bearing
 range, or enter degrees directly. The preview starts at zoom level 11 for new
 spots. **Update saved spot** and **Save as new** store the current circular-map
 zoom with that spot and restore it when reopened, including after a page reload.
-Unsaved zoom changes leave the stored view unchanged. Its slider
-reaches level 20 and changes only the map scale. With the configured MapTiler
+Unsaved zoom changes leave the stored view unchanged.
+
+You can also set an optional **Beach / reef angle**. Click **Set beach / reef
+angle**, drag the purple dots parallel to the
+local beach or reef, and use **Flip sea side** to point SEA toward the water.
+The angle can also be entered numerically (0° is north–south; 90° is east–west).
+The table shows each wind/swell boundary relative to the perpendicular: wind 0°
+means directly offshore and swell 0° means arriving straight in. Positive is
+clockwise, negative anticlockwise; the width retains the selected clockwise arc,
+including a full 360°. The alignment is stored with **Update saved spot** or
+**Save as new**. It is a reference for choosing bearings; forecasts and alerts
+continue to use the selected compass bearings.
+
+The zoom slider reaches level 20 and changes only the map scale. With the configured MapTiler
 key, the circular preview defaults to satellite imagery, with provider credits
 below the circle. It uses the same imagery source as the main map and keeps
 direction handles and forecast rays above the image. If imagery is unavailable,

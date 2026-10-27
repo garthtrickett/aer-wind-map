@@ -3,6 +3,7 @@ import { conditionSource, type HistoryCriteria } from "./history.ts";
 import type { CompassReading } from "./compass-forecast.ts";
 import { bearingAt, bearingPoint, clockwiseSectorPath, clockwiseWedgePath } from "./history-compass-geometry.ts";
 import { defaultHistoryMapZoom, minHistoryMapZoom, maxHistoryMapZoom } from "./history-map-settings.ts";
+import { shoreReferenceOverlay } from "./shore-reference-view.ts";
 
 export const bearingFromPointer = (event: PointerEvent, svg: SVGSVGElement): number => {
   const rect = svg.getBoundingClientRect();
@@ -35,7 +36,7 @@ const current = (kind: "wind" | "swell", direction: number | null | undefined, r
   </g>`;
 };
 
-export const historyCompassView = (criteria: HistoryCriteria, reading: CompassReading | null = null, mapZoom = defaultHistoryMapZoom): TemplateResult => html`
+export const historyCompassView = (criteria: HistoryCriteria, reading: CompassReading | null = null, mapZoom = defaultHistoryMapZoom, shoreNormal: number | null = null): TemplateResult => html`
   <div class="history-compass" aria-label="Map and selected wind and swell directions">
     <div class="history-compass-stage">
       <div id="history-mini-map" class="history-mini-map" aria-hidden="true"></div>
@@ -48,6 +49,7 @@ export const historyCompassView = (criteria: HistoryCriteria, reading: CompassRe
         <circle class="compass-inner-ring" cx="140" cy="140" r="95" />
         ${conditionSource(criteria) !== "swell" ? current("wind", reading?.wind?.direction, 130) : nothing}
         ${conditionSource(criteria) !== "wind" ? current("swell", reading?.swell?.direction, 112) : nothing}
+        ${shoreReferenceOverlay(shoreNormal)}
         ${handle("windFromStart", criteria.windFromStart, 121, "Wind range start dot")}
         ${handle("windFromEnd", criteria.windFromEnd, 123, "Wind range end dot", criteria.windFromEnd === 360 && criteria.windFromStart === 0 ? 350 : criteria.windFromEnd)}
         ${handle("swellFromStart", criteria.swellFromStart, 103, "Swell range start dot")}
