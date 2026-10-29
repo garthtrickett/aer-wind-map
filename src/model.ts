@@ -158,7 +158,7 @@ export const initialState: State = {
   forecastAlerts: {}, forecastAlertsDismissed: false,
   history: {
     open: false, phase: "needsData", point: null, mapZoom: defaultHistoryMapZoom, shoreNormal: null,
-    startYear: Math.max(2022, lastCompleteHistoryYear - 2), endYear: lastCompleteHistoryYear,
+    startYear: Math.max(2022, lastCompleteHistoryYear - 4), endYear: lastCompleteHistoryYear,
     criteria: defaultHistoryCriteria, requestedKey: null, data: null, error: null, selectedMonth: null, downloadRequested: false,
     savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null,
     forecastPreview: { phase: "idle", request: 0 },

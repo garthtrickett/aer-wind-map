@@ -373,7 +373,8 @@ It is a filtering preference, not a guarantee of a glassy sea surface.
   arrays totaled 12.5 MB, before map and browser overhead. Decoding and
   animation can be demanding on older phones.
 - Gusts are shown as unavailable if the gust field cannot be fetched or decoded.
-- Monthly history covers complete years from 2022 onward. A day needs at least
+- Monthly history defaults to all available complete years from 2022 onward,
+  up to the supported five-year limit. A day needs at least
   18 paired hourly values to count in the denominator. MFWAM's source cadence
   is three hours; Open-Meteo provides interpolated hourly values between model
   outputs. These are model estimates useful for seasonal screening, not

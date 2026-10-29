@@ -50,7 +50,7 @@ try {
   }
   assert.equal(await page.locator(".history-month").count(), 12);
   assert.deepEqual(await page.locator(".history-settings select").evaluateAll((elements) => elements.map((element) => (element as HTMLSelectElement).value)),
-    [String(new Date().getUTCFullYear() - 3), String(new Date().getUTCFullYear() - 1)]);
+    [String(Math.max(2022, new Date().getUTCFullYear() - 5)), String(new Date().getUTCFullYear() - 1)]);
   assert.ok((await page.locator(".history-month").allInnerTexts()).some((text) => /\d+\/\d+ days/.test(text) && !text.includes("/0 days")));
   assert.ok((await page.locator(".history-coverage").innerText()).includes("Times are local to"));
   assert.equal(archiveRequests.length, 2);
