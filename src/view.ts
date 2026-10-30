@@ -65,6 +65,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
     return evaluation.matched ? [{ spot, summary: alert.summary, evaluation,
       nextWindowStart: evaluation.windows[0]?.start ?? null }] : [];
   });
+  const visibleSavedSpots = state.savedSpots.filter((spot) =>
+    spot.name.toLowerCase().includes(state.savedSpotsSearch.trim().toLowerCase()));
 
   return html`
     <header class="masthead">
@@ -109,9 +111,11 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
     ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
       <div class="saved-spots-head"><strong>Saved spots</strong><button type="button" aria-label="Close saved spots"
         @click=${() => propose({ kind: "savedSpotsToggled" })}>×</button></div>
+      <input class="saved-spots-search" type="search" aria-label="Search saved spots by title" placeholder="Search by title"
+        .value=${state.savedSpotsSearch} @input=${(event: Event) => propose({ kind: "savedSpotsSearchChanged", query: (event.target as HTMLInputElement).value })} />
       ${state.savedSpotsError ? html`<p class="saved-spots-error" role="alert">${state.savedSpotsError.kind === "invalid"
         ? "Saved spots could not be read in this browser." : "Browser storage is unavailable. Changes could not be saved."}</p>` : nothing}
-      ${state.savedSpots.length ? html`<div class="saved-spots-list">${state.savedSpots.map((spot) => {
+      ${visibleSavedSpots.length ? html`<div class="saved-spots-list">${visibleSavedSpots.map((spot) => {
         const alert = state.forecastAlerts[spot.id];
         return html`
         <div class="saved-spot-row">
@@ -125,7 +129,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <button type="button" class="saved-spot-remove" aria-label=${`Remove ${spot.name}`}
             @click=${() => propose({ kind: "savedSpotRemoved", id: spot.id })}>×</button>
         </div>`;
-      })}</div>` : html`<p class="saved-spots-empty">Open a point’s Find your season panel to save its settings here.</p>`}
+      })}</div>` : html`<p class="saved-spots-empty">${state.savedSpots.length
+        ? "No saved spots match that title." : "Open a point’s Find your season panel to save its settings here."}</p>`}
       ${telegramView(state.telegram, propose)}
       <p class="saved-spots-foot">Presets saved in this browser; synced Telegram alerts run on the server.</p>
     </section>` : nothing}

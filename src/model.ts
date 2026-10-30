@@ -79,6 +79,7 @@ export type State = Readonly<{
   history: HistoryPanel;
   savedSpots: readonly SavedSpot[];
   savedSpotsOpen: boolean;
+  savedSpotsSearch: string;
   savedSpotsError: SavedSpotsError | null;
   forecastAlerts: Readonly<Record<string, ForecastAlertStatus>>;
   forecastAlertsDismissed: boolean;
@@ -136,6 +137,7 @@ export type Proposal =
   | { readonly kind: "savedSpotLinksChanged"; readonly ids: readonly string[] }
   | { readonly kind: "savedSpotSaved"; readonly id: string }
   | { readonly kind: "savedSpotRemoved"; readonly id: string }
+  | { readonly kind: "savedSpotsSearchChanged"; readonly query: string }
   | { readonly kind: "savedSpotsPersistFailed"; readonly error: SavedSpotsError }
   | { readonly kind: "forecastAlertsStarted"; readonly generation: number; readonly entries: readonly Readonly<{ id: string; key: string }>[] }
   | { readonly kind: "forecastAlertsCompleted"; readonly generation: number; readonly checks: readonly ForecastAlertCheck[] }
@@ -154,7 +156,7 @@ export const initialState: State = {
   observations: initialObservations,
   phase: "idle", layer: "wind", run: null, step: 3, requestedKey: null, field: null,
   selected: null, modalOpen: false, error: null, playing: false,
-  savedSpots: [], savedSpotsOpen: false, savedSpotsError: null,
+  savedSpots: [], savedSpotsOpen: false, savedSpotsSearch: "", savedSpotsError: null,
   forecastAlerts: {}, forecastAlertsDismissed: false,
   history: {
     open: false, phase: "needsData", point: null, mapZoom: defaultHistoryMapZoom, shoreNormal: null,
@@ -311,7 +313,8 @@ const presentApp = (state: State, proposal: Proposal): State => {
       } };
     case "savedSpotsLoaded": return { ...state, savedSpots: proposal.spots, savedSpotsError: null };
     case "savedSpotsLoadFailed": return { ...state, savedSpotsError: proposal.error };
-    case "savedSpotsToggled": return { ...state, savedSpotsOpen: !state.savedSpotsOpen, observations: { ...state.observations, open: false } };
+    case "savedSpotsToggled": return { ...state, savedSpotsOpen: !state.savedSpotsOpen, savedSpotsSearch: "", observations: { ...state.observations, open: false } };
+    case "savedSpotsSearchChanged": return { ...state, savedSpotsSearch: proposal.query };
     case "savedSpotOpened": {
       const spot = state.savedSpots.find((item) => item.id === proposal.id);
       if (!spot) return state;

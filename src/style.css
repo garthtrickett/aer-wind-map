@@ -156,6 +156,9 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .saved-spots-panel { position: absolute; z-index: 6; top: 234px; left: 24px; width: 285px; max-height: min(55vh, 460px); overflow-y: auto; padding: 14px; border: 1px solid rgba(255,255,255,.2); border-radius: 15px; background: #0c3442; color: #e8f7f2; box-shadow: 0 14px 40px rgba(3,29,40,.32); }
 .saved-spots-head { display: flex; align-items: center; justify-content: space-between; font: 600 16px "Outfit", sans-serif; }
 .saved-spots-head button { width: 26px; height: 26px; border: 0; border-radius: 7px; background: rgba(255,255,255,.12); color: white; font-size: 20px; }
+.saved-spots-search { box-sizing: border-box; width: 100%; margin-top: 12px; padding: 9px 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 9px; background: rgba(255,255,255,.08); color: #e8f7f2; font: inherit; font-size: 12px; }
+.saved-spots-search::placeholder { color: #a9c9ca; }
+.saved-spots-search:focus-visible { outline: 2px solid #95e4cd; outline-offset: 2px; }
 .saved-spots-list { display: grid; gap: 7px; margin-top: 12px; }
 .saved-spot-row { display: flex; align-items: stretch; gap: 5px; border: 1px solid rgba(255,255,255,.13); border-radius: 9px; background: rgba(255,255,255,.06); }
 .saved-spot-open { flex: 1; min-width: 0; padding: 9px; border: 0; background: transparent; color: #e8f7f2; text-align: left; }
