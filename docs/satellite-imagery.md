@@ -1,7 +1,8 @@
 # Satellite imagery sources and historical views
 
 Research reference, checked 25 October 2026. The dated Esri Wayback layer is implemented behind
-a build flag; public activation awaits confirmation of appropriate Esri usage rights.
+a build flag. Public imagery history was enabled on 30 October 2026 at the operator's request;
+the account and usage-rights research below records the earlier investigation.
 
 ## Sources
 
@@ -79,8 +80,8 @@ for release discovery, local changes and capture metadata. Its raster tiles
 fit Aer's Leaflet map. A real Chromium check from Aer's origin successfully
 fetched the catalogue, a tile, local-change data and capture metadata without
 an API key. Aer now uses the official library lazily for the optional history layer. Public
-activation is gated by `VITE_ESRI_WAYBACK_ENABLED=true` after confirming the
-app's Esri usage rights; anonymous API access is not treated as a licence.
+activation is controlled by `VITE_ESRI_WAYBACK_ENABLED=true`; this was set in Railway
+production on 30 October 2026 at the operator's request. Anonymous API access is not treated as a licence.
 
 ### Sample coastal coverage
 
@@ -149,6 +150,29 @@ and regular-satellite browser checks at 1440, 390 and 320 px in both WebGL and
 fallback rendering; daily wind/wave lookup regression at desktop and mobile.
 The compact mobile history picker was also verified with real Jinzun imagery.
 
+### Public activation, 30 October 2026
+
+At the operator's explicit request, Railway production now sets
+`VITE_ESRI_WAYBACK_ENABLED=true`. Deployment
+`a59023df-2c32-4ea8-9d91-c289ef0ec356` succeeded, using application commit
+`c4d6ef6`. No application-code change was needed.
+
+A fresh browser check fetched the deployed application and real Esri services:
+
+- Desktop, 1440 px, Sanur at zoom 14: 11 date options, including one unknown
+  acquisition date. Older switched from 01/05/2025 to 27/09/2024, with successful
+  imagery tile responses for both releases.
+- Mobile, 390 px, Jinzun at zoom 14: six options, including one unknown date.
+  Older switched from 25/07/2021 to 04/06/2020; real coastal imagery was visible
+  and the date picker fit the viewport.
+- Both checks reported no page errors. Weather requests were isolated from this
+  imagery check; it does not validate weather-source availability.
+
+The control is **Imagery history** beneath **Map / Satellite**. Zoom into a coast
+and choose a capture date, or use **Older / Newer**. Dates remain independent of
+the weather timeline. These activation notes supersede the earlier disabled
+production status recorded above.
+
 ### Account choice still unresolved
 
 Esri is the vendor; ArcGIS is its platform, not a competing licence.
@@ -172,7 +196,9 @@ Suggested question to Esri (draft only; not sent):
 > export, redistribution, server proxy or imagery hosting. Does a free
 > ArcGIS Online Public account cover this, or which licence is required?
 
-Public activation remains disabled until that usage permission is confirmed.
+Public activation was initially disabled pending that clarification. On 30 October
+2026 the operator explicitly requested activation, and the production build flag
+was enabled. That configuration change does not resolve the account question above.
 
 ### Constraints retained in the implementation
 
