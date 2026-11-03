@@ -12,7 +12,8 @@ import { createWindMap } from "./map.ts";
 import { createWindRenderer } from "./renderer.ts";
 import { createForecastWorker } from "./worker-client.ts";
 import { fieldKey, initialState, nap, present, type Effect, type Proposal, type State } from "./model.ts";
-import { readSavedSpots, writeSavedSpots } from "./saved-spots.ts";
+import { readSavedSpots } from "./saved-spots.ts";
+import { createAccountClient } from "./account.ts";
 import { forecastAlertKey, loadForecastAlerts, loadForecastGroup } from "./forecast-alerts.ts";
 import { flagView, view } from "./view.ts";
 import type { ForecastField } from "./wave.ts";
@@ -48,6 +49,9 @@ const forecastWorker = createForecastWorker();
 const cache = new Map<string, ForecastField>();
 const satelliteUrl = mapTilerTileJson(import.meta.env.VITE_MAPTILER_API_KEY);
 let state: State = { ...initialState, placeSearch: { ...initialState.placeSearch, available: satelliteUrl !== null }, wayback: { ...initialState.wayback, available: waybackEnabled(import.meta.env.VITE_ESRI_WAYBACK_ENABLED) }, satellite: { ...initialState.satellite, available: satelliteUrl !== null } };
+const accounts = createAccountClient({ storage: () => window.localStorage,
+  changed: (panel, spots, resetSession) => dispatch({ kind: "accountChanged", panel, spots, resetSession }) });
+let accountGeneration = 0;
 let displayedField: ForecastField | null = null;
 let selectedPoint: State["selected"] = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
@@ -368,20 +372,30 @@ const refreshForecastAlerts = (): void => {
 };
 
 function dispatch(proposal: Proposal): void {
+  if (proposal.kind === "accountAction") { void accounts.action(proposal.action); return; }
   const previous = state;
   let next = present(state, proposal);
   if (next === state) return;
   if ((proposal.kind === "savedSpotSaved" || proposal.kind === "savedSpotRemoved" || proposal.kind === "telegramSpotRestored") && next.savedSpots !== previous.savedSpots) {
-    const result = writeSavedSpots(() => window.localStorage, next.savedSpots);
+    const result = accounts.persist(next.savedSpots);
     if (!result.ok) next = present(previous, { kind: "savedSpotsPersistFailed", error: result.error });
   }
   state = next;
+  if (proposal.kind === "accountChanged" && proposal.resetSession) {
+    accountGeneration++;
+    alertGeneration++;
+    alertSignature = "";
+    queueMicrotask(() => {
+      dispatch({ kind: "telegramSpotsChanged", key: telegramSpotsKey(state.savedSpots), edited: false });
+      dispatch({ kind: "telegramRequested", action: "status" });
+    });
+  }
   if (placeController && state.placeSearch.request !== placeRequest) { placeController.abort(); placeController = null; }
   if (compassController && state.compassForecast.request !== compassRequest) { compassController.abort(); compassController = null; }
   if (waybackController && state.wayback.request !== waybackRequest) { waybackController.abort(); waybackController = null; }
   if (dayController && state.dayLookup.request !== dayRequest) { dayController.abort(); dayController = null; }
   if (state.telegram.syncedKey !== previous.telegram.syncedKey) {
-    try { window.localStorage.setItem("aer.telegram.synced.v1", state.telegram.syncedKey ?? ""); }
+    try { window.localStorage.setItem(`aer.telegram.synced.v1${state.account.user ? `.${state.account.user.id}` : ""}`, state.telegram.syncedKey ?? ""); }
     catch { /* Sync status remains visible; server monitoring is already durable. */ }
   }
   colorCanvas.hidden = windMap.maplibre !== null || !state.weatherOverlay;
@@ -446,14 +460,17 @@ function dispatch(proposal: Proposal): void {
   const effect = nap(state);
   if (effect) runEffect(effect);
   const telegram = state.telegram.request;
-  if (telegram && !telegram.started) {
+  if (telegram && !telegram.started && state.account.phase !== "checking" &&
+    (!state.account.user || !state.account.busy && ["idle", "saved"].includes(state.account.sync))) {
     const spots = state.savedSpots;
     const revision = state.telegram.status.revision;
     dispatch({ kind: "telegramStarted", id: telegram.id, key: telegramSpotsKey(spots) });
-    void telegramRequest(telegram.action, spots, revision).then(
-      (reply) => dispatch({ kind: "telegramLoaded", id: telegram.id, reply }),
-      (cause) => dispatch({ kind: "telegramFailed", id: telegram.id,
-        message: cause instanceof Error ? cause.message : "Telegram is unavailable. Try again." }),
+    const generation = accountGeneration;
+    void telegramRequest(telegram.action, spots, revision, state.account.user?.id).then(
+      (reply) => { if (generation === accountGeneration) dispatch({ kind: "telegramLoaded", id: telegram.id, reply }); },
+      (cause) => { if (generation === accountGeneration) dispatch({ kind: "telegramFailed", id: telegram.id,
+        message: cause instanceof Error ? cause.message : "Telegram is unavailable. Try again." });
+      },
     );
   }
 }
@@ -504,16 +521,31 @@ const firstEffect = nap(state);
 if (firstEffect) runEffect(firstEffect);
 dispatch({ kind: "telegramRequested", action: "status" });
 
+const takeLoginToken = (): string | null => {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("login");
+  if (token) {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    dispatch({ kind: "accountOpened" });
+  }
+  return token;
+};
+const accountReady = accounts.start(takeLoginToken());
+window.addEventListener("hashchange", () => {
+  const token = takeLoginToken();
+  if (token) void accounts.start(token);
+});
+
 const linkedAlert = new URL(window.location.href).searchParams.get("alert");
 const forecastToken = new URLSearchParams(window.location.hash.slice(1)).get("forecast");
 if ((linkedAlert && linkedAlert.length <= 100) || forecastToken) {
   // Fragments are never sent in navigation requests or Referer headers. Remove
   // the capability from the address bar after taking our local copy.
   if (forecastToken) window.history.replaceState(null, "", window.location.pathname + window.location.search);
-  void fetch(forecastToken ? "/api/telegram/view" : `/api/telegram/spot?id=${encodeURIComponent(linkedAlert!)}`, {
+  void accountReady.then(() => fetch(forecastToken ? "/api/telegram/view" : `/api/telegram/spot?id=${encodeURIComponent(linkedAlert!)}`, {
     credentials: "same-origin", signal: AbortSignal.timeout(15_000),
-    ...(forecastToken ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: forecastToken }) } : {}),
-  })
+    headers: { ...(state.account.user ? { "X-Aer-Account": state.account.user.id } : {}), ...(forecastToken ? { "Content-Type": "application/json" } : {}) },
+    ...(forecastToken ? { method: "POST", body: JSON.stringify({ token: forecastToken }) } : {}),
+  }))
     .then(async (response) => {
       const raw = await response.json();
       if (!response.ok || !isSavedSpot(raw.spot)) throw new Error("This forecast link expired or its alert was removed.");

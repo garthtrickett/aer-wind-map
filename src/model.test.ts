@@ -8,6 +8,22 @@ import type { WindField } from "./wind.ts";
 const run = { date: "20260925", hour: 18, id: "2026092518", startedAt: "2026-09-25T18:00:00Z" };
 const field: WindField = { kind: "wind", run, step: 3, width: 1, height: 1, firstLatitude: 0, firstLongitude: 0, increment: 1, u: new Float32Array([1]), v: new Float32Array([0]), gust: null };
 
+test("account bootstrap retains unchanged browser alerts; account switches clear previous private state", () => {
+  let state = present(present(initialState, { kind: "locationSelected", point: { latitude: 11, longitude: 119 } }), { kind: "historyOpened" });
+  state = present(state, { kind: "savedSpotNameChanged", name: "Coast" });
+  state = present(state, { kind: "savedSpotSaved", id: "coast" });
+  state = { ...state, forecastAlerts: { coast: { kind: "loading", key: "key", generation: 1 } } };
+  const same = present(state, { kind: "accountChanged", panel: { ...state.account, phase: "guest" }, spots: [...state.savedSpots] });
+  assert.equal(same.savedSpots, state.savedSpots);
+  assert.equal(same.forecastAlerts, state.forecastAlerts);
+  const switched = present(same, { kind: "accountChanged", panel: { ...state.account, phase: "signedIn", user: { id: "other", email: "other@example.com" } },
+    spots: [], resetSession: true });
+  assert.deepEqual(switched.savedSpots, []);
+  assert.deepEqual(switched.forecastAlerts, {});
+  assert.equal(switched.history.open, false);
+  assert.equal(switched.telegram.status.connected, false);
+});
+
 test("map zoom stays a draft until save, restores per spot and does not invalidate conditions", () => {
   let state = present(present(initialState, { kind: "locationSelected", point: { latitude: 11, longitude: 119 } }), { kind: "historyOpened" });
   state = present(state, { kind: "savedSpotNameChanged", name: "Coast" });

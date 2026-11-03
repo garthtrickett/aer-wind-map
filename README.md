@@ -76,7 +76,63 @@ The CSV retains all hours, with nighttime rows marked as not meeting conditions.
 Name and save a point from **Find your season** to keep its location, years,
 and conditions. **Saved spots** on the map lists them; their markers reopen
 the same settings. You can update a spot, save a copy, or remove one. These
-saves stay in this browser's local storage.
+saves stay in this browser's local storage until you sign in and import them.
+
+## Email accounts and browser import
+
+Choose **Sign in** on the map (or the account button in **Saved spots**). Enter
+your email to sign up or sign in using the same flow. Open the emailed link,
+check the email address shown, then choose **Continue to Aer**. Links expire
+after 15 minutes and work once; opening a link alone does not consume it.
+Account sessions last up to 30 days. Login secrets stay out of URL query strings
+and server access logs and are removed from the address bar after opening.
+
+On the browser that contains your existing spots, sign in and choose
+**Account → Import this browser’s … spots**. This is a one-time, transactional
+import per browser and account. It includes all saved wind/swell markers,
+criteria, year ranges, alert rules, linked markers, beach alignment and mini-map
+zoom. Existing server spots are retained; colliding IDs are remapped together
+with their links. Repeating a request after a timeout does not import twice.
+The original `aer.saved-spots.v1` browser copy is kept unchanged. Other browsers
+cannot access that old browser copy; run the import where the data exists.
+
+While signed in, adding, updating and deleting spots saves to your account.
+A new device loads the same collection after sign-in. **Refresh saved spots**
+loads changes made on another device. Unsynced edits are stored separately on
+the current device and retried on reload. Independent edits from other devices
+merge; conflicting edits require a visible choice before replacing a version.
+Signing out restores this browser's original local collection. It does not
+delete your account spots or disconnect its server-side Telegram monitoring.
+Existing Telegram connections are attached to the verified account on first
+sign-in from their original browser, and then follow that account across devices.
+
+### Server setup
+
+Use Node 24 and a durable volume. Set `AER_ACCOUNT_DB=/data/aer-accounts.sqlite`
+and the HTTPS `PUBLIC_APP_URL` origin. On Railway, the account database defaults
+to `aer-accounts.sqlite` under `RAILWAY_VOLUME_MOUNT_PATH` if no explicit path
+is configured. This is separate from the existing Telegram database.
+
+Set server-only `RESEND_API_KEY` and `AER_EMAIL_FROM` using an address on a
+verified sending domain. No email provider credentials belong in `VITE_`
+variables. If email delivery is not configured, Aer clearly labels sign-in as
+unavailable and keeps browser-only use working. Production never exposes login
+links in API responses, logs or a development mailbox. Local development reads
+these settings from `.env.local`; its `PUBLIC_APP_URL` must match the Vite origin.
+
+Accounts, hashed login/session secrets, import receipts and send rate limits
+are stored in SQLite. Every account read/write is scoped to the session's user;
+writes also identify the expected user to reject stale tabs after account
+switching. Mutations check the exact app origin. Email requests have persistent
+per-address, connection-IP and global rate limits. Back up the account database
+using SQLite-aware tooling or volume snapshots; do not copy a live database
+without its pending WAL data.
+
+Run `npm run test:accounts`, `npm run build`, then `npm run smoke:accounts`.
+The browser smoke uses a local fake email transport with the real account API;
+it sends no email and checks mobile import, cross-device editing, logout and
+account isolation. A real received email still needs verification after the
+provider credentials and sender domain are configured.
 
 Checking the alert checkbox in **Find your season** immediately previews the
 forecast before saving. **Search the next … days** controls the look-ahead,

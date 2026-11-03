@@ -72,11 +72,12 @@ export const presentTelegram = (panel: TelegramPanel, proposal: TelegramProposal
   }
 };
 
-export const telegramRequest = async (action: TelegramAction, spots: readonly SavedSpot[], revision: number): Promise<TelegramReply> => {
+export const telegramRequest = async (action: TelegramAction, spots: readonly SavedSpot[], revision: number, userId?: string): Promise<TelegramReply> => {
   const response = await fetch(`/api/telegram/${action === "sync" ? "spots" : action}`, {
     method: action === "status" ? "GET" : action === "sync" ? "PUT" : "POST",
     credentials: "same-origin", signal: AbortSignal.timeout(15_000),
-    ...(action === "status" ? {} : { headers: { "Content-Type": "application/json" },
+    headers: { ...(userId ? { "X-Aer-Account": userId } : {}), ...(action === "status" ? {} : { "Content-Type": "application/json" }) },
+    ...(action === "status" ? {} : {
       body: JSON.stringify(action === "sync" ? { spots: telegramSpots(spots), revision } : {}) }),
   });
   const raw = await response.json();

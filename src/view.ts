@@ -1,5 +1,6 @@
 import { conditionSourceLabel } from "./history.ts";
 import { telegramView } from "./telegram-view.ts";
+import { accountView } from "./account-view.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
 import { describeWeatherError } from "./ecmwf.ts";
 import { compassDirection, sampleWind, validTime } from "./wind.ts";
@@ -88,7 +89,9 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
       <div class="map-tools"><button class="saved-spots-toggle" type="button" aria-expanded=${state.savedSpotsOpen}
         @click=${() => propose({ kind: "savedSpotsToggled" })}>Saved spots <span>${state.savedSpots.length}</span></button>
         <button class="saved-spots-toggle observations-toggle" type="button" aria-expanded=${state.observations.open}
-          @click=${() => propose({ kind: "observationsToggled" })}>Observations</button></div>
+          @click=${() => propose({ kind: "observationsToggled" })}>Observations</button>
+        <button class="saved-spots-toggle account-toggle" type="button"
+          @click=${() => propose({ kind: "accountOpened" })}>${state.account.user ? "Account" : "Sign in"}</button></div>
       ${!state.modalOpen && !state.history.open && !state.savedSpotsOpen && !state.observations.open && !state.observations.selectedId
         ? placeSearchView(state.placeSearch, propose) : nothing}
     </header>
@@ -111,6 +114,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
     ${state.savedSpotsOpen ? html`<section class="saved-spots-panel" aria-label="Saved spots">
       <div class="saved-spots-head"><strong>Saved spots</strong><button type="button" aria-label="Close saved spots"
         @click=${() => propose({ kind: "savedSpotsToggled" })}>×</button></div>
+      ${state.accountOpen ? accountView(state.account, propose) : html`<button type="button" class="account-summary"
+        @click=${() => propose({ kind: "accountOpened" })}>${state.account.user ? state.account.sync === "error" || state.account.sync === "conflict"
+          ? "Account · changes need attention" : state.account.browserCount && !state.account.imported ? "Account · import browser spots"
+            : "Account · saved across devices" : "Sign in to save spots across devices"}</button>`}
       <input class="saved-spots-search" type="search" aria-label="Search saved spots by title" placeholder="Search by title"
         .value=${state.savedSpotsSearch} @input=${(event: Event) => propose({ kind: "savedSpotsSearchChanged", query: (event.target as HTMLInputElement).value })} />
       ${state.savedSpotsError ? html`<p class="saved-spots-error" role="alert">${state.savedSpotsError.kind === "invalid"
@@ -132,7 +139,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
       })}</div>` : html`<p class="saved-spots-empty">${state.savedSpots.length
         ? "No saved spots match that title." : "Open a point’s Find your season panel to save its settings here."}</p>`}
       ${telegramView(state.telegram, propose)}
-      <p class="saved-spots-foot">Presets saved in this browser; synced Telegram alerts run on the server.</p>
+      <p class="saved-spots-foot">${state.account.user ? "Presets saved to your account. Telegram alerts run on the server."
+        : "Presets saved in this browser. Sign in to save them across devices."}</p>
     </section>` : nothing}
 
     ${forecastMatches.length ? state.forecastAlertsDismissed ? html`
@@ -219,7 +227,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
         </section>
       </div>` : nothing}
-    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null, state.placeSearch)}
+    ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null, state.placeSearch, state.account)}
     ${observationsView(state.observations, propose, now)}
   `;
 };

@@ -4,7 +4,8 @@ import { createMonitor } from "./monitor.ts";
 import { openAlertStore } from "./store.ts";
 import { createTelegram } from "./telegram.ts";
 
-export const createAlertRuntime = (env: NodeJS.ProcessEnv = process.env) => {
+export const createAlertRuntime = (env: NodeJS.ProcessEnv = process.env,
+  account?: Pick<Parameters<typeof createAlertHttp>[0], "ownerFor" | "rememberOwner" | "accountFor">) => {
   const token = env.TELEGRAM_BOT_TOKEN ?? "";
   const username = (env.TELEGRAM_BOT_USERNAME ?? "").replace(/^@/, "");
   const publicUrl = env.PUBLIC_APP_URL ?? "";
@@ -22,7 +23,7 @@ export const createAlertRuntime = (env: NodeJS.ProcessEnv = process.env) => {
   const monitor = createMonitor({ store, telegram, publicUrl });
   const controller = new AbortController();
   let ready = false;
-  const handle = createAlertHttp({ store, username, publicUrl });
+  const handle = createAlertHttp({ store, username, publicUrl, ...account });
   const unavailable = createAlertHttp({ store: null, username: "", publicUrl: "" });
   const task = (async () => {
     while (!controller.signal.aborted && !ready) {

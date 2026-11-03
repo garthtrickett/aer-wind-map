@@ -15,6 +15,7 @@ import { initialWayback, alignWayback, presentWayback, waybackEffect, type Wayba
 import { initialPlaceSearch, dismissPlaceSearch, presentPlaceSearch, placeSearchEffect, type PlaceSearch, type PlaceSearchProposal, type PlaceSearchEffect } from "./place-search-model.ts";
 import { defaultHistoryMapZoom, validHistoryMapZoom } from "./history-map-settings.ts";
 import { validShoreNormal } from "./shore-reference.ts";
+import { initialAccount, type AccountPanel, type AccountAction } from "./account-types.ts";
 
 export type Point = Readonly<{ latitude: number; longitude: number }>;
 export type ForecastAlertStatus =
@@ -57,6 +58,8 @@ export type HistoryPanel = Readonly<{
 }>;
 
 export type State = Readonly<{
+  account: AccountPanel;
+  accountOpen: boolean;
   placeSearch: PlaceSearch;
   basemap: Basemap;
   compassForecast: CompassForecast;
@@ -86,6 +89,9 @@ export type State = Readonly<{
 }>;
 
 export type Proposal =
+  | { readonly kind: "accountAction"; readonly action: AccountAction }
+  | { readonly kind: "accountOpened" }
+  | { readonly kind: "accountChanged"; readonly panel: AccountPanel; readonly spots?: readonly SavedSpot[]; readonly resetSession?: boolean }
   | PlaceSearchProposal
   | CompassForecastProposal
   | WaybackProposal
@@ -148,6 +154,8 @@ export type Proposal =
   | { readonly kind: "forecastPreviewRefresh" };
 
 export const initialState: State = {
+  account: initialAccount,
+  accountOpen: false,
   placeSearch: initialPlaceSearch,
   basemap: "map", weatherOverlay: true, wayback: initialWayback,
   satellite: { available: false, phase: "idle", data: null, message: null },
@@ -182,6 +190,15 @@ const selectionChanged = (state: State, point: Point): State => ({
 
 const presentApp = (state: State, proposal: Proposal): State => {
   switch (proposal.kind) {
+    case "accountAction": return state;
+    case "accountOpened": return { ...state, accountOpen: true, savedSpotsOpen: true, modalOpen: false,
+      history: { ...state.history, open: false }, observations: { ...state.observations, open: false } };
+    case "accountChanged": {
+      const spots = proposal.spots && JSON.stringify(proposal.spots) !== JSON.stringify(state.savedSpots) ? proposal.spots : state.savedSpots;
+      return { ...state, account: proposal.panel, savedSpots: spots,
+        ...(proposal.spots && !proposal.panel.browserInvalid ? { savedSpotsError: null } : {}),
+        ...(proposal.resetSession ? { telegram: initialTelegram, history: initialState.history, modalOpen: false, forecastAlerts: {} } : {}) };
+    }
     case "placeSearchQueryChanged":
     case "placeSearchRequested":
     case "placeSearchStarted":

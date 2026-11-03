@@ -125,7 +125,7 @@ const alertRulesView = (rules: readonly AlertDayRule[], propose: (proposal: Prop
   </fieldset>`;
 };
 
-export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number, compass: CompassForecast, mapTime: number | null, placeSearch: PlaceSearch): TemplateResult | typeof nothing => {
+export const historyView = (history: HistoryPanel, propose: (proposal: Proposal) => void, savedSpots: readonly SavedSpot[], dayLookup: DayLookupPanel, now: number, compass: CompassForecast, mapTime: number | null, placeSearch: PlaceSearch, account?: import("./account-types.ts").AccountPanel): TemplateResult | typeof nothing => {
   if (!history.open || !history.point) return nothing;
   const setCriteria = (criteria: HistoryCriteria): void => propose({ kind: "historyCriteriaChanged", criteria });
   const saveSpot = (asNew: boolean): void => propose({ kind: "savedSpotSaved",
@@ -272,7 +272,11 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 ${alertRulesView(history.alertRules, propose)}
                 ${history.alertEnabled ? forecastPreviewView(history, propose) : nothing}
               ${history.saveFeedback ? html`<p class=${`history-save-feedback ${history.saveFeedback === "saved" ? "success" : "error"}`}
-                role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? "Saved in this browser. Open it from Saved spots on the map."
+                role=${history.saveFeedback === "saved" ? "status" : "alert"}>${history.saveFeedback === "saved" ? account?.user
+                  ? account.sync === "saved" ? "Saved to your account. Open it from Saved spots on any device."
+                    : account.sync === "error" || account.sync === "conflict" ? "Changes kept on this device. Open Account to finish syncing."
+                      : "Saving to your account…"
+                  : "Saved in this browser. Sign in to save across devices."
                   : history.saveFeedback === "nameRequired" ? "Enter a name to save this spot."
                     : "Browser storage is unavailable. This spot was not saved."}</p>` : nothing}
             </form>

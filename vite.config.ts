@@ -1,14 +1,22 @@
 import { createAlertRuntime } from "./scripts/alerts/runtime.ts";
-import { defineConfig } from "vite";
+import { createAccountRuntime } from "./scripts/accounts/runtime.ts";
+import { defineConfig, loadEnv } from "vite";
 import { createObservationFeed, serveObservationRequest } from "./scripts/observations.ts";
 import { createBuoyHistoryFeed, serveBuoyHistoryRequest } from "./scripts/buoy-history.ts";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [{
     name: "aer-observations",
     configureServer(server) {
-      const alerts = createAlertRuntime();
-      server.httpServer?.once("close", () => { void alerts.stop(); });
+      const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
+      const accounts = createAccountRuntime(env);
+      const alerts = createAlertRuntime(env, accounts);
+      server.httpServer?.once("close", () => { void alerts.stop().then(() => accounts.stop()); });
+      server.middlewares.use("/api/account", (request, response) => {
+        const original = request.url;
+        request.url = `/api/account${request.url}`;
+        void accounts.handle(request, response).finally(() => { request.url = original; });
+      });
       server.middlewares.use("/api/telegram", (request, response, next) => {
         const original = request.url;
         request.url = `/api/telegram${request.url}`;
@@ -20,4 +28,4 @@ export default defineConfig({
       server.middlewares.use("/api/buoy-history", (request, response) => { void serveBuoyHistoryRequest(request, response, history); });
     },
   }],
-});
+}));

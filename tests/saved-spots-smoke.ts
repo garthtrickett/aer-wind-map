@@ -206,7 +206,9 @@ try {
   assert.match(await page.locator(".forecast-alert-list button").innerText(), /4 of 14 days/);
   assert.equal(await page.locator(".saved-spot-icon").count(), 1);
   await page.getByRole("button", { name: "Close history" }).click();
-  await page.locator(".saved-spot-icon").click();
+  // The selected forecast's drag handle shares the pin's bottom coordinates.
+  // Click the visible head of the saved pin above that handle.
+  await page.locator(".saved-spot-icon").click({ position: { x: 17, y: 8 } });
   assert.equal(await page.getByLabel("Name this spot and season").inputValue(), "Wet season Bukit");
   assert.equal(await page.getByLabel("Matching days for rule 1").inputValue(), "2");
   await expect(totalDays).toHaveValue("4");

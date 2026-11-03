@@ -3,8 +3,11 @@ import { isSavedSpot } from "../../src/saved-spots.ts";
 import { disconnectedTelegram } from "../../src/telegram-types.ts";
 import { digest, type AlertStore } from "./store.ts";
 
-export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }: Readonly<{
+export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now, ownerFor, rememberOwner, accountFor }: Readonly<{
   store: AlertStore | null; username: string; publicUrl: string; clock?: () => number;
+  ownerFor?: (request: IncomingMessage) => string | null;
+  rememberOwner?: (request: IncomingMessage, owner: string) => void;
+  accountFor?: (request: IncomingMessage) => string | null;
 }>) => {
   const limits = new Map<string, { count: number; until: number }>();
   const limit = (key: string, maximum: number): boolean => {
@@ -22,8 +25,11 @@ export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }
     const url = new URL(request.url || "/", "http://localhost");
     const route = url.pathname;
     if (!store) { json(response, 200, { status: disconnectedTelegram }); return; }
+    if (accountFor && route !== "/api/telegram/view" && (request.headers["x-aer-account"] ?? null) !== accountFor(request)) {
+      json(response, 401, { error: "Your account session changed. Reload Aer before changing Telegram settings." }); return;
+    }
     const cookie = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("aer_alerts="))?.slice(11);
-    const owner = cookie && /^[A-Za-z0-9_-]{43}$/.test(cookie) ? digest(cookie) : null;
+    const owner = ownerFor ? ownerFor(request) : cookie && /^[A-Za-z0-9_-]{43}$/.test(cookie) ? digest(cookie) : null;
     const now = clock();
     const current = () => store.status(owner, now);
     if (request.method === "GET") {
@@ -59,6 +65,7 @@ export const createAlertHttp = ({ store, username, publicUrl, clock = Date.now }
       if (route === "/api/telegram/connect" && request.method === "POST") {
         if (!limit(`link:${request.socket.remoteAddress ?? "unknown"}`, 10)) { json(response, 429, { error: "Too many connection links. Try again in 15 minutes." }); return; }
         const result = store.beginLink(owner, now);
+        if (result.cookie) rememberOwner?.(request, digest(result.cookie));
         if (result.cookie) response.setHeader("Set-Cookie", `aer_alerts=${result.cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${publicUrl.startsWith("https:") ? "; Secure" : ""}`);
         json(response, 200, { status: store.status(result.cookie ? digest(result.cookie) : owner, now),
           connectUrl: `https://t.me/${username}?start=${result.token}`, expiresAt: now + 600_000 }); return;

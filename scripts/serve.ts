@@ -1,4 +1,5 @@
 import { createAlertRuntime } from "./alerts/runtime.ts";
+import { createAccountRuntime } from "./accounts/runtime.ts";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -10,7 +11,8 @@ const root = resolve(import.meta.dirname, "../dist");
 const port = Number(process.env.PORT || "3000");
 const observations = createObservationFeed();
 const buoyHistory = createBuoyHistoryFeed();
-const telegram = createAlertRuntime();
+const accounts = createAccountRuntime();
+const telegram = createAlertRuntime(process.env, accounts);
 const types: Readonly<Record<string, string>> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -39,6 +41,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (pathname.startsWith("/api/account/")) {
+    await accounts.handle(request, response);
+    return;
+  }
   if (pathname.startsWith("/api/telegram/")) {
     await telegram.handle(request, response);
     return;
@@ -73,6 +79,7 @@ const server = createServer(async (request, response) => {
     "Content-Type": types[extname(file)] || "application/octet-stream",
     "Content-Length": info.size,
     "Cache-Control": pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
     ...(compressed ? { "Content-Encoding": "gzip", Vary: "Accept-Encoding" } : {}),
   });
   if (request.method === "HEAD") { response.end(); return; }
@@ -83,7 +90,7 @@ server.listen(port, "0.0.0.0", () => process.stdout.write(`Aer listening on ${po
 
 const shutdown = () => {
   server.close();
-  void telegram.stop().then(() => process.exit(0));
+  void telegram.stop().then(() => { accounts.stop(); process.exit(0); });
 };
 process.once("SIGTERM", shutdown);
 process.once("SIGINT", shutdown);
