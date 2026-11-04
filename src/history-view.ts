@@ -199,8 +199,8 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 (value) => setCriteria({ ...criteria, maxSwellPeriod: value,
                   minSwellPeriod: Math.min(value, criteria.minSwellPeriod) }), "s",
                 () => setCriteria({ ...criteria, maxSwellPeriod: null }))}
-              ${numberControl("Wind speed at most", criteria.maxWindSpeed, 0, 40, .5,
-                (value) => setCriteria({ ...criteria, maxWindSpeed: value }), "m/s")}
+              ${numberControl("Wind speed at most", Number((criteria.maxWindSpeed * 3.6).toFixed(1)), 0, 144, .5,
+                (value) => setCriteria({ ...criteria, maxWindSpeed: value / 3.6 }), "km/h")}
               ${numberControl("Wind direction ignored at or below", calmWindThresholdKmh(criteria), 0, 10, .5,
                 (value) => setCriteria({ ...criteria, calmWindKmh: value }), "km/h")}
               ${numberControl("Minimum window", criteria.minConsecutiveHours, 1, 12, 1,

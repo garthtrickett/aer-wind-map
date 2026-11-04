@@ -94,6 +94,16 @@ try {
   await expect(minimumPeriod).toHaveValue("12");
   await expect(page.locator(".history-month").first()).toContainText("1/1 days");
   assert.equal(archiveRequests.length, 2, "period changes should rescore downloaded history");
+  const maximumWind = page.getByLabel("Wind speed at most");
+  await expect(maximumWind).toHaveValue("18"); // Existing 5 m/s limit.
+  await expect(maximumWind.locator("..")).toContainText("km/h");
+  await expect(page.getByLabel("Wind direction ignored at or below").locator("..")).toContainText("km/h");
+  await maximumWind.fill("10");
+  await maximumWind.press("Tab");
+  await expect(page.locator(".history-month").first()).toContainText("0/1 days"); // Fixture wind is 10.8 km/h.
+  await maximumWind.fill("18");
+  await maximumWind.press("Tab");
+  await expect(page.locator(".history-month").first()).toContainText("1/1 days");
   // The compass loads its two sources independently of the opted-in alert preview.
   const compassRequests = 2;
   await expect.poll(() => forecastRequests).toBe(compassRequests);
@@ -203,6 +213,8 @@ try {
     return raw && JSON.parse(raw).spots[0]?.alertMinDays === 2;
   });
   await page.locator(".forecast-alert-list button").waitFor({ timeout: 20_000 });
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0].criteria.maxWindSpeed), 5,
+    "km/h input preserves the stored m/s limit");
   assert.match(await page.locator(".forecast-alert-list button").innerText(), /4 of 14 days/);
   assert.equal(await page.locator(".saved-spot-icon").count(), 1);
   await page.getByRole("button", { name: "Close history" }).click();
@@ -214,6 +226,7 @@ try {
   await expect(totalDays).toHaveValue("4");
   await expect(page.getByLabel("Total days for rule 2")).toHaveValue("7");
   await expect(maximumPeriod).toHaveValue("12");
+  await expect(maximumWind).toHaveValue("18");
   await maximumPeriod.fill("11");
   await maximumPeriod.press("Tab");
   await page.getByRole("button", { name: "Update saved spot" }).click();

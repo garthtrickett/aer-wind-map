@@ -103,7 +103,7 @@ try {
   }
   for (const [label, value] of [
     ["Swell height from", "0"], ["Swell height to", "15"], ["Swell period at least", "0"],
-    ["Wind speed at most", "40"], ["Wind from", "0"], ["Wind to", "360"],
+    ["Wind speed at most", "144"], ["Wind from", "0"], ["Wind to", "360"],
     ["Swell from", "0"], ["Swell to", "360"],
   ]) {
     await page.getByLabel(label).fill(value);
