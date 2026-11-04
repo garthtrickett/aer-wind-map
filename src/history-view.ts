@@ -17,6 +17,8 @@ import type { DayLookupPanel } from "./day-lookup-model.ts";
 import { displayDate, displayDay } from "./dates.ts";
 import { forecastWindowConditions } from "./forecast-window.ts";
 import { forecastWindowView } from "./forecast-window-view.ts";
+import { monthlySwellDistribution } from "./swell-distribution.ts";
+import { swellDistributionView } from "./swell-distribution-view.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -307,6 +309,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     </button>`)}
                 </div>
                 ${selectedMonth === null ? nothing : html`
+                  ${swellDistributionView(monthlySwellDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth])}
                   <div class="history-days-head"><h3>${monthNames[selectedMonth]} windows</h3>
                     <span>${selectedDays.length} qualifying days across ${history.startYear}–${history.endYear}</span></div>
                   <div class="history-days">${selectedDays.length ? selectedDays.map((day) => html`

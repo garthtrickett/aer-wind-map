@@ -440,7 +440,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "historyCriteriaChanged": {
       if (!validCriteria(proposal.criteria)) return state;
       const changedSource = conditionSource(proposal.criteria) !== conditionSource(state.history.criteria);
-      return { ...state, history: { ...state.history, criteria: proposal.criteria, selectedMonth: null, saveFeedback: null,
+      return { ...state, history: { ...state.history, criteria: proposal.criteria, saveFeedback: null,
         ...(changedSource ? { phase: "needsData", requestedKey: null, data: null, error: null,
           forecastPreview: resetForecastPreview(state.history.forecastPreview) } : {}) } };
     }
