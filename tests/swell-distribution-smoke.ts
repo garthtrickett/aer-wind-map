@@ -51,7 +51,7 @@ try {
         const marine = url.hostname.startsWith("marine-");
         await route.fulfill({ contentType: "application/json", body: JSON.stringify({ latitude: -8.7, longitude: 115.1,
           timezone: "UTC", hourly: { time, ...(marine ? {
-            swell_wave_height: time.map((_, i) => i % 24 >= 14 ? 2.2 : 1),
+            swell_wave_height: time.map((_, i) => i % 24 === 9 ? .2 : i % 24 >= 14 ? 2.2 : 1),
             swell_wave_period: time.map((_, i) => i % 24 < 8 ? 5 : i % 24 < 10 ? 7 : i % 24 < 14 ? 15 : 11),
             swell_wave_direction: time.map(() => 220),
           } : { wind_speed_10m: time.map((_, i) => i < 48 ? 3 : aprilWind[i % 24]?.speed ?? null),
@@ -79,10 +79,14 @@ try {
     await expect(grid.locator(".distribution-subtitle")).toHaveText("with good wind");
     await expect(grid.locator("tbody td")).toHaveCount(35);
     const row = grid.locator("tbody tr").nth(1);
-    await expect(row.locator("td").nth(1)).toHaveText("16.7%");
+    await expect(row.locator("td").nth(1)).toHaveText("8.3%");
     await expect(row.locator("td").nth(5)).toHaveText("16.7%");
     await expect(grid).toContainText("Good wind during 50%");
     await expect(grid).toContainText("12 of 372 possible hourly samples available");
+    const totals = grid.locator("tfoot td");
+    await expect(grid.locator("tfoot th")).toHaveText("All heights");
+    // Sum raw observations across height bands before rounding: 8.3% + 8.3% displays as 16.7%.
+    await expect(totals).toHaveText(["0%", "16.7%", "0%", "16.7%", "0%", "16.7%", "0%"]);
     await grid.scrollIntoViewIfNeeded();
     const tableRegion = grid.getByRole("region", { name: "Swell height and period table" });
     const box = await tableRegion.boundingBox();
@@ -95,23 +99,26 @@ try {
     await page.getByRole("button", { name: "Show February qualifying days" }).click();
     await expect(grid).toContainText("February swell height × period");
     await expect(grid).toContainText("No hours passed your wind settings");
+    await expect(totals).toHaveText(Array(7).fill("0%"));
     await expect(wind).toContainText("February wind direction × speed");
     await expect(wind.locator("tbody tr").nth(6).locator("td").nth(2)).toHaveText("100%");
     await page.getByRole("button", { name: "Show March qualifying days" }).click();
     await expect(wind).toContainText("No usable wind data for this month");
     await expect(grid).toContainText("No usable paired swell and wind data");
+    await expect(totals).toHaveCount(0);
     await page.getByLabel("Swell period at least").fill("20");
     await page.getByLabel("Swell period at least").press("Tab");
     await expect(grid).toContainText("March swell height × period");
     await page.getByRole("button", { name: "Show January qualifying days" }).click();
-    await expect(row.locator("td").nth(1)).toHaveText("16.7%", { timeout: 10_000 });
+    await expect(row.locator("td").nth(1)).toHaveText("8.3%", { timeout: 10_000 });
     await page.getByLabel("Marker type").selectOption("swell");
     await expect(grid.locator(".distribution-subtitle")).toHaveCount(0);
     await expect(wind).toHaveCount(0);
     await expect(row.locator("td").nth(0)).toHaveText("16.7%");
-    await expect(row.locator("td").nth(1)).toHaveText("16.7%");
+    await expect(row.locator("td").nth(1)).toHaveText("8.3%");
     await expect(row.locator("td").nth(5)).toHaveText("33.3%");
     await expect(grid).toContainText("Most common combinations");
+    await expect(totals).toHaveText(["16.7%", "16.7%", "0%", "33.3%", "0%", "33.3%", "0%"]);
     await page.getByLabel("Marker type").selectOption("wind");
     await expect(grid).toHaveCount(0);
     await expect(wind).toContainText("January wind direction × speed");

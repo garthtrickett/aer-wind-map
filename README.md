@@ -89,6 +89,9 @@ Click a month to expand hourly condition distributions for those same local
   heights, periods and directions are included regardless of swell rules. For
   combined markers, cells count hours with acceptable wind against all usable
   paired swell/wind hours, so the table can total less than 100%.
+  An **All heights** footer totals each period column across all swell sizes,
+  using raw sample counts before rounding and retaining the same denominator
+  and, for combined markers, the same good-wind requirement.
 
 Both distributions show hourly frequencies, not percentages of qualifying days.
 Speed and period bands include their lower bound and exclude their upper bound.
