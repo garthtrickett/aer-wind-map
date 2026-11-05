@@ -441,6 +441,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .distribution-table td.most-common { outline: 2px solid #328772; outline-offset: -2px; font-weight: 700; }
 .distribution-table tfoot th, .distribution-table tfoot td { font-weight: 700; border-top: 2px solid #b4d5cb; }
 .distribution-table tfoot td { background: #e3f0eb; }
+.distribution-table .distribution-total { font-weight: 700; border-left: 2px solid #b4d5cb; background: #e3f0eb; }
 .distribution-calm { margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: #426770; }
 .distribution-common { margin-top: 13px; font-size: 11px; color: #426770; }
 .distribution-common ol { margin: 7px 0 0; padding-left: 18px; }

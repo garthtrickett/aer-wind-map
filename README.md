@@ -84,6 +84,9 @@ Click a month to expand hourly condition distributions for those same local
   adjustable calm allowance. Missing non-calm directions and speeds are excluded.
   All winds are included regardless of matching rules; the top three direction
   and speed combinations and sample coverage appear below the table.
+  An **All speeds** column totals each direction across all speed bands, using
+  raw counts before rounding. These direction totals plus the separate calm
+  percentage account for all usable wind hours.
 - **Swell height × period** (swell-only and combined markers) includes separate
   <6 s and 6–8 s columns, then 8–10, 10–12, 12–14, 14–18 and ≥18 s. All swell
   heights, periods and directions are included regardless of swell rules. For

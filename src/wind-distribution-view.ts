@@ -5,6 +5,7 @@ import { windDirections, windSpeedBands, type WindDistribution } from "./wind-di
 export const windDistributionView = (distribution: WindDistribution | null, month: string): TemplateResult | typeof nothing => {
   if (!distribution) return nothing;
   const { availableHours, expectedHours, calmHours, cells } = distribution;
+  const directionTotals = cells.map((row) => row.reduce((total, count) => total + count, 0));
   const common = cells.flatMap((row, direction) => row.map((count, speed) => ({ count, direction, speed })))
     .filter((cell) => cell.count > 0).sort((a, b) => b.count - a.count).slice(0, 3);
   const peak = common[0]?.count ?? 0;
@@ -17,21 +18,26 @@ export const windDistributionView = (distribution: WindDistribution | null, mont
         · shown separately because direction matters little in calm conditions.</p>
       <table class="distribution-table">
         <caption>Wind comes from the direction shown, grouped into 45° sectors centred on each compass point.
-          Speed in km/h; ranges include the lower bound and exclude the upper bound.</caption>
-        <thead><tr><th scope="col">From ↓<br />km/h →</th>${windSpeedBands.map((band) => html`<th scope="col">${band.label}</th>`)}</tr></thead>
+          Speed in km/h; ranges include the lower bound and exclude the upper bound.
+          The All speeds column totals each direction across the speed bands; calm stays separate.</caption>
+        <thead><tr><th scope="col">From ↓<br />km/h →</th>${windSpeedBands.map((band) => html`<th scope="col">${band.label}</th>`)}
+          <th scope="col" class="distribution-total">All speeds</th></tr></thead>
         <tbody>${windDirections.map((direction, row) => html`<tr><th scope="row">${direction}</th>
           ${cells[row].map((count, column) => html`<td
             class=${count > 0 && count === peak ? "most-common" : ""}
             style=${`--frequency:${peak ? count / peak : 0}`}
             title=${`From ${direction} at ${windSpeedBands[column].label} km/h: ${count} of ${availableHours} usable hours`}
           >${percentLabel(count, availableHours)}</td>`)}
+          <td class="distribution-total"
+            title=${`From ${direction} across all speed bands: ${directionTotals[row]} of ${availableHours} usable hours`}
+          >${percentLabel(directionTotals[row], availableHours)}</td>
         </tr>`)}</tbody>
       </table>
       ${common.length ? html`<div class="distribution-common"><strong>Most common combinations</strong><ol>
         ${common.map((cell) => html`<li><span>${windDirections[cell.direction]} at ${windSpeedBands[cell.speed].label} km/h</span>
           <b>${percentLabel(cell.count, availableHours)}</b></li>`)}
       </ol></div>` : html`<p class="distribution-note">All usable hours were calm.</p>`}
-      <p class="distribution-note">The grid and calm percentage together account for all usable wind hours; displayed percentages are rounded.</p>
+      <p class="distribution-note">Direction totals and the separate calm percentage together account for all usable wind hours; displayed percentages are rounded.</p>
     ` : html`<p class="distribution-note">No usable wind data for this month.</p>`}
     <p class="distribution-note">${availableHours.toLocaleString("en-GB")} of ${expectedHours.toLocaleString("en-GB")} possible hourly samples available.
       Missing speeds and missing directions for non-calm winds are excluded. This is an hourly distribution;

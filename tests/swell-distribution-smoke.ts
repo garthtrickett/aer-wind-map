@@ -69,7 +69,10 @@ try {
     const grid = page.locator(".swell-distribution");
     const wind = page.locator(".wind-distribution");
     await expect(wind).toContainText("January wind direction × speed");
-    await expect(wind.locator("tbody td")).toHaveCount(40);
+    await expect(wind.locator("tbody td")).toHaveCount(48);
+    await expect(wind.getByRole("columnheader", { name: "All speeds" })).toBeVisible();
+    const directionTotals = wind.locator("tbody .distribution-total");
+    await expect(directionTotals).toHaveText(["0%", "0%", "50%", "0%", "0%", "0%", "50%", "0%"]);
     await expect(wind.locator("tbody tr").nth(2).locator("td").nth(2)).toHaveText("50%");
     await expect(wind.locator("tbody tr").nth(6).locator("td").nth(2)).toHaveText("50%");
     await expect(wind).toContainText("Calm (<2 km/h): 0%");
@@ -102,8 +105,10 @@ try {
     await expect(totals).toHaveText(Array(7).fill("0%"));
     await expect(wind).toContainText("February wind direction × speed");
     await expect(wind.locator("tbody tr").nth(6).locator("td").nth(2)).toHaveText("100%");
+    await expect(directionTotals).toHaveText(["0%", "0%", "0%", "0%", "0%", "0%", "100%", "0%"]);
     await page.getByRole("button", { name: "Show March qualifying days" }).click();
     await expect(wind).toContainText("No usable wind data for this month");
+    await expect(directionTotals).toHaveCount(0);
     await expect(grid).toContainText("No usable paired swell and wind data");
     await expect(totals).toHaveCount(0);
     await page.getByLabel("Swell period at least").fill("20");
@@ -126,6 +131,7 @@ try {
     await expect(wind).toContainText("Calm (<2 km/h): 20%");
     await expect(wind).toContainText("10 of 360 possible hourly samples available");
     await expect(wind.locator("tbody tr").nth(1).locator("td").nth(2)).toHaveText("20%");
+    await expect(directionTotals).toHaveText(["10%", "60%", "0%", "0%", "0%", "0%", "10%", "0%"]);
     await expect(wind.locator(".distribution-common li").first()).toContainText("NE at 10–15 km/h");
     await wind.scrollIntoViewIfNeeded();
     const windBox = await wind.locator("table").boundingBox();
