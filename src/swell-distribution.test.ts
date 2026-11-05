@@ -18,11 +18,17 @@ test("joint swell bins partition every boundary exactly once and retain height-p
     hour({ swellHeight: height.min, swellPeriod: period.min })));
   hours.push(hour({ swellHeight: 8, swellPeriod: 25 }));
   const result = monthlySwellDistribution(data(hours), swellOnly, 0)!;
-  assert.equal(result.availableHours, 31);
-  assert.equal(result.includedHours, 31);
-  assert.equal(result.cells.flat().reduce((a, b) => a + b), 31);
+  assert.equal(result.availableHours, 36);
+  assert.equal(result.includedHours, 36);
+  assert.equal(result.cells.flat().reduce((a, b) => a + b), 36);
   assert.deepEqual(result.cells, Array.from({ length: 5 }, (_, row) =>
-    Array.from({ length: 6 }, (_, column) => row === 4 && column === 5 ? 2 : 1)));
+    Array.from({ length: 7 }, (_, column) => row === 4 && column === 6 ? 2 : 1)));
+});
+
+test("short periods distinguish below six, six to eight, and eight to ten seconds", () => {
+  const result = monthlySwellDistribution(data([5.999, 6, 7.999, 8].map((swellPeriod) =>
+    hour({ swellHeight: 1, swellPeriod }))), swellOnly, 0)!;
+  assert.deepEqual(result.cells[1], [1, 2, 1, 0, 0, 0, 0]);
 });
 
 test("combined distribution counts joint wind passes against ALL paired hours and reuses calm rules", () => {
@@ -37,7 +43,7 @@ test("combined distribution counts joint wind passes against ALL paired hours an
   ]), defaultHistoryCriteria, 0)!;
   assert.equal(result.availableHours, 5);
   assert.equal(result.includedHours, 2);
-  assert.equal(result.cells[1][2], 2);
+  assert.equal(result.cells[1][3], 2);
   assert.equal(result.withGoodWind, true);
 });
 
@@ -46,7 +52,7 @@ test("distribution ignores swell filters and minimum window, and swell-only need
   const result = monthlySwellDistribution(observations, { ...swellOnly, minConsecutiveHours: 12,
     minSwellHeight: 2, minSwellPeriod: 15, swellFromStart: 0, swellFromEnd: 1 }, 0)!;
   assert.equal(result.availableHours, 1);
-  assert.equal(result.cells[0][0], 1);
+  assert.equal(result.cells[0][1], 1);
   assert.equal(result.withGoodWind, false);
   assert.equal(monthlySwellDistribution(observations, { ...swellOnly, conditions: "wind" }, 0), null);
 });

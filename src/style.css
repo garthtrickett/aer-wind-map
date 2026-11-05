@@ -426,25 +426,31 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .history-month small { color: #6d878c; font-size: 10px; white-space: nowrap; }
 .history-bar { display: block; width: 100%; height: 5px; overflow: hidden; border-radius: 8px; background: #dce9e5; }
 .history-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #63c6ac, #e7ba5b); }
-.swell-distribution { margin-top: 18px; padding: 16px; border: 1px solid #c5ddd6; border-radius: 13px; background: white; }
-.swell-distribution h3 { margin: 0; font-size: 16px; color: #17414a; }
-.swell-distribution-subtitle { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #277961; }
-.swell-distribution-note { margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: #57777e; }
-.swell-distribution-table { width: 100%; table-layout: fixed; border-spacing: 3px; margin-top: 12px; font-size: 11px; }
-.swell-distribution-table caption { text-align: left; font-size: 10px; line-height: 1.5; color: #65838a; margin-bottom: 6px; }
-.swell-distribution-table th { padding: 8px 2px; font-weight: 600; color: #426770; }
-.swell-distribution-table th:first-child { width: 70px; text-align: left; }
-.swell-distribution-table td { padding: 12px 2px; text-align: center; border-radius: 5px; color: #17414a; background: rgba(79, 180, 149, calc(.06 + var(--frequency) * .55)); font-variant-numeric: tabular-nums; }
-.swell-distribution-table td.most-common { outline: 2px solid #328772; outline-offset: -2px; font-weight: 700; }
-.swell-distribution-common { margin-top: 13px; font-size: 11px; color: #426770; }
-.swell-distribution-common ol { margin: 7px 0 0; padding-left: 18px; }
-.swell-distribution-common li { padding: 4px 0; }
-.swell-distribution-common li b { margin-left: 12px; color: #17414a; }
+.history-distribution { margin-top: 18px; padding: 16px; border: 1px solid #c5ddd6; border-radius: 13px; background: white; }
+.history-distribution h3 { margin: 0; font-size: 16px; color: #17414a; }
+.distribution-subtitle { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #277961; }
+.distribution-note { margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: #57777e; }
+.distribution-scroll { overflow-x: auto; }
+.distribution-scroll-hint { display: none; }
+.swell-distribution .distribution-table { min-width: 470px; }
+.distribution-table { width: 100%; table-layout: fixed; border-spacing: 3px; margin-top: 12px; font-size: 11px; }
+.distribution-table caption { text-align: left; font-size: 10px; line-height: 1.5; color: #65838a; margin-bottom: 6px; }
+.distribution-table th { padding: 8px 2px; font-weight: 600; color: #426770; }
+.distribution-table th:first-child { width: 70px; text-align: left; }
+.distribution-table td { padding: 12px 2px; text-align: center; border-radius: 5px; color: #17414a; background: rgba(79, 180, 149, calc(.06 + var(--frequency) * .55)); font-variant-numeric: tabular-nums; }
+.distribution-table td.most-common { outline: 2px solid #328772; outline-offset: -2px; font-weight: 700; }
+.distribution-calm { margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: #426770; }
+.distribution-common { margin-top: 13px; font-size: 11px; color: #426770; }
+.distribution-common ol { margin: 7px 0 0; padding-left: 18px; }
+.distribution-common li { padding: 4px 0; }
+.distribution-common li b { margin-left: 12px; color: #17414a; }
 @media (max-width: 480px) {
-  .swell-distribution { padding: 12px 7px; }
-  .swell-distribution-table { border-spacing: 2px; font-size: 10px; }
-  .swell-distribution-table th:first-child { width: 54px; }
-  .swell-distribution-table td { padding: 12px 0; font-size: 9px; }
+  .history-distribution { padding: 12px 7px; }
+  .distribution-table { border-spacing: 2px; font-size: 10px; }
+  .distribution-table th:first-child { width: 54px; }
+  .distribution-table td { padding: 12px 0; font-size: 9px; }
+  .swell-distribution .distribution-table td { font-size: 11px; }
+  .distribution-scroll-hint { display: block; margin: 10px 0 0; font-size: 11px; color: #57777e; }
 }
 .history-days-head { margin: 21px 0 9px; }
 .history-days { max-height: 175px; overflow-y: auto; border: 1px solid #dce9e6; border-radius: 11px; }

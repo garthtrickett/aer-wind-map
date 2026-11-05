@@ -73,6 +73,26 @@ timezone. Eligible hourly samples run from 06:00 through 17:00; 18:00 is
 excluded. This fixed surf window does not track seasonal sunrise and sunset.
 The CSV retains all hours, with nighttime rows marked as not meeting conditions.
 
+Click a month to expand hourly condition distributions for those same local
+06:00–18:00 hours across the selected years:
+
+- **Wind direction × speed** (wind-only and combined markers) groups winds
+  into eight compass sectors and 2–5, 5–10, 10–15, 15–20 and ≥20 km/h bands.
+  Each cell is a percentage of all usable wind hours, including calm hours in
+  the denominator. Calm below 2 km/h is shown separately, even when direction
+  is missing. This fixed display threshold is independent of the marker's
+  adjustable calm allowance. Missing non-calm directions and speeds are excluded.
+  All winds are included regardless of matching rules; the top three direction
+  and speed combinations and sample coverage appear below the table.
+- **Swell height × period** (swell-only and combined markers) includes separate
+  <6 s and 6–8 s columns, then 8–10, 10–12, 12–14, 14–18 and ≥18 s. All swell
+  heights, periods and directions are included regardless of swell rules. For
+  combined markers, cells count hours with acceptable wind against all usable
+  paired swell/wind hours, so the table can total less than 100%.
+
+Both distributions show hourly frequencies, not percentages of qualifying days.
+Speed and period bands include their lower bound and exclude their upper bound.
+
 Name and save a point from **Find your season** to keep its location, years,
 and conditions. **Saved spots** on the map lists them; their markers reopen
 the same settings. You can update a spot, save a copy, or remove one. These

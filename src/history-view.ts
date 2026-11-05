@@ -19,6 +19,8 @@ import { forecastWindowConditions } from "./forecast-window.ts";
 import { forecastWindowView } from "./forecast-window-view.ts";
 import { monthlySwellDistribution } from "./swell-distribution.ts";
 import { swellDistributionView } from "./swell-distribution-view.ts";
+import { monthlyWindDistribution } from "./wind-distribution.ts";
+import { windDistributionView } from "./wind-distribution-view.ts";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
   new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(Date.UTC(2024, month, 1))));
@@ -309,6 +311,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     </button>`)}
                 </div>
                 ${selectedMonth === null ? nothing : html`
+                  ${windDistributionView(monthlyWindDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth])}
                   ${swellDistributionView(monthlySwellDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth])}
                   <div class="history-days-head"><h3>${monthNames[selectedMonth]} windows</h3>
                     <span>${selectedDays.length} qualifying days across ${history.startYear}–${history.endYear}</span></div>

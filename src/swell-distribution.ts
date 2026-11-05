@@ -9,7 +9,8 @@ export const swellHeightBands = [
   { label: "≥3 m", min: 3, max: Infinity },
 ] as const;
 export const swellPeriodBands = [
-  { label: "<8 s", min: 0, max: 8 },
+  { label: "<6 s", min: 0, max: 6 },
+  { label: "6–8 s", min: 6, max: 8 },
   { label: "8–10 s", min: 8, max: 10 },
   { label: "10–12 s", min: 10, max: 12 },
   { label: "12–14 s", min: 12, max: 14 },
