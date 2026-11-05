@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayHours, loadDay, validLookupDate } from "./day-lookup.ts";
+import { dayHours, loadDay, seaLevelTrend, validLookupDate } from "./day-lookup.ts";
 import { initialState, nap, present } from "./model.ts";
 
 const point = { latitude: 22.952, longitude: 121.295 };
@@ -14,8 +14,12 @@ const waves = (times = time) => ({ latitude: 22.958336, longitude: 121.375015, t
   time: times, swell_wave_height: times.map(() => 1.2), swell_wave_period: times.map(() => 8), swell_wave_direction: times.map(() => 65),
   wave_height: times.map(() => 1.7), wave_period: times.map(() => 6), wave_direction: times.map(() => 75),
 } });
+const tide = (times = time) => ({ latitude: 22.9583, longitude: 121.2917, timezone: "Asia/Taipei", hourly: {
+  time: times, sea_level_height_msl: times.map((_, index) => (index - 10) / 10),
+} });
 const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
-const fetcher = (async (input) => response(String(input).includes("archive-api") ? wind() : waves())) as typeof fetch;
+const fetcher = (async (input) => response(String(input).includes("archive-api") ? wind()
+  : String(input).includes("meteofrance_currents") ? tide() : waves())) as typeof fetch;
 
 test("day lookup requests only one date in local time and separates swell from combined waves", async () => {
   const urls: URL[] = [];
@@ -29,6 +33,10 @@ test("day lookup requests only one date in local time and separates swell from c
   assert.equal(result.data.hours[0].windSpeed, 3.6);
   assert.equal(result.data.hours[0].swellHeight, 1.2);
   assert.equal(result.data.hours[0].waveHeight, 1.7);
+  assert.equal(result.data.hours[0].seaLevel, -1, "Negative heights relative to MSL are valid");
+  assert.equal(result.data.tide.issue, null);
+  assert.equal(urls.length, 3);
+  assert.equal(urls.find((url) => url.searchParams.get("models") === "meteofrance_currents")?.searchParams.get("hourly"), "sea_level_height_msl");
   assert.deepEqual(result.data.wind.grid, { latitude: 23.022846, longitude: 121.31661 });
   for (const url of urls) {
     assert.equal(url.searchParams.get("start_date"), date);
@@ -91,10 +99,68 @@ test("local-hour filtering handles a 25-hour daylight-saving day", () => {
   const start = Date.parse("2025-11-02T00:00:00-04:00") / 1000;
   const hours = Array.from({ length: 25 }, (_, index) => ({ time: start + index * 3600,
     windSpeed: 0, windDirection: null, swellHeight: null, swellPeriod: null, swellDirection: null,
-    waveHeight: null, wavePeriod: null, waveDirection: null }));
-  const data = { date: "2025-11-02", timezone: "America/New_York", wind: { grid: null, issue: null }, waves: { grid: null, issue: null }, hours };
+    waveHeight: null, wavePeriod: null, waveDirection: null, seaLevel: null }));
+  const data = { date: "2025-11-02", timezone: "America/New_York", wind: { grid: null, issue: null },
+    waves: { grid: null, issue: null }, tide: { grid: null, issue: null }, hours };
   assert.equal(dayHours(data, 0, 24).length, 25);
   assert.equal(dayHours(data, 6, 18).length, 12);
+});
+
+test("tide survives failed wind and waves, with its own grid and local timezone", async () => {
+  const result = await loadDay(point, date, (async (input) => String(input).includes("meteofrance_currents")
+    ? response(tide()) : new Response("unavailable", { status: 503 })) as typeof fetch);
+  assert.ok(result.ok);
+  assert.equal(result.data.timezone, "Asia/Taipei");
+  assert.equal(result.data.hours.length, 24);
+  assert.equal(result.data.hours[6].seaLevel, -.4);
+  assert.equal(result.data.hours[6].windSpeed, null);
+  assert.equal(result.data.hours[6].waveHeight, null);
+  assert.deepEqual(result.data.tide.grid, { latitude: 22.9583, longitude: 121.2917 });
+});
+
+test("tide failures and all-null archives do not remove wind or waves or fabricate zero tide", async () => {
+  for (const unavailable of [new Response("unavailable", { status: 503 }), response({ ...tide(), hourly: {
+    time, sea_level_height_msl: time.map(() => null),
+  } })]) {
+    const result = await loadDay(point, date, (async (input) => String(input).includes("meteofrance_currents")
+      ? unavailable : fetcher(input)) as typeof fetch);
+    assert.ok(result.ok);
+    assert.ok(result.data.tide.issue);
+    assert.equal(result.data.hours[6].seaLevel, null);
+    assert.equal(result.data.hours[6].windSpeed, 3.6);
+    assert.equal(result.data.hours[6].waveHeight, 1.7);
+  }
+});
+
+test("tide joins by timestamp, retaining missing readings and excluding a different local date", async () => {
+  const result = await loadDay(point, date, (async (input) => {
+    if (!String(input).includes("meteofrance_currents")) return fetcher(input);
+    const times = [time[0] - 3600, ...time.filter((_, index) => index !== 6)];
+    const values = tide(times);
+    return response({ ...values, hourly: { ...values.hourly, sea_level_height_msl: times.map((_, index) => index === 7 ? null : -.2) } });
+  }) as typeof fetch);
+  assert.ok(result.ok);
+  assert.equal(result.data.hours.length, 24);
+  assert.equal(result.data.hours[0].time, time[0]);
+  assert.equal(result.data.hours[6].seaLevel, null);
+  assert.equal(result.data.hours[7].seaLevel, null);
+  assert.equal(result.data.hours[8].seaLevel, -.2);
+});
+
+test("rising and falling use adjacent signed sea levels and never bridge missing hours", async () => {
+  const result = await loadDay(point, date, fetcher);
+  assert.ok(result.ok);
+  const data = result.data;
+  assert.equal(seaLevelTrend(data, time[0]), "Rising");
+  assert.equal(seaLevelTrend(data, time[10]), "Rising");
+  assert.equal(seaLevelTrend(data, time[23]), "Rising");
+  const falling = { ...data, hours: data.hours.map((row) => ({ ...row, seaLevel: -row.seaLevel! })) };
+  assert.equal(seaLevelTrend(falling, time[10]), "Falling");
+  const steady = { ...data, hours: data.hours.map((row) => ({ ...row, seaLevel: 0 })) };
+  assert.equal(seaLevelTrend(steady, time[10]), "Steady");
+  const gap = { ...data, hours: [data.hours[0], data.hours[3]] };
+  assert.equal(seaLevelTrend(gap, time[0]), null);
+  assert.equal(seaLevelTrend({ ...data, hours: [{ ...data.hours[0], seaLevel: null }] }, time[0]), null);
 });
 
 test("marker/date changes invalidate in-flight responses; hour changes reuse loaded data", async () => {

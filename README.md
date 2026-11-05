@@ -265,9 +265,19 @@ combined waves each show height, period and direction from Météo-France MFWAM.
 Combined waves include wind waves and swell; these heights are not surf-face
 heights. MFWAM's native three-hour values are interpolated to hourly by Open-Meteo.
 These are historical model estimates, not station measurements. Times are local
-to the displayed timezone, and the actual wind and wave grid coordinates are
+to the displayed timezone, and the actual wind, wave and tide grid coordinates are
 shown separately. Recent days may not yet be published. Missing values stay
-missing, and one source can still display when the other is unavailable.
+missing, and each source can still display when another is unavailable.
+
+Tide / sea level comes from Météo-France SMOC via Open-Meteo Marine, using a
+separate request pinned to `meteofrance_currents` and `sea_level_height_msl`.
+The selected hours show a curve and hourly heights in metres, including valid
+negative values. Rising/falling labels use adjacent hourly samples, without
+bridging missing readings. These are sea levels including tides and weather
+effects relative to global mean sea level, not local chart datum or a pure
+astronomical tide prediction. The approximately 8 km grid has limited coastal
+accuracy. Historical tide coverage varies; unavailable dates show missing
+values and a source message while retaining wind and waves.
 
 ## Measured wave and wind stations
 

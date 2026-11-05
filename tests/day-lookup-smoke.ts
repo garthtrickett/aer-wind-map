@@ -25,12 +25,12 @@ const spot = { id: "jinzun", name: "Jinzun test marker", point: { latitude: 22.9
   startYear: 2025, endYear: 2025, criteria: defaultHistoryCriteria, alertEnabled: false, alertMinDays: 2 };
 
 try {
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 844 }]) {
     const context = await browser.newContext({ viewport, locale: "en-US", timezoneId: "America/Los_Angeles" });
     await context.addInitScript((spot) => {
       localStorage.setItem("aer.saved-spots.v1", JSON.stringify({ version: 1, spots: [spot] }));
     }, spot);
-    let failWaves = false, nullValues = false;
+    let failWaves = false, failTide = false, nullValues = false;
     const dayRequests: string[] = [];
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
@@ -43,11 +43,13 @@ try {
         const day = url.searchParams.has("start_date") && url.searchParams.get("start_date") === url.searchParams.get("end_date");
         if (day) dayRequests.push(url.toString());
         const marine = url.hostname.startsWith("marine");
-        if (day && failWaves && marine) { await route.fulfill({ status: 503, body: "unavailable" }); return; }
+        const tide = url.searchParams.get("models") === "meteofrance_currents";
+        if (day && ((failWaves && marine && !tide) || (failTide && tide))) { await route.fulfill({ status: 503, body: "unavailable" }); return; }
         const value = (n: number) => time.map(() => day && nullValues ? null : n);
         await route.fulfill({ contentType: "application/json", body: JSON.stringify({ latitude: 22.9583, longitude: 121.375,
           timezone: "Asia/Taipei", hourly: { time,
-            ...(marine ? { swell_wave_height: value(1.2), swell_wave_period: value(8), swell_wave_direction: value(65),
+            ...(tide ? { sea_level_height_msl: time.map((_, hour) => nullValues ? null : (hour - 10) / 10) }
+              : marine ? { swell_wave_height: value(1.2), swell_wave_period: value(8), swell_wave_direction: value(65),
               wave_height: value(1.7), wave_period: value(6), wave_direction: value(75) }
               : { wind_speed_10m: value(day ? 3.6 : 1), wind_direction_10m: value(355) }) } }) }); return;
       }
@@ -87,18 +89,26 @@ try {
     await expect(first).toContainText("N 355°");
     await expect(first).toContainText("1.2 m · 8.0 s");
     await expect(first).toContainText("1.7 m · 6.0 s");
+    await expect(first.locator(".day-lookup-tide")).toContainText("-0.40 m");
+    await expect(first.locator(".day-lookup-tide")).toContainText("Rising");
+    await expect(page.locator(".day-tide-chart")).toContainText("mean sea level");
+    await expect(page.locator(".day-tide-chart circle")).toHaveCount(12);
+    await expect(page.locator(".day-lookup-content")).toContainText("Météo-France SMOC");
     await expect(page.locator(".day-lookup-content")).toContainText("22.9583, 121.3750");
-    assert.equal(dayRequests.length, 2);
+    assert.equal(dayRequests.length, 3);
     assert.ok(dayRequests.every((url) => new URL(url).searchParams.get("start_date") === date));
     await expect(page.locator(".day-lookup-status")).toContainText("24/10/2025");
     await page.getByLabel("Lookup end hour").selectOption("9");
     await expect(page.locator(".day-lookup-table tbody tr")).toHaveCount(3);
-    assert.equal(dayRequests.length, 2, "Hour filters must reuse the downloaded day");
+    assert.equal(dayRequests.length, 3, "Hour filters must reuse the downloaded day");
+    await expect(page.locator(".day-tide-chart circle")).toHaveCount(3);
     await page.getByLabel("Lookup start hour").selectOption("0");
     await page.getByLabel("Lookup end hour").selectOption("24");
     await expect(page.locator(".day-lookup-table tbody tr")).toHaveCount(24);
     await page.getByLabel("Lookup start hour").selectOption("6");
     await page.getByLabel("Lookup end hour").selectOption("9");
+    await page.locator(".day-tide-chart").scrollIntoViewIfNeeded();
+    await page.locator(".day-tide-chart").screenshot({ path: `/tmp/aer-day-tide-${viewport.width}.png` });
     await page.screenshot({ path: `/tmp/aer-day-lookup-${viewport.width}.png`, fullPage: true });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 
@@ -107,9 +117,17 @@ try {
     await expect(page.locator(".day-lookup-warning")).toContainText("Waves: Source unavailable");
     await expect(page.locator(".day-lookup-table tbody tr").first()).toContainText("3.6 km/h");
     await expect(page.locator(".day-lookup-table tbody tr").first()).not.toContainText("1.7 m");
-    failWaves = false; nullValues = true;
+    await expect(page.locator(".day-lookup-tide").first()).toContainText("-0.40 m");
+    failWaves = false; failTide = true;
     await page.getByRole("button", { name: "Load day", exact: true }).click();
-    await expect(page.locator(".day-lookup-warning")).toContainText("No usable values");
+    await expect(page.locator(".day-lookup-warning")).toContainText("Tide: Source unavailable");
+    await expect(page.locator(".day-lookup-table tbody tr").first()).toContainText("1.7 m");
+    await expect(page.locator(".day-lookup-tide").first()).toHaveText("——");
+    await expect(page.locator(".day-tide-chart")).toHaveCount(0);
+    failTide = false; nullValues = true;
+    await page.getByRole("button", { name: "Load day", exact: true }).click();
+    await expect(page.locator(".day-lookup-warning").filter({ hasText: "No usable values" })).toHaveCount(1);
+    await expect(page.locator(".day-lookup-warning").filter({ hasText: "No tide / sea-level estimates" })).toHaveCount(1);
     await expect(page.locator(".day-lookup-table tbody tr").first()).not.toContainText("0.0");
 
     await page.getByLabel("Lookup date").fill("25/10/2025");
@@ -127,7 +145,7 @@ try {
     await page.screenshot({ path: `/tmp/aer-day-details-${viewport.width}.png`, fullPage: true });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     assert.deepEqual(errors, []);
-    console.log(`Daily lookup passed at ${viewport.width}px: local hours, units, filters, partial source, missing data and both marker panels.`);
+    console.log(`Daily lookup passed at ${viewport.width}px: local hours, signed tide heights, tide chart, filters, partial source, missing data and both marker panels.`);
     await context.close();
   }
 } finally {
