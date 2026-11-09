@@ -6,7 +6,7 @@ ECMWF's current linked limits page lists 20 queued requests per user and one act
 
 The scheduler holds a single SQLite coordinator lease across deployments. Within that lease it advances multiple distinct jobs concurrently. Submitted requests keep their slots between polls; repeated ticks cannot start the same job twice. Saved provider receipts survive restart. Ambiguous submissions are never retried automatically. Cached data and existing queued jobs are retained.
 
-When filling slots, prefer locations with fewer outstanding requests, then FIFO order. This prevents one location's 49 months from excluding all other locations until it finishes. No requests are cancelled to make room; a newly added location uses the next available slot.
+When filling slots, prefer locations with fewer outstanding requests, then those least recently served. Use FIFO order within a location. This prevents one location's 49 months from excluding all other locations until it finishes, including when more locations are waiting than there are slots. No requests are cancelled to make room; a newly added location uses the next available slot.
 
 ECMWF accepts individual days and date ranges. A whole month is Aer's current extraction/cache choice, not an API requirement. Splitting into daily requests would still share the account's active-request allowance, and may repeat archive reads and queue overhead. It would also require durable partial-month storage and chart availability tracking. Smaller chunks need a measured trial before changing the extraction strategy. Grouping nearby locations by month is another candidate for reducing repeated archive work. [ECMWF retrieval efficiency](https://confluence.ecmwf.int/spaces/WEBAPI/pages/54301008/Retrieval+efficiency).
 

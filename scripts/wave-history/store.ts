@@ -55,14 +55,20 @@ export function openWaveStore(path: string, limits: ArchiveLimits = defaultArchi
       const queued = (db.prepare("SELECT * FROM months WHERE state='queued' ORDER BY updated,key").all() as Job[]).filter((job) => !busy.has(job.key));
       const cell = (job: Job) => `${job.latitude}:${job.longitude}`;
       const counts = new Map<string, number>();
+      const lastServed = db.prepare("SELECT latitude,longitude,MAX(updated) AS time FROM months WHERE state<>'queued' GROUP BY latitude,longitude")
+        .all() as { latitude: number; longitude: number; time: number }[];
+      const served = new Map(lastServed.map((row) => [`${row.latitude}:${row.longitude}`, row.time]));
       for (const job of active) counts.set(cell(job), (counts.get(cell(job)) ?? 0) + 1);
       // Give other locations a slot before adding more requests for the same location.
       while (slots-- > 0 && queued.length) {
         let first = 0;
-        for (let index = 1; index < queued.length; index++)
-          if ((counts.get(cell(queued[index])) ?? 0) < (counts.get(cell(queued[first])) ?? 0)) first = index;
+        for (let index = 1; index < queued.length; index++) {
+          const candidate = cell(queued[index]), current = cell(queued[first]);
+          const difference = (counts.get(candidate) ?? 0) - (counts.get(current) ?? 0);
+          if (difference < 0 || (difference === 0 && (served.get(candidate) ?? 0) < (served.get(current) ?? 0))) first = index;
+        }
         const job = queued.splice(first, 1)[0];
-        selected.push(job); counts.set(cell(job), (counts.get(cell(job)) ?? 0) + 1);
+        selected.push(job); counts.set(cell(job), (counts.get(cell(job)) ?? 0) + 1); served.set(cell(job), Date.now());
       }
       return selected;
     },

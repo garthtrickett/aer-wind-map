@@ -59,6 +59,18 @@ test("provider jobs retain their slots between polls, and lowering concurrency r
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a fourth location gets the next slot instead of waiting for an older location's full range", () => {
+  const { dir, store, first, second } = setup();
+  const third = monthKeys(30, 145, 2022, 2025), fourth = monthKeys(35, 150, 2022, 2025);
+  try {
+    store.enqueue(third, "user"); store.enqueue(fourth, "user");
+    for (const job of [first[0], second[0], third[0]]) store.update(job.key, "polling", `receipt-${job.latitude}`);
+    store.complete(first[0].key, month);
+    const next = store.runnable(3, new Set([second[0].key, third[0].key]));
+    assert.equal(next.length, 1); assert.equal(next[0].key, fourth[0].key);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("overlapping deployments keep one coordinator and restart resumes receipts without resubmission", async () => {
   const { dir, path, store } = setup(), second = openWaveStore(path);
   const seen: Job[] = [];
