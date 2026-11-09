@@ -342,7 +342,7 @@ try {
     await reduced.goto(base, { waitUntil: "domcontentloaded" });
     await reduced.getByText("Live forecast").waitFor({ timeout: 45_000 });
     // Canvas screenshots include the background. Isolate particles from late map tile loads.
-    if (webgl2) await reduced.addStyleTag({ content: "#map { background: #000 !important; } #map .maplibregl-canvas, #map .leaflet-control-container { visibility: hidden !important; }" });
+    if (webgl2) await reduced.addStyleTag({ content: "#map { background: #000 !important; } #map .maplibregl-canvas, #map .leaflet-control-container, #ui { visibility: hidden !important; }" });
     await reduced.waitForTimeout(500);
     const before = await arrowSnapshot(reduced);
     await reduced.waitForTimeout(250);
@@ -352,6 +352,7 @@ try {
       await reduced.addStyleTag({ content: "#map { background: #000 !important; } #map .maplibregl-canvas, #map .leaflet-control-container { visibility: hidden !important; }" });
       await reduced.locator("#map").click({ position: { x: 350, y: 400 } });
       const anchorBefore = await reduced.locator(".flag-point").boundingBox();
+      await reduced.addStyleTag({ content: "#selected-flag { visibility: hidden !important; }" });
       const arrowsBeforePan = (await reduced.locator("#map").screenshot()).toString("base64");
       await reduced.mouse.move(600, 350);
       await reduced.mouse.down();

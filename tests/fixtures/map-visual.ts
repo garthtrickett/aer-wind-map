@@ -41,6 +41,7 @@ const api = {
   setView(latitude: number, longitude: number, zoom: number) { map.map.setView([latitude, longitude], zoom, { animate: false }); renderer.redraw(); },
   setDirection(from: number) { wave.waveDirection!.fill(from); renderer.setField(wave); },
   setFlag,
+  panBy(x: number, y: number) { map.map.panBy([x, y], { animate: false }); },
   flagAt(x: number, y: number) {
     const point = map.pointAt({ x, y });
     map.select(point);
