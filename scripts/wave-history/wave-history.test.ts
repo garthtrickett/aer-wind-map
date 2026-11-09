@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { decodeEcwam } from "./netcdf.ts";
 import { openWaveStore, monthKeys, type Job } from "./store.ts";
 import { advanceJob, marsRequest } from "./ecmwf.ts";
-import { joinEcwamHistory } from "../../src/ecwam-history.ts";
+import { joinEcwamHistory, loadEcwamHistory } from "../../src/ecwam-history.ts";
 import { defaultHistoryCriteria, hourHasData, hourMatchesCriteria, historyCsv, type HistoricalData } from "../../src/history.ts";
 import { initialState, present, nap } from "../../src/model.ts";
 
@@ -37,6 +37,45 @@ test("keys share a snapped cell and include UTC boundary months without inventin
   assert.equal(keys.at(-1)!.year, 2025); assert.equal(keys.at(-1)!.month, 12);
   assert.equal(key.latitude, 23.375); assert.equal(key.longitude, 122.375);
   assert.equal(monthKeys(23.37, 122.43, 2025, 2025)[0].key, keys[0].key);
+});
+test("default allowance accepts ten full four-year locations and repeated clicks reuse the queue", () => {
+  const { store, dir } = temporaryStore();
+  try {
+    const locations = Array.from({ length: 10 }, (_, index) => monthKeys(20 + index, 130, 2022, 2025));
+    for (const keys of locations) { assert.equal(keys.length, 49); store.enqueue(keys, "user"); }
+    const all = locations.flat();
+    assert.equal(store.progress(all, true).pending, 490);
+    store.enqueue(all, "user");
+    assert.equal(store.progress(all, true).pending, 490);
+    const next = monthKeys(31, 130, 2022, 2025);
+    assert.throws(() => store.enqueue(next, "user"), /490 of 512.*49 more/);
+    assert.equal(store.progress(next, true).missing, 49, "limit rejection must not enqueue part of a range");
+    store.enqueue(next, "another-user");
+    assert.equal(store.progress(next, true).pending, 49);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+test("queue capacity is separate from the daily allowance and rejects a whole range atomically", () => {
+  const { path, dir, store: initial } = temporaryStore(); initial.close();
+  const store = openWaveStore(path, { dailyMonths: 512, pendingMonths: 60 });
+  const first = monthKeys(20, 130, 2022, 2025), next = monthKeys(21, 130, 2022, 2025);
+  try {
+    store.enqueue(first, "user");
+    assert.throws(() => store.enqueue(next, "user"), /queue is full: 49 of 60/);
+    assert.equal(store.progress(next, true).missing, 49);
+    store.complete(first[0].key, month);
+    store.enqueue(first, "user");
+    assert.equal(store.progress(first, true).ready, 1);
+    assert.equal(store.progress(first, true).pending, 48);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+test("preparation errors are presented as a readable message rather than a JSON response body", async () => {
+  const message = "Daily archive preparation limit reached: 490 of 512 new months prepared.";
+  const result = await loadEcwamHistory({ point: { latitude: 23.36, longitude: 122.42 }, startYear: 2022, endYear: 2025,
+    conditions: "swell", partition: "primary", prepare: true, signal: new AbortController().signal,
+    progress: () => assert.fail("a rejected request must not invent preparation progress"),
+    fetcher: async () => new Response(JSON.stringify({ error: message }), { status: 429, headers: { "Content-Type": "application/json" } }) });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.detail, message);
 });
 test("durable queue deduplicates and resumes saved provider receipts; uncertain POST does not resubmit", async () => {
   const { store, path, dir } = temporaryStore();

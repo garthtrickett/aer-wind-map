@@ -2,7 +2,7 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import type { HistoryPanel, Proposal } from "./model.ts";
 import type { WaveHistorySource, SwellPartition } from "./wave-history-types.ts";
 import { conditionSource } from "./history.ts";
-export function waveHistoryControls(history: HistoryPanel, propose: (proposal: Proposal) => void): TemplateResult | typeof nothing {
+export function waveHistoryControls(history: HistoryPanel, propose: (proposal: Proposal) => void, signedIn = false): TemplateResult | typeof nothing {
   if (conditionSource(history.criteria) === "wind") return nothing;
   const source = history.historyWaveSource ?? "mfwam", partition = history.historySwellPartition ?? "primary";
   const change = (next: WaveHistorySource, component: SwellPartition) => propose({ kind: "historyWaveSourceChanged", source: next, partition: component });
@@ -26,10 +26,12 @@ export function waveHistoryControls(history: HistoryPanel, propose: (proposal: P
           A full year or multi-year range can take many hours. You can close Aer; downloads continue on the server. Available months appear as they finish.</p>` : nothing}
         ${progress.ready < progress.total ? html`<p>Percentages use downloaded days only. Unavailable months show —. Full-year comparisons need all months.</p>` : nothing}
         ${progress.failed ? html`<p>${progress.failed} archive requests need attention. ${progress.error}</p>` : nothing}
+        ${history.archivePrepare && history.phase === "failed" ? html`<p role="alert">${history.error?.detail ?? "History preparation could not start. Please try again."}</p>` : nothing}
         ${progress.missing && progress.configured ? html`<button type="button" class="secondary-button"
           @click=${() => propose({ kind: "historyArchivePrepare" })}>Prepare missing ECMWF history</button>
-          <p>Sign in before preparing new downloads. Start with one year to keep the first download smaller.</p>
-          <button type="button" class="secondary-button" @click=${() => propose({ kind: "accountOpened" })}>Open account</button>` : nothing}
+          <p>${signedIn ? "Months already queued or cached are reused. You can prepare another location while downloads continue."
+            : "Sign in before preparing new downloads. Start with one year to keep the first download smaller."}</p>
+          ${signedIn ? nothing : html`<button type="button" class="secondary-button" @click=${() => propose({ kind: "accountOpened" })}>Open account</button>`}` : nothing}
         ${!progress.configured ? html`<p>The server archive connection is not configured yet. Cached history remains readable.</p>` : nothing}
       </div>` : nothing}` : nothing}
   </section>`;

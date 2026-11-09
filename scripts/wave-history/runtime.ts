@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isAbsolute } from "node:path";
-import { openWaveStore, monthKeys } from "./store.ts";
+import { openWaveStore, monthKeys, defaultArchiveLimits } from "./store.ts";
 import { advanceJob } from "./ecmwf.ts";
 
 export function createWaveHistoryRuntime(env: NodeJS.ProcessEnv = process.env, accountFor: (request: IncomingMessage) => string | null = () => null) {
   const path = env.AER_WAVE_HISTORY_DB ?? (env.RAILWAY_VOLUME_MOUNT_PATH ? `${env.RAILWAY_VOLUME_MOUNT_PATH}/aer-wave-history.sqlite` : "");
   if (path && !isAbsolute(path)) throw new Error("AER_WAVE_HISTORY_DB must be an absolute durable path");
-  const store = path ? openWaveStore(path) : null;
+  const store = path ? openWaveStore(path, {
+    dailyMonths: Number(env.AER_ARCHIVE_DAILY_MONTH_LIMIT ?? defaultArchiveLimits.dailyMonths),
+    pendingMonths: Number(env.AER_ARCHIVE_PENDING_MONTH_LIMIT ?? defaultArchiveLimits.pendingMonths),
+  }) : null;
   const credentials = env.ECMWF_API_EMAIL && env.ECMWF_API_KEY ? { email: env.ECMWF_API_EMAIL, key: env.ECMWF_API_KEY } : null;
   const configured = !!store && !!credentials;
   const workerId = randomUUID();

@@ -237,7 +237,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               </select></label>
               <span>Up to five complete years</span>
             </div>
-            ${waveHistoryControls(history, propose)}
+            ${waveHistoryControls(history, propose, !!account?.user)}
             <form class="history-save" @submit=${(event: Event) => { event.preventDefault(); saveSpot(false); }}>
               <label for="history-spot-name">Name this spot and season</label>
               <div class="history-save-actions">
@@ -290,7 +290,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
           </div>
           ${(history.phase === "loading" || history.phase === "needsData") && !history.data ? html`
             <div class="history-message" role="status">Loading hourly condition history for ${history.startYear}–${history.endYear}…</div>`
-            : history.phase === "failed" ? html`
+            : history.phase === "failed" && !(history.archivePrepare && history.archiveProgress) ? html`
               <div class="history-message" role="alert"><strong>Historical data could not be loaded.</strong>
                 <p>${history.historyWaveSource === "ecwam" ? history.error?.detail : history.error?.kind === "invalid" ? "The archive returned incomplete data." : "Please check your connection and try again."}</p>
                 <button class="secondary-button" @click=${() => propose({ kind: "historyRetry" })}>Try again</button></div>`

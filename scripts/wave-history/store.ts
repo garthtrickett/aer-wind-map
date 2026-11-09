@@ -5,6 +5,8 @@ import type { ArchiveProgress, EcwamMonth } from "../../src/wave-history-types.t
 
 export type MonthKey = Readonly<{ key: string; latitude: number; longitude: number; year: number; month: number }>;
 export type Job = MonthKey & { state: string; provider: string | null; result: string | null; error: string | null; updated: number };
+export const defaultArchiveLimits = { dailyMonths: 512, pendingMonths: 2048 } as const;
+export type ArchiveLimits = Readonly<{ dailyMonths: number; pendingMonths: number }>;
 export function monthKeys(latitude: number, longitude: number, start: number, end: number): MonthKey[] {
   const lat = Math.round(latitude * 8) / 8, lon = ((Math.round(longitude * 8) / 8 + 540) % 360) - 180;
   const keys: MonthKey[] = [];
@@ -16,7 +18,9 @@ export function monthKeys(latitude: number, longitude: number, start: number, en
   }
   return keys;
 }
-export function openWaveStore(path: string) {
+export function openWaveStore(path: string, limits: ArchiveLimits = defaultArchiveLimits) {
+  if (![limits.dailyMonths, limits.pendingMonths].every((value) => Number.isSafeInteger(value) && value > 0))
+    throw new Error("Archive queue limits must be positive integers");
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path);
   chmodSync(path, 0o600);
@@ -61,8 +65,8 @@ export function openWaveStore(path: string) {
         if (!missing.length) { db.exec("COMMIT"); return; }
         const pending = Number(db.prepare("SELECT COUNT(*) AS n FROM months WHERE state NOT IN ('ready','failed')").get()!.n);
         const recent = Number(db.prepare("SELECT COUNT(*) AS n FROM requests WHERE owner=? AND created>?").get(owner, Date.now() - 86_400_000)!.n);
-        if (pending + missing.length > 128) throw new Error("The archive queue is full. Try again after the current downloads finish.");
-        if (recent + missing.length > 64) throw new Error("Daily archive preparation limit reached. Cached history is still available.");
+        if (pending + missing.length > limits.pendingMonths) throw new Error(`The archive queue is full: ${pending} of ${limits.pendingMonths} months queued. This location needs ${missing.length} new months. Existing downloads continue; try again after some finish.`);
+        if (recent + missing.length > limits.dailyMonths) throw new Error(`Daily archive preparation limit reached: ${recent} of ${limits.dailyMonths} new months prepared in the last 24 hours. This location needs ${missing.length} more. Existing downloads continue and cached history is still available. Try a shorter year range or try again later.`);
         for (const item of missing) {
           db.prepare("INSERT INTO months(key,latitude,longitude,year,month,state,updated) VALUES (?,?,?,?,?,'queued',?)")
             .run(item.key, item.latitude, item.longitude, item.year, item.month, Date.now());
