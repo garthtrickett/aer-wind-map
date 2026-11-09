@@ -157,3 +157,10 @@ test("reopening ECMWF history refreshes server progress instead of freezing a pa
   assert.equal(reopened.history.phase, "needsData");
   assert.equal(nap(reopened)?.kind, "loadHistory");
 });
+test("unlimited 3x3 short records discard padding per hour, with no shifted or missing readings", () => {
+  const padded = decodeEcwam(readFileSync(new URL("../../tests/fixtures/ecwam/november-2025-record-padding.nc", import.meta.url)), 2025, 11, 23.375, 122.375);
+  assert.equal(padded.hours.length, 720);
+  for (let i = 0; i < month.hours.length; i++) {
+    assert.deepEqual(padded.hours[i], month.hours[i], `every component must match at hour ${i}`);
+  }
+});

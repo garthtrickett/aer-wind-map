@@ -14,7 +14,14 @@ export function decodeEcwam(data: Uint8Array, year: number, month: number, latit
     const scale = Number(attribute("scale_factor") ?? 1), offset = Number(attribute("add_offset") ?? 0);
     const fill = attribute("_FillValue"), missing = attribute("missing_value");
     const size = variable.dimensions.reduce((n, id) => n * (file.dimensions[id].size || file.recordDimension.length), 1);
-    const raw = file.getDataVariable(name).flat() as number[];
+    const records = file.getDataVariable(name);
+    // NetCDF record variables pad EACH time slice to four bytes. netcdfjs returns
+    // that padding as extra values; stripping only the final array tail shifts
+    // all subsequent hours when the spatial cell count is odd (e.g. a 3x3 box).
+    const perRecord = size / file.recordDimension.length;
+    const raw = (variable.record
+      ? records.flatMap((record) => Array.isArray(record) ? record.slice(0, perRecord) : [record])
+      : records.flat()) as number[];
     return raw.slice(0, size).map((value) => value === fill || value === missing ? NaN : value * scale + offset);
   };
   const latitudes = read("latitude"), longitudes = read("longitude"), times = read("time");

@@ -20,7 +20,7 @@ export function openWaveStore(path: string) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path);
   chmodSync(path, 0o600);
-  db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+  db.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
     CREATE TABLE IF NOT EXISTS months(key TEXT PRIMARY KEY, latitude REAL NOT NULL, longitude REAL NOT NULL,
       year INTEGER NOT NULL, month INTEGER NOT NULL, state TEXT NOT NULL, provider TEXT, result TEXT, error TEXT, updated INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS requests(owner TEXT NOT NULL, created INTEGER NOT NULL);
@@ -55,14 +55,14 @@ export function openWaveStore(path: string) {
       const row = get(item.key); return row?.state === "ready" && row.result ? [JSON.parse(row.result) as EcwamMonth] : [];
     }),
     enqueue(keys: readonly MonthKey[], owner: string) {
-      const missing = keys.filter((key) => !get(key.key));
-      if (!missing.length) return;
-      const pending = Number(db.prepare("SELECT COUNT(*) AS n FROM months WHERE state NOT IN ('ready','failed')").get()!.n);
-      const recent = Number(db.prepare("SELECT COUNT(*) AS n FROM requests WHERE owner=? AND created>?").get(owner, Date.now() - 86_400_000)!.n);
-      if (pending + missing.length > 128) throw new Error("The archive queue is full. Try again after the current downloads finish.");
-      if (recent + missing.length > 64) throw new Error("Daily archive preparation limit reached. Cached history is still available.");
       db.exec("BEGIN IMMEDIATE");
       try {
+        const missing = keys.filter((key) => !get(key.key));
+        if (!missing.length) { db.exec("COMMIT"); return; }
+        const pending = Number(db.prepare("SELECT COUNT(*) AS n FROM months WHERE state NOT IN ('ready','failed')").get()!.n);
+        const recent = Number(db.prepare("SELECT COUNT(*) AS n FROM requests WHERE owner=? AND created>?").get(owner, Date.now() - 86_400_000)!.n);
+        if (pending + missing.length > 128) throw new Error("The archive queue is full. Try again after the current downloads finish.");
+        if (recent + missing.length > 64) throw new Error("Daily archive preparation limit reached. Cached history is still available.");
         for (const item of missing) {
           db.prepare("INSERT INTO months(key,latitude,longitude,year,month,state,updated) VALUES (?,?,?,?,?,'queued',?)")
             .run(item.key, item.latitude, item.longitude, item.year, item.month, Date.now());
