@@ -11,6 +11,8 @@ export type WaveField = Readonly<{
   increment: number;
   waveHeight: Float32Array;
   wavePeriod: Float32Array;
+  /** Mean combined-wave bearing FROM true north, in degrees. */
+  waveDirection?: Float32Array;
 }>;
 
 export type ForecastField = WindField | WaveField;
@@ -38,7 +40,7 @@ export const waveColor = (height: number): readonly [number, number, number] => 
   return [158, 89, 142];
 };
 
-export const sampleWave = (field: WaveField, latitude: number, longitude: number): Readonly<{ height: number; period: number }> | null => {
+export const sampleWave = (field: WaveField, latitude: number, longitude: number): Readonly<{ height: number; period: number; directionFrom?: number | null }> | null => {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const y = (field.firstLatitude - latitude) / field.increment;
   if (y < 0 || y > field.height - 1) return null;
@@ -58,6 +60,7 @@ export const sampleWave = (field: WaveField, latitude: number, longitude: number
   let totalWeight = 0;
   let height = 0;
   let period = 0;
+  let east = 0, north = 0, directionWeight = 0;
   for (const corner of corners) {
     if (corner.weight === 0) continue;
     const cornerHeight = field.waveHeight[corner.index]!;
@@ -66,6 +69,19 @@ export const sampleWave = (field: WaveField, latitude: number, longitude: number
     totalWeight += corner.weight;
     height += cornerHeight * corner.weight;
     period += cornerPeriod * corner.weight;
+    const direction = field.waveDirection?.[corner.index];
+    if (direction !== undefined && Number.isFinite(direction) && direction >= 0 && direction <= 360) {
+      const radians = direction * Math.PI / 180;
+      east += Math.sin(radians) * corner.weight;
+      north += Math.cos(radians) * corner.weight;
+      directionWeight += corner.weight;
+    }
   }
-  return totalWeight > 0 ? { height: height / totalWeight, period: period / totalWeight } : null;
+  if (totalWeight === 0) return null;
+  const reading = { height: height / totalWeight, period: period / totalWeight };
+  if (!field.waveDirection) return reading;
+  // Circular averaging handles north correctly; opposite, cancelling directions are undefined.
+  const directionFrom = height > 0 && directionWeight > 0 && Math.hypot(east, north) / directionWeight > 1e-6
+    ? ((Math.atan2(east, north) * 180 / Math.PI) + 360) % 360 : null;
+  return { ...reading, directionFrom };
 };

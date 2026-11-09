@@ -133,16 +133,18 @@ decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRu
   const rowFor = (param: string): IndexRow | undefined => index.value.find((row) => row.param === param && row.levtype === "sfc");
   const uRow = rowFor(layer === "wind" ? "10u" : "swh");
   const vRow = rowFor(layer === "wind" ? "10v" : "mwp");
+  const directionRow = layer === "waves" ? rowFor("mwd") : undefined;
   const gustRow = rowFor("10fg") ?? rowFor("10fg3");
   if (!uRow || !vRow) {
     decoderScope.postMessage({ key, ok: false, error: { kind: "index", detail: `${layer === "wind" ? "10 m wind" : "Wave height or period"} fields missing` } });
     return;
   }
   const url = forecastUrl(run, step, "grib2", layer);
-  const [uBytes, vBytes, gustBytes] = await Promise.all([
+  const [uBytes, vBytes, gustBytes, directionBytes] = await Promise.all([
     downloadField(url, uRow),
     downloadField(url, vRow),
     layer === "wind" && gustRow ? downloadField(url, gustRow) : Promise.resolve(null),
+    directionRow ? downloadField(url, directionRow) : Promise.resolve(null),
   ]);
   const failed = [uBytes, vBytes].find((item) => !item.ok);
   if (failed && !failed.ok) { decoderScope.postMessage({ key, ok: false, error: failed.error }); return; }
@@ -150,6 +152,7 @@ decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRu
 
   const u = await decodeField(uBytes.value, `u-${key}`);
   const v = await decodeField(vBytes.value, `v-${key}`);
+  const direction = directionBytes?.ok ? await decodeField(directionBytes.value, `direction-${key}`) : null;
   const gust = gustBytes?.ok ? await decodeField(gustBytes.value, `gust-${key}`) : null;
   const bad = [u, v].find((item) => !item.ok);
   if (bad && !bad.ok) { decoderScope.postMessage({ key, ok: false, error: bad.error }); return; }
@@ -159,6 +162,9 @@ decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRu
     decoderScope.postMessage({ key, ok: false, error: { kind: "decode", detail: "Forecast grids do not match" } });
     return;
   }
+  const sameGrid = (other: FieldValues): boolean => other.width === u.value.width && other.height === u.value.height &&
+    other.firstLatitude === u.value.firstLatitude && other.firstLongitude === u.value.firstLongitude && other.increment === u.value.increment;
+  const waveDirection = direction?.ok && sameGrid(direction.value) ? direction.value.values : undefined;
   const grid = {
     run, step, width: u.value.width, height: u.value.height,
     firstLatitude: u.value.firstLatitude, firstLongitude: u.value.firstLongitude,
@@ -166,8 +172,9 @@ decoderScope.onmessage = async (event: MessageEvent<{ key: string; run: WorkerRu
   };
   const field = layer === "wind"
     ? { ...grid, kind: "wind", u: u.value.values, v: v.value.values, gust: gust?.ok ? gust.value.values : null }
-    : { ...grid, kind: "waves", waveHeight: u.value.values, wavePeriod: v.value.values };
+    : { ...grid, kind: "waves", waveHeight: u.value.values, wavePeriod: v.value.values, waveDirection };
   const transfer: Transferable[] = [u.value.values.buffer, v.value.values.buffer];
+  if (waveDirection) transfer.push(waveDirection.buffer);
   if (gust?.ok) transfer.push(gust.value.values.buffer);
   decoderScope.postMessage({ key, ok: true, field }, transfer);
 };

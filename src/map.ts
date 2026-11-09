@@ -168,8 +168,11 @@ export const createWindMap = (
     flag.style.left = `${position.x}px`;
     flag.style.top = `${position.y}px`;
     flag.style.setProperty("--flag-panel-left", `${panelLeft}px`);
-    flag.style.setProperty("--flag-rise", `${Math.min(118, Math.max(78, position.y - 85))}px`);
-    flag.classList.toggle("flag-below", position.y < 190);
+    const panelHeight = flag.querySelector(".flag-panel")?.getBoundingClientRect().height ?? 85;
+    const below = position.y < panelHeight + 90 && size.y - position.y > position.y;
+    const space = below ? size.y - position.y : position.y;
+    flag.style.setProperty("--flag-rise", `${Math.min(118, Math.max(24, space - panelHeight - 12))}px`);
+    flag.classList.toggle("flag-below", below);
   };
   map.on("move zoom resize", positionFlag);
   map.on("click", (event: L.LeafletMouseEvent) =>

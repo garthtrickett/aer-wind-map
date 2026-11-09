@@ -1,12 +1,11 @@
 import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
-import type { WindField } from "./wind.ts";
 import { waveColor, type ForecastField } from "./wave.ts";
 import { windColor } from "./renderer-canvas.ts";
 
 type View = Readonly<{ center: Readonly<{ lat: number; lng: number }>; zoom: number }>;
 type Surface = Readonly<{ gl: WebGL2RenderingContext; program: WebGLProgram; texture: WebGLTexture; vao: WebGLVertexArrayObject }>;
 type Renderer = Readonly<{ setField: (field: ForecastField | null) => void; redraw: () => void }>;
-type ParticleRenderer = Readonly<{ setField: (field: WindField | null) => void; redraw: () => void }>;
+type ParticleRenderer = Readonly<{ setField: (field: ForecastField | null) => void; redraw: () => void }>;
 
 const worldCenter = (center: View["center"]): Readonly<{ x: number; y: number }> => {
   const latitude = Math.max(-85.05112878, Math.min(center.lat, 85.05112878));
@@ -77,6 +76,7 @@ const particleVertex = `#version 300 es
   layout(location = 0) in vec3 seed;
   uniform float u_time;
   uniform float u_pixelRatio;
+  uniform bool u_waveMode;
   out vec2 direction;
   out float opacity;
   ${common}
@@ -85,16 +85,19 @@ const particleVertex = `#version 300 es
     vec2 wind = windAt(screen);
     float speed = length(wind);
     direction = speed > .3 ? vec2(wind.x, -wind.y) / speed : vec2(1.0, 0.0);
-    float age = fract(u_time / 3.2 + seed.z);
-    vec2 position = screen + direction * min(3.0, max(.45, speed * .13)) * age * 190.0;
+    float lifetime = u_waveMode ? 4.8 : 3.2;
+    float age = fract(u_time / lifetime + seed.z);
+    float distance = u_waveMode ? 145.0 : min(3.0, max(.45, speed * .13)) * 190.0;
+    vec2 position = screen + direction * distance * age;
     gl_Position = vec4(position / u_viewport * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
-    gl_PointSize = 19.0 * u_pixelRatio;
-    opacity = speed < .3 || isnan(speed) || isinf(speed) ? 0.0 : min(.86, (1.0 - age) * 2.9);
+    gl_PointSize = (u_waveMode ? 25.0 : 19.0) * u_pixelRatio;
+    opacity = speed < .3 || isnan(speed) || isinf(speed) ? 0.0 : (u_waveMode ? sin(age * 3.14159265) * .78 : min(.86, (1.0 - age) * 2.9));
   }
 `;
 
 const particleFragment = `#version 300 es
   precision highp float;
+  uniform bool u_waveMode;
   in vec2 direction;
   in float opacity;
   out vec4 outColor;
@@ -103,11 +106,21 @@ const particleFragment = `#version 300 es
     return length(point - (start + edge * clamp(dot(point-start, edge) / dot(edge, edge), 0.0, 1.0)));
   }
   void main() {
-    vec2 point = (gl_PointCoord - .5) * 19.0;
+    vec2 point = (gl_PointCoord - .5) * (u_waveMode ? 25.0 : 19.0);
     vec2 local = vec2(dot(point, direction), dot(point, vec2(-direction.y, direction.x)));
     float distance = min(segmentDistance(local, vec2(-5.0, 0.0), vec2(5.0, 0.0)),
       min(segmentDistance(local, vec2(5.0, 0.0), vec2(1.0, -3.0)),
           segmentDistance(local, vec2(5.0, 0.0), vec2(1.0, 3.0))));
+    if (u_waveMode) {
+      // Three short curved crests, perpendicular to travel, with a brighter leading edge.
+      float bend = local.y * local.y * .025;
+      float crests = min(abs(local.x + bend + 4.0), min(abs(local.x + bend), abs(local.x + bend - 4.0)));
+      float endFade = 1.0 - smoothstep(6.0, 10.0, abs(local.y));
+      float stroke = 1.0 - smoothstep(.45, 1.55, crests);
+      float lead = mix(.4, 1.0, smoothstep(-6.0, 5.0, local.x));
+      outColor = vec4(vec3(.94, 1.0, 1.0), stroke * endFade * lead * opacity);
+      return;
+    }
     float shadow = 1.0 - smoothstep(1.4, 3.8, distance);
     float line = 1.0 - smoothstep(.35, 1.15, distance);
     outColor = vec4(mix(vec3(.02, .12, .17), vec3(1.0), line), max(shadow * .2, line) * opacity);
@@ -144,7 +157,7 @@ const surface = (gl: WebGL2RenderingContext, vertex: string, fragment: string): 
   return { gl, program, texture, vao };
 };
 
-const uploadWind = (surface: Surface, field: WindField, values: Float32Array): void => {
+const uploadWind = (surface: Surface, field: ForecastField, values: Float32Array): void => {
   const { gl } = surface;
   gl.bindTexture(gl.TEXTURE_2D, surface.texture);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, field.width, field.height, 0, gl.RG, gl.FLOAT, values);
@@ -333,7 +346,7 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Par
 
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const started = performance.now();
-  let field: WindField | null = null;
+  let field: ForecastField | null = null;
   let frame = 0;
   let particleCount = 0;
   let seedWidth = 0;
@@ -401,18 +414,20 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Par
       }
       seedView = { center, zoom: view.zoom };
       useView(particles, field, view, width, height);
+      gl.uniform1i(gl.getUniformLocation(particles.program, "u_waveMode"), field.kind === "waves" ? 1 : 0);
       gl.uniform1f(gl.getUniformLocation(particles.program, "u_time"), reducedMotion.matches ? 0 : (now - started) / 1000);
       gl.uniform1f(gl.getUniformLocation(particles.program, "u_pixelRatio"), arrows.width / width);
       gl.drawArrays(gl.POINTS, 0, particleCount);
     }
-    if (!reducedMotion.matches && !document.hidden) frame = requestAnimationFrame(paint);
+    if (field && !reducedMotion.matches && !document.hidden) frame = requestAnimationFrame(paint);
   };
   const requestPaint = (): void => {
     if (frame) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(paint);
   };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) requestPaint(); });
-  if (reducedMotion.matches) map.on("moveend", requestPaint);
+  map.on("move", requestPaint);
+  reducedMotion.addEventListener("change", requestPaint);
   return {
     setField: (next) => {
       field = next;
@@ -420,9 +435,18 @@ const createParticleOverlay = (map: MapLibreMap, arrows: HTMLCanvasElement): Par
       seedView = null;
       if (next) {
         const vectors = new Float32Array(next.width * next.height * 2);
-        for (let index = 0; index < next.u.length; index++) {
-          vectors[index * 2] = next.u[index]!;
-          vectors[index * 2 + 1] = next.v[index]!;
+        for (let index = 0; index < next.width * next.height; index++) {
+          if (next.kind === "wind") {
+            vectors[index * 2] = next.u[index]!;
+            vectors[index * 2 + 1] = next.v[index]!;
+          } else {
+            const from = next.waveDirection?.[index];
+            const valid = from !== undefined && Number.isFinite(from) && from >= 0 && from <= 360 &&
+              next.waveHeight[index]! > .05 && Number.isFinite(next.wavePeriod[index]);
+            const angle = (from ?? 0) * Math.PI / 180;
+            vectors[index * 2] = valid ? -Math.sin(angle) : Number.NaN;
+            vectors[index * 2 + 1] = valid ? -Math.cos(angle) : Number.NaN;
+          }
         }
         uploadWind(particles, next, vectors);
       }
@@ -471,7 +495,7 @@ export const createWebGLWindRenderer = (map: MapLibreMap, arrows: HTMLCanvasElem
       field = next;
       revision++;
       if (next && resources) uploadField(resources, next);
-      particleOverlay.setField(next?.kind === "wind" ? next : null);
+      particleOverlay.setField(next);
       map.triggerRepaint();
     },
     redraw: () => {

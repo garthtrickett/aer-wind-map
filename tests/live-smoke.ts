@@ -244,8 +244,8 @@ try {
   if (!await page.locator(".legend").innerText().then((text) => text.includes("WAVES + SWELL HEIGHT"))) {
     throw new Error("Wave layer did not update the legend");
   }
-  if (!await page.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
-    throw new Error("Wind arrows remained visible over the wave layer");
+  if (await page.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
+    throw new Error("Wave crests canvas is hidden over the wave layer");
   }
   if (await colorSnapshot(page) === windColorBeforeSwitch) throw new Error("Wave layer retained the wind colors");
   await page.locator("#map").click({ position: { x: 430, y: 450 } });
@@ -253,6 +253,10 @@ try {
   if (!waveFlag.includes("m") || !waveFlag.includes("s period") || waveFlag.includes("No data")) {
     throw new Error(`Wave flag lacks height or period: ${waveFlag}`);
   }
+  if (!await page.locator(".flag-wave-direction").innerText().then((text) => text.includes("from") && text.includes("°"))) {
+    throw new Error("Live ECMWF wave flag lacks its mean direction");
+  }
+  console.log(`Live wave flag: ${await page.locator(".flag-reading").innerText()}`);
   await page.getByRole("button", { name: "Open forecast details" }).click();
   const waveModal = await page.getByRole("dialog", { name: "Waves at this location" }).innerText();
   if (!waveModal.includes("Mean wave period") || !waveModal.includes("both wind waves and swell")) {
@@ -337,6 +341,8 @@ try {
     const reduced = await browser.newPage({ reducedMotion: "reduce" });
     await reduced.goto(base, { waitUntil: "domcontentloaded" });
     await reduced.getByText("Live forecast").waitFor({ timeout: 45_000 });
+    // Canvas screenshots include the background. Isolate particles from late map tile loads.
+    if (webgl2) await reduced.addStyleTag({ content: "#map { background: #000 !important; } #map .maplibregl-canvas, #map .leaflet-control-container { visibility: hidden !important; }" });
     await reduced.waitForTimeout(500);
     const before = await arrowSnapshot(reduced);
     await reduced.waitForTimeout(250);
@@ -441,8 +447,8 @@ try {
       const y = Math.floor(450 * canvas.height / canvas.clientHeight);
       return (canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3] ?? 0) > 0;
     }, null, { timeout: 10_000 });
-    if (!await fallback.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
-      throw new Error("Canvas fallback retained wind arrows in Waves mode");
+    if (await fallback.locator("#wind-arrows").evaluate((canvas: HTMLCanvasElement) => canvas.hidden)) {
+      throw new Error("Canvas fallback wave crests canvas is hidden");
     }
     await fallback.close();
   }

@@ -1,3 +1,4 @@
+import { flagSwellView } from "./flag-swell-view.ts";
 import { conditionSourceLabel } from "./history.ts";
 import { telegramView } from "./telegram-view.ts";
 import { accountView } from "./account-view.ts";
@@ -29,7 +30,9 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
   const reading = state.layer === "wind" && wind
     ? html`<span class="flag-speed"><strong>${wind.speed.toFixed(1)}</strong><span>m/s</span></span><span class="flag-bearing">from ${compassDirection(wind.directionFrom)}</span>`
     : state.layer === "waves" && waves
-      ? html`<span class="flag-speed"><strong>${waves.height.toFixed(1)}</strong><span>m</span></span><span class="flag-bearing">${waves.period.toFixed(1)} s period</span>`
+      ? html`<span class="flag-speed"><strong>${waves.height.toFixed(1)}</strong><span>m</span></span><span class="flag-wave-meta"><span class="flag-bearing">${waves.period.toFixed(1)} s period</span>
+          <span class="flag-wave-direction">${waves.directionFrom !== null && waves.directionFrom !== undefined ? html`<span aria-hidden="true" class="flag-direction-arrow" style=${`transform:rotate(${waves.directionFrom + 180}deg)`}>↑</span>
+            from ${compassDirection(waves.directionFrom)} · ${Math.round(waves.directionFrom)}°` : "Direction unavailable"}</span></span>`
       : html`<span class="flag-waiting">${state.phase === "failed" ? "Unavailable" : state.phase === "ready" ? "No data here" : `Loading ${state.layer === "wind" ? "wind" : "waves"}…`}</span>`;
   const openWithKeyboard = (event: MouseEvent): void => {
     if (event.detail === 0) propose({ kind: "detailsOpened" });
@@ -42,6 +45,7 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
       <button class="flag-grab" type="button" data-flag-drag aria-label="Drag forecast flag or open details" @click=${openWithKeyboard}>
         <span class="flag-caption">${state.layer === "wind" ? "Wind" : "Waves"} <span aria-hidden="true">≋</span></span>
         <span class="flag-reading">${reading}</span>
+        ${state.layer === "waves" ? flagSwellView(state) : nothing}
       </button>
       <button class="flag-expand" type="button" aria-label="Open forecast details" @click=${() => propose({ kind: "detailsOpened" })}>⌄</button>
       <button class="flag-dismiss" type="button" aria-label="Remove forecast flag" @click=${() => propose({ kind: "selectionCleared" })}>×</button>
@@ -219,7 +223,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             <p class="gust-note">Gust is the maximum since the previous forecast output.</p>
           ` : waves ? html`
             <div class="primary-reading"><strong>${waves.height.toFixed(1)}</strong><span>m<br />Significant wave height</span></div>
-            <div class="detail-grid"><div><span>Mean wave period</span><strong>${waves.period.toFixed(1)} s</strong></div></div>
+            <div class="detail-grid"><div><span>Mean wave period</span><strong>${waves.period.toFixed(1)} s</strong></div>
+              <div><span>Combined waves from</span><strong>${waves.directionFrom === undefined || waves.directionFrom === null ? "Unavailable" : `${compassDirection(waves.directionFrom)} · ${Math.round(waves.directionFrom)}°`}</strong></div></div>
             <p class="gust-note">Height and period include both wind waves and swell. They do not isolate the primary swell.</p>
           ` : html`<p class="modal-loading">${busy ? `Loading ${state.layer === "wind" ? "wind" : "waves"} at this time…` : "Forecast data is unavailable here."}</p>`}
           <button class="history-open" type="button" @click=${() => propose({ kind: "historyOpened" })}>Explore historical swell and wind →</button>

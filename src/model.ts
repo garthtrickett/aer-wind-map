@@ -499,7 +499,9 @@ export const present = (state: State, proposal: Proposal): State => {
   }
   const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
   const wayback = alignWayback(next.wayback, next.selected, next.basemap === "wayback");
-  const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : null, conditionSource(next.history.criteria));
+  const waveFlag = next.layer === "waves" && !next.history.open ? next.selected : null;
+  const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : waveFlag,
+    next.history.open ? conditionSource(next.history.criteria) : waveFlag ? "swell" : conditionSource(next.history.criteria));
   return dayLookup === next.dayLookup && wayback === next.wayback && compassForecast === next.compassForecast ? next : { ...next, dayLookup, wayback, compassForecast };
 };
 

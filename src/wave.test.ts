@@ -45,3 +45,22 @@ test("keeps masked points and missing wave-period pairs empty", () => {
   assert.equal(sampleWave(coast, 1, 1), null);
   assert.equal(sampleWave(coast, 1, 0.5), null);
 });
+
+test("circular wave directions cross north, preserve coastal masks and reject cancelling bearings", () => {
+  const north = { ...field, waveDirection: new Float32Array([350, 10, 90, 90, 350, 10, 90, 90]) };
+  const reading = sampleWave(north, .5, .5)!;
+  assert.ok(reading.directionFrom !== null && Math.min(reading.directionFrom!, 360 - reading.directionFrom!) < 1e-5);
+  const opposed = { ...north, waveDirection: new Float32Array([90, 270, 90, 90, 90, 270, 90, 90]) };
+  assert.equal(sampleWave(opposed, .5, .5)?.directionFrom, null);
+  const missing = { ...north, waveDirection: new Float32Array(8).fill(NaN) };
+  assert.equal(sampleWave(missing, .5, .5)?.directionFrom, null);
+  const flat = { ...north, waveHeight: new Float32Array(8) };
+  assert.equal(sampleWave(flat, .5, .5)?.directionFrom, null);
+});
+
+test("wave crests travel opposite the model's from bearing", async () => {
+  const { waveTravel } = await import("./wave-motion.ts");
+  assert.ok(Math.abs(waveTravel(180).y + 1) < 1e-8, "southerly waves travel north on screen");
+  assert.ok(Math.abs(waveTravel(90).x + 1) < 1e-8, "easterly waves travel west");
+  assert.ok(Math.abs(waveTravel(0).y - 1) < 1e-8);
+});

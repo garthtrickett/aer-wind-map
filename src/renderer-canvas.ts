@@ -1,3 +1,4 @@
+import { waveTravel, waveVisualSpeed } from "./wave-motion.ts";
 import type * as L from "leaflet";
 import { sampleWind } from "./wind.ts";
 import { sampleWave, waveColor, type ForecastField } from "./wave.ts";
@@ -130,8 +131,21 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
     arrowContext.stroke();
   };
 
+  const drawCrests = (x: number, y: number, dx: number, dy: number, opacity: number): void => {
+    arrowContext.save();
+    arrowContext.translate(x, y);
+    arrowContext.rotate(Math.atan2(dy, dx));
+    for (let crest = -1; crest <= 1; crest++) {
+      arrowContext.globalAlpha = opacity * (crest === 1 ? 1 : crest === 0 ? .65 : .35);
+      arrowContext.beginPath();
+      arrowContext.moveTo(crest * 4 - 1.5, -7);
+      arrowContext.quadraticCurveTo(crest * 4 + 1.5, 0, crest * 4 - 1.5, 7);
+      arrowContext.stroke();
+    }
+    arrowContext.restore();
+  };
   const animate = (now: number): void => {
-    frame = requestAnimationFrame(animate);
+    frame = field && !document.hidden && !reducedMotion.matches ? requestAnimationFrame(animate) : 0;
     if (moving || zooming) { lastFrame = now; return; }
     const { width, height } = size();
     if (arrowsPreviewed) {
@@ -147,7 +161,7 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
       previewShift = { x: 0, y: 0, scale: 1 };
     }
     arrowContext.clearRect(0, 0, width, height);
-    if (!field || field.kind !== "wind" || document.hidden || width === 0 || height === 0) return;
+    if (!field || document.hidden || width === 0 || height === 0) return;
     const delta = Math.min((now - (lastFrame || now)) / 16.7, 2);
     lastFrame = now;
     const target = Math.min(650, Math.max(180, Math.round(width * height / 1900)));
@@ -162,22 +176,32 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
 
     for (const particle of particles) {
       const location = map.containerPointToLatLng([particle.x, particle.y]);
-      const wind = sampleWind(field, location.lat, location.lng);
-      if (!wind || wind.speed < 0.3 || particle.age > 190 || particle.x < -10 || particle.x > width + 10 || particle.y < -10 || particle.y > height + 10) {
+      const wind = field.kind === "wind" ? sampleWind(field, location.lat, location.lng) : null;
+      const wave = field.kind === "waves" ? sampleWave(field, location.lat, location.lng) : null;
+      const life = field.kind === "waves" ? 220 : 190;
+      const valid = field.kind === "wind" ? wind && wind.speed >= .3
+        : wave && wave.height > .05 && wave.period > 0 && wave.directionFrom !== undefined && wave.directionFrom !== null;
+      if (!valid || particle.age > life || particle.x < -10 || particle.x > width + 10 || particle.y < -10 || particle.y > height + 10) {
         Object.assign(particle, makeParticle(width, height));
         continue;
       }
-      const distance = reducedMotion.matches ? 0 : Math.min(3, Math.max(0.45, wind.speed * 0.13)) * delta;
-      const dx = wind.u / wind.speed;
-      const dy = -wind.v / wind.speed;
-      particle.x += dx * distance;
-      particle.y += dy * distance;
+      const direction = wind ? { x: wind.u / wind.speed, y: -wind.v / wind.speed } : waveTravel(wave!.directionFrom!);
+      const distance = reducedMotion.matches ? 0 : (wind ? Math.min(3, Math.max(.45, wind.speed * .13)) : waveVisualSpeed(wave!.period)) * delta;
+      particle.x += direction.x * distance;
+      particle.y += direction.y * distance;
       if (!reducedMotion.matches) particle.age += delta;
-      drawArrow(particle.x, particle.y, dx, dy, reducedMotion.matches ? 0.75 : Math.min(0.86, (190 - particle.age) / 65));
+      if (wave) drawCrests(particle.x, particle.y, direction.x, direction.y, reducedMotion.matches ? .7 : Math.sin(particle.age / life * Math.PI) * .78);
+      else drawArrow(particle.x, particle.y, direction.x, direction.y, reducedMotion.matches ? .75 : Math.min(.86, (life - particle.age) / 65));
     }
     arrowContext.globalAlpha = 1;
   };
 
+  const requestMotion = (): void => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(animate);
+  };
+  document.addEventListener("visibilitychange", requestMotion);
+  reducedMotion.addEventListener("change", requestMotion);
   const cancelColor = (): void => {
     colorRevision++;
     if (colorFrame) cancelAnimationFrame(colorFrame);
@@ -211,6 +235,7 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
   const finishMove = (): void => {
     moving = false;
     if (!zooming) requestColor();
+    requestMotion();
   };
   map.on("movestart", startMove);
   map.on("zoomstart", () => { zooming = true; cancelColor(); });
@@ -236,7 +261,8 @@ export const createWindRenderer = (map: L.Map, color: HTMLCanvasElement, arrows:
         colorContext.clearRect(0, 0, color.width, color.height);
         arrowContext.clearRect(0, 0, arrows.clientWidth, arrows.clientHeight);
       } else requestColor();
+      requestMotion();
     },
-    redraw: requestColor,
+    redraw: () => { requestColor(); requestMotion(); },
   };
 };

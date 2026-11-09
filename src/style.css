@@ -186,7 +186,6 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .saved-spots-empty, .saved-spots-error, .saved-spots-foot { margin-top: 11px; font-size: 11px; line-height: 1.45; }
 .saved-spots-empty, .saved-spots-foot { color: #a9c9ca; }
 .saved-spots-error { color: #ffd7c8; }
-.saved-spot-icon { position: relative; }
 .saved-spot-icon span { position: absolute; left: 2px; top: 1px; display: grid; place-items: center; width: 30px; height: 30px; border: 3px solid #fff; border-radius: 50%; background: #165b6b; color: white; font-size: 9px; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .saved-spot-wind span { background: #137a8a; }
 .saved-spot-swell span { background: #e4a322; color: #153943; }
@@ -714,3 +713,9 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .wave-history-source .history-years label { flex: 1 1 220px; min-width: 0; max-width: 100%; }
 .wave-history-source select { max-width: 100%; }
 .wave-history-source .history-message { overflow-wrap: anywhere; }
+
+.flag-wave-meta { display: grid; gap: 4px; white-space: normal; }
+.flag-wave-direction, .flag-swell-direction { display: flex; align-items: center; gap: 5px; color: #d4e6e1; font-size: 11px; }
+.flag-direction-arrow { display: inline-block; font-size: 17px; line-height: 1; transform-origin: center; }
+.flag-swell { display: grid; gap: 5px; padding-top: 9px; margin-top: 9px; border-top: 1px solid #ffffff29; font-size: 11px; color: #b9d6ce; }
+.flag-swell > strong { color: #fff; font-size: 13px; font-weight: 600; }

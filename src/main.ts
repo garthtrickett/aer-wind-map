@@ -54,7 +54,6 @@ const accounts = createAccountClient({ storage: () => window.localStorage,
   changed: (panel, spots, resetSession) => dispatch({ kind: "accountChanged", panel, spots, resetSession }) });
 let accountGeneration = 0;
 let displayedField: ForecastField | null = null;
-let selectedPoint: State["selected"] = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
 let alertSignature = "";
 let nextAlertRefreshAt = 0;
@@ -247,8 +246,12 @@ const runEffect = (effect: Effect): void => {
     const controller = new AbortController();
     compassController = controller; compassRequest = effect.request;
     dispatch({ kind: "compassForecastStarted", request: effect.request });
-    void loadCompassForecast(effect.point, effect.source, controller.signal).then((result) =>
-      dispatch({ kind: "compassForecastCompleted", request: effect.request, result, checkedAt: Date.now() }));
+    const timer = window.setTimeout(() => {
+      if (controller.signal.aborted) return;
+      void loadCompassForecast(effect.point, effect.source, controller.signal).then((result) =>
+        dispatch({ kind: "compassForecastCompleted", request: effect.request, result, checkedAt: Date.now() }));
+    }, 250);
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
     return;
   }
   if (effect.kind === "loadWayback") {
@@ -409,7 +412,7 @@ function dispatch(proposal: Proposal): void {
     catch { /* Sync status remains visible; server monitoring is already durable. */ }
   }
   colorCanvas.hidden = windMap.maplibre !== null || !state.weatherOverlay;
-  arrowsCanvas.hidden = state.layer === "waves" || !state.weatherOverlay;
+  arrowsCanvas.hidden = !state.weatherOverlay;
   if (state.basemap !== previous.basemap || state.satellite.data !== previous.satellite.data ||
     selectedCapture(state.wayback) !== selectedCapture(previous.wayback)) {
     const capture = selectedCapture(state.wayback);
@@ -431,10 +434,8 @@ function dispatch(proposal: Proposal): void {
     displayedField = visibleField;
     windRenderer.setField(displayedField);
   }
-  if (selectedPoint !== state.selected) {
-    selectedPoint = state.selected;
-    windMap.select(selectedPoint);
-  }
+  // Async swell readings can change the panel height without changing the point.
+  windMap.select(state.selected);
   const coordinatesSelected = proposal.kind === "placeSearchRequested" && state.selected !== previous.selected;
   if ((proposal.kind === "placeSearchResultSelected" || coordinatesSelected) && state.selected && state.selected !== previous.selected) {
     const zoom = proposal.kind === "placeSearchResultSelected" ? previous.placeSearch.places[proposal.index].zoom : 14;
