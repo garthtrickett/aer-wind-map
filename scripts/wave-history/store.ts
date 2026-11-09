@@ -46,6 +46,26 @@ export function openWaveStore(path: string, limits: ArchiveLimits = defaultArchi
       } catch (error) { db.exec("ROLLBACK"); throw error; }
     },
     release(owner: string) { db.prepare("DELETE FROM worker WHERE owner=?").run(owner); },
+    runnable(concurrency: number, busy: ReadonlySet<string>): Job[] {
+      const capacity = Math.max(0, concurrency - busy.size);
+      const active = db.prepare("SELECT * FROM months WHERE state IN ('submitting','polling','downloading') ORDER BY updated").all() as Job[];
+      const selected = active.filter((job) => job.state !== "submitting" && !busy.has(job.key)).slice(0, capacity);
+      let slots = Math.min(capacity - selected.length, Math.max(0, concurrency - active.length));
+      if (slots <= 0) return selected;
+      const queued = (db.prepare("SELECT * FROM months WHERE state='queued' ORDER BY updated,key").all() as Job[]).filter((job) => !busy.has(job.key));
+      const cell = (job: Job) => `${job.latitude}:${job.longitude}`;
+      const counts = new Map<string, number>();
+      for (const job of active) counts.set(cell(job), (counts.get(cell(job)) ?? 0) + 1);
+      // Give other locations a slot before adding more requests for the same location.
+      while (slots-- > 0 && queued.length) {
+        let first = 0;
+        for (let index = 1; index < queued.length; index++)
+          if ((counts.get(cell(queued[index])) ?? 0) < (counts.get(cell(queued[first])) ?? 0)) first = index;
+        const job = queued.splice(first, 1)[0];
+        selected.push(job); counts.set(cell(job), (counts.get(cell(job)) ?? 0) + 1);
+      }
+      return selected;
+    },
     jobs: () => db.prepare("SELECT * FROM months WHERE state IN ('queued','polling','downloading') ORDER BY CASE WHEN state='queued' THEN 1 ELSE 0 END, updated LIMIT 1").get() as Job | undefined,
     progress(keys: readonly MonthKey[], configured: boolean): ArchiveProgress {
       const rows = keys.map((item) => get(item.key));
@@ -53,6 +73,7 @@ export function openWaveStore(path: string, limits: ArchiveLimits = defaultArchi
         pending: rows.filter((r) => r && ["queued", "submitting", "polling", "downloading"].includes(r.state)).length,
         failed: rows.filter((r) => r?.state === "failed").length, missing: rows.filter((r) => !r).length,
         active: rows.find((r) => r && ["submitting", "polling", "downloading"].includes(r.state))?.key ?? null,
+        activeCount: rows.filter((r) => r && ["submitting", "polling", "downloading"].includes(r.state)).length,
         error: rows.find((r) => r?.error)?.error ?? null };
     },
     months: (keys: readonly MonthKey[]): EcwamMonth[] => keys.flatMap((item) => {

@@ -10,5 +10,6 @@ export type EcwamMonth = Readonly<{
 export type ArchiveProgress = Readonly<{
   configured: boolean; total: number; ready: number; pending: number; failed: number; missing: number;
   active: string | null; error: string | null;
+  activeCount?: number;
 }>;
 export type ArchiveReply = Readonly<{ progress: ArchiveProgress; months?: readonly EcwamMonth[] }>;

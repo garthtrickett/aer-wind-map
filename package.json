@@ -29,7 +29,7 @@
     "smoke:telegram": "node tests/telegram-smoke.ts",
     "test:accounts": "node --test scripts/accounts/accounts.test.ts src/account-sync.test.ts src/account.test.ts",
     "smoke:accounts": "node tests/accounts-smoke.ts",
-    "test:wave-history": "node --test scripts/wave-history/wave-history.test.ts"
+    "test:wave-history": "node --test scripts/wave-history/wave-history.test.ts scripts/wave-history/worker.test.ts"
   },
   "dependencies": {
     "@esri/wayback-core": "1.1.0",

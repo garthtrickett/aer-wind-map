@@ -24,6 +24,8 @@ export function waveHistoryControls(history: HistoryPanel, propose: (proposal: P
         <strong>${progress.ready}/${progress.total} UTC months cached</strong>
         ${progress.pending ? html`<p>${progress.pending} months downloading or queued. First downloads can take 20–30 minutes per month.
           A full year or multi-year range can take many hours. You can close Aer; downloads continue on the server. Available months appear as they finish.</p>` : nothing}
+        ${progress.pending && progress.activeCount !== undefined ? html`<p>${progress.activeCount} month requests submitted or downloading for this location; ${Math.max(0, progress.pending - progress.activeCount)} waiting in Aer.
+          Aer submits several requests concurrently. ECMWF controls how many run at once.</p>` : nothing}
         ${progress.ready < progress.total ? html`<p>Percentages use downloaded days only. Unavailable months show —. Full-year comparisons need all months.</p>` : nothing}
         ${progress.failed ? html`<p>${progress.failed} archive requests need attention. ${progress.error}</p>` : nothing}
         ${history.archivePrepare && history.phase === "failed" ? html`<p role="alert">${history.error?.detail ?? "History preparation could not start. Please try again."}</p>` : nothing}
