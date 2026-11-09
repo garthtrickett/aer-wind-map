@@ -1,3 +1,4 @@
+import type { WaveHistorySource, SwellPartition } from "./wave-history-types.ts";
 import { validAlertRules, validForecastLookAhead, type AlertDayRule } from "./alert-rules.ts";
 import { validSpotLinks } from "./spot-links.ts";
 import { validHistoryMapZoom } from "./history-map-settings.ts";
@@ -12,6 +13,8 @@ export type SavedSpot = Readonly<{
   point: Point;
   startYear: number;
   endYear: number;
+  historyWaveSource?: WaveHistorySource;
+  historySwellPartition?: SwellPartition;
   criteria: HistoryCriteria;
   alertEnabled: boolean;
   alertMinDays: number;
@@ -51,6 +54,8 @@ export const isSavedSpot = (value: unknown): value is SavedSpot => {
     Number.isInteger(value.startYear) && (value.startYear as number) >= 2022 &&
     Number.isInteger(value.endYear) && (value.endYear as number) <= lastCompleteHistoryYear &&
     (value.endYear as number) >= (value.startYear as number) && (value.endYear as number) - (value.startYear as number) <= 4 &&
+    (value.historyWaveSource === undefined || ["mfwam", "ecwam"].includes(value.historyWaveSource as string)) &&
+    (value.historySwellPartition === undefined || ["primary", "secondary"].includes(value.historySwellPartition as string)) &&
     validCriteria(value.criteria as HistoryCriteria);
 };
 

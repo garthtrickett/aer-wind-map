@@ -488,3 +488,58 @@ Saved presets remain local; monitor snapshots persist on the server.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for data and state boundaries.
 For imagery sources and Google Earth's historical imagery button, see the
 [satellite imagery research note](docs/satellite-imagery.md).
+
+### Direct ECMWF hourly swell history
+
+The historical panel offers **ECMWF ECWAM · hourly hindcast** alongside the existing
+MFWAM source. Existing saved spots keep MFWAM. Source and primary/secondary swell
+selection are saved with the spot and sync through accounts. Forecast alerts and
+the separate day lookup retain their existing data sources.
+
+This uses the public CY50R1 research experiments
+[ijxo (2019–2023)](https://apps.ecmwf.int/ifs-experiments/rd/ijxo/) and
+[iocj (2024–2025)](https://apps.ecmwf.int/ifs-experiments/rd/iocj/), CC BY 4.0.
+These are hourly ECWAM hindcasts with corrected ERA5 atmospheric forcing and
+altimeter assimilation, **not archived operational forecasts or the old ERA5
+wave reanalysis**. The app currently offers complete years from 2022 to 2025.
+Output is sampled on a 0.125° grid from the approximately 14 km model. Nearshore
+bathymetry remains unresolved; put swell markers offshore.
+
+Both partitions are retrieved together: 140121/122/123 (first swell height,
+direction, period), 140124/125/126 (second swell height, direction, period).
+ECWAM period is Tm−1,0; existing MFWAM historical period is Tm01. The same numeric
+period threshold is not an equivalent filter between models. CSV exports name
+the source, selected component and period definition and retain both triples.
+A zero-height component counts as available data but cannot qualify as swell.
+
+Set server-only `ECMWF_API_EMAIL` and `ECMWF_API_KEY` from the registered
+[ECMWF Web API](https://api.ecmwf.int/v1/key/) account. This is a different key
+from Copernicus CDS. Configure an absolute `AER_WAVE_HISTORY_DB`, or use the
+Railway volume default `/data/aer-wave-history.sqlite`. Nothing is placed in
+`VITE_*` variables. The runtime needs Node 24 and production `netcdfjs`.
+
+Opening a marker reads the cache without starting archive requests. **Prepare
+missing ECMWF history** requires an authenticated account and same-origin POST.
+The server deduplicates monthly grid-cell requests, limits the queue to 128
+months and new requests to 64 months per account per 24 hours, and runs one
+provider job at a time. First downloads can take 20–30 minutes **per month**;
+a multi-year range can take many hours. Both components share one download.
+Monthly results appear incrementally; percentages count downloaded usable days,
+not missing months. Until the range is complete, the displayed best month may
+reflect uneven coverage. The app requests adjoining UTC months where published,
+so local calendar dates join correctly; 2026 is not available as an end boundary.
+
+SQLite stores the upstream receipt before polling. A four-minute renewable
+worker lease excludes overlapping replicas during deployments. Browser polling
+stops when the view closes; server work continues. Restarted workers resume known
+receipts. An interrupted or uncertain submission without a receipt is marked
+failed and **never automatically resubmitted**. Inspect the account's ECMWF
+requests before resolving such a failure, to avoid a duplicate submission.
+Provider results are deleted only after validated data is committed to the cache.
+
+`npm run test:wave-history` checks real packed NetCDF values, UTC joins, absent
+components, persistence, queue deduplication, worker exclusion, uncertain sends,
+and HTTP authentication/origin restrictions. `node tests/wave-history-smoke.ts`
+checks source/component controls, saved settings, CSV and desktop/mobile layouts
+against a real extracted month fixture with mocked transport. The fixture's
+0.25° validation cell is explicitly separate from the production 0.125° cache.

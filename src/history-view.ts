@@ -1,3 +1,4 @@
+import { waveHistoryControls } from "./wave-history-view.ts";
 import { compassReadingAt } from "./compass-forecast.ts";
 import { compassForecastView } from "./compass-forecast-view.ts";
 import type { CompassForecast } from "./compass-forecast-model.ts";
@@ -142,7 +143,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
     catalog.findIndex((other) => other.id === spot.id) === index);
   const setLink = (id: string, checked: boolean): void => propose({ kind: "savedSpotLinksChanged",
     ids: checked ? [...history.linkedSpotIds, id] : history.linkedSpotIds.filter((other) => other !== id) });
-  const summary = history.phase === "ready" && history.data ? summarizeHistory(history.data, criteria) : null;
+  const summary = (history.phase === "ready" || history.historyWaveSource === "ecwam") && history.data ? summarizeHistory(history.data, criteria) : null;
   const ranked = summary?.months.filter((month) => month.qualifyingDays > 0)
     .sort((a, b) => b.percent - a.percent || b.qualifyingDays - a.qualifyingDays || a.month - b.month) ?? [];
   const best = ranked[0] ?? null;
@@ -151,9 +152,10 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
   const localClock = history.data ? new Intl.DateTimeFormat("en", {
     timeZone: history.data.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }) : null;
-  const startOptions = Array.from({ length: lastCompleteHistoryYear - 2021 }, (_, index) => 2022 + index)
+  const historyLastYear = history.historyWaveSource === "ecwam" ? Math.min(2025, lastCompleteHistoryYear) : lastCompleteHistoryYear;
+  const startOptions = Array.from({ length: historyLastYear - 2021 }, (_, index) => 2022 + index)
     .filter((year) => year <= history.endYear && history.endYear - year <= 4);
-  const endOptions = Array.from({ length: lastCompleteHistoryYear - 2021 }, (_, index) => 2022 + index)
+  const endOptions = Array.from({ length: historyLastYear - 2021 }, (_, index) => 2022 + index)
     .filter((year) => year >= history.startYear && year - history.startYear <= 4);
 
   return html`
@@ -235,6 +237,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
               </select></label>
               <span>Up to five complete years</span>
             </div>
+            ${waveHistoryControls(history, propose)}
             <form class="history-save" @submit=${(event: Event) => { event.preventDefault(); saveSpot(false); }}>
               <label for="history-spot-name">Name this spot and season</label>
               <div class="history-save-actions">
@@ -285,14 +288,14 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     : "Browser storage is unavailable. This spot was not saved."}</p>` : nothing}
             </form>
           </div>
-          ${history.phase === "loading" || history.phase === "needsData" ? html`
+          ${(history.phase === "loading" || history.phase === "needsData") && !history.data ? html`
             <div class="history-message" role="status">Loading hourly condition history for ${history.startYear}–${history.endYear}…</div>`
             : history.phase === "failed" ? html`
               <div class="history-message" role="alert"><strong>Historical data could not be loaded.</strong>
-                <p>${history.error?.kind === "invalid" ? "The archive returned incomplete data." : "Please check your connection and try again."}</p>
+                <p>${history.historyWaveSource === "ecwam" ? history.error?.detail : history.error?.kind === "invalid" ? "The archive returned incomplete data." : "Please check your connection and try again."}</p>
                 <button class="secondary-button" @click=${() => propose({ kind: "historyRetry" })}>Try again</button></div>`
               : summary && history.data ? html`
-                ${best ? html`<div class="history-best"><span>BEST MONTH FOR THESE CONDITIONS</span>
+                ${best ? html`<div class="history-best"><span>${history.archiveProgress && history.archiveProgress.ready < history.archiveProgress.total ? "BEST CACHED MONTH · PARTIAL HISTORY" : "BEST MONTH FOR THESE CONDITIONS"}</span>
                   <strong>${monthNames[best.month]}</strong>
                   <span>${best.qualifyingDays} of ${best.observedDays} usable days · ${best.percent.toFixed(0)}%</span></div>`
                   : html`<div class="history-message">${summary.months.some((month) => month.observedDays > 0)
@@ -312,7 +315,7 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                 </div>
                 ${selectedMonth === null ? nothing : html`
                   ${windDistributionView(monthlyWindDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth])}
-                  ${swellDistributionView(monthlySwellDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth])}
+                  ${swellDistributionView(monthlySwellDistribution(history.data, criteria, selectedMonth), monthNames[selectedMonth], history.data.swellPartition ?? "primary")}
                   <div class="history-days-head"><h3>${monthNames[selectedMonth]} windows</h3>
                     <span>${selectedDays.length} qualifying days across ${history.startYear}–${history.endYear}</span></div>
                   <div class="history-days">${selectedDays.length ? selectedDays.map((day) => html`
@@ -321,13 +324,17 @@ export const historyView = (history: HistoryPanel, propose: (proposal: Proposal)
                     : html`<p>No qualifying days in this month.</p>`}</div>`}
                 <p class="history-coverage">A usable day has at least 18 hours of data for the selected conditions.
                   Times are local to ${history.data.timezone}.
-                  ${conditionSource(criteria) !== "wind" ? html`Wave model cell: ${coordinates(history.data.waveGrid.latitude, history.data.waveGrid.longitude)}.` : nothing}
+                  ${conditionSource(criteria) !== "wind" && (history.historyWaveSource !== "ecwam" || (history.archiveProgress?.ready ?? 0) > 0) ? html`Wave model cell: ${coordinates(history.data.waveGrid.latitude, history.data.waveGrid.longitude)}.` : nothing}
                   ${conditionSource(criteria) !== "swell" ? html`Wind model cell: ${coordinates(history.data.windGrid.latitude, history.data.windGrid.longitude)}.` : nothing}</p>
                 <button class="history-download" type="button" @click=${() => propose({ kind: "historyDownloadRequested" })}>Download hourly CSV</button>
               ` : nothing}
-          <p class="history-source">Historical swell: Météo-France MFWAM via <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Open-Meteo Marine</a>.
+          <p class="history-source">${history.historyWaveSource === "ecwam" && conditionSource(criteria) !== "wind" ? html`Historical swell: ECMWF ECWAM CY50R1,
+            <a href="https://apps.ecmwf.int/ifs-experiments/rd/ijxo/" target="_blank" rel="noopener noreferrer">ijxo (2019–2023)</a> +
+            <a href="https://apps.ecmwf.int/ifs-experiments/rd/iocj/" target="_blank" rel="noopener noreferrer">iocj (2024–2025)</a>, CC BY 4.0.
+            Hourly research hindcast with corrected ERA5 atmospheric forcing, not the historical operational forecast archive.
+            Output grid 0.125°; native model resolution about 14 km. ${history.historySwellPartition === "secondary" ? "Secondary" : "Primary"} swell, period Tm−1,0.` : html`Historical swell: Météo-France MFWAM via <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Open-Meteo Marine</a>. MFWAM's source runs every 3 hours; intervening hourly values are interpolated. Period Tm01.`}
             Historical wind: ECMWF IFS via <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener noreferrer">Open-Meteo Archive</a>.
-            MFWAM's source runs every 3 hours; intervening hourly values are interpolated. These are model estimates for seasonal screening.</p>
+            These are model estimates for seasonal screening, not breaking-wave heights.</p>
         </div>
       </section>
     </div>`;

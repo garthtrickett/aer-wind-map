@@ -1,3 +1,4 @@
+import { createWaveHistoryRuntime } from "./scripts/wave-history/runtime.ts";
 import { createAlertRuntime } from "./scripts/alerts/runtime.ts";
 import { createAccountRuntime } from "./scripts/accounts/runtime.ts";
 import { defineConfig, loadEnv } from "vite";
@@ -11,7 +12,12 @@ export default defineConfig(({ mode }) => ({
       const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
       const accounts = createAccountRuntime(env);
       const alerts = createAlertRuntime(env, accounts);
-      server.httpServer?.once("close", () => { void alerts.stop().then(() => accounts.stop()); });
+      const waveHistory = createWaveHistoryRuntime(env, accounts.accountFor);
+      server.middlewares.use("/api/wave-history", (request, response) => {
+        const original = request.url; request.url = `/api/wave-history${request.url}`;
+        void waveHistory.handle(request, response).finally(() => { request.url = original; });
+      });
+      server.httpServer?.once("close", () => { void Promise.all([alerts.stop(), waveHistory.stop()]).then(() => accounts.stop()); });
       server.middlewares.use("/api/account", (request, response) => {
         const original = request.url;
         request.url = `/api/account${request.url}`;

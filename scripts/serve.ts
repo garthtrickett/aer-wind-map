@@ -1,3 +1,4 @@
+import { createWaveHistoryRuntime } from "./wave-history/runtime.ts";
 import { createAlertRuntime } from "./alerts/runtime.ts";
 import { createAccountRuntime } from "./accounts/runtime.ts";
 import { createReadStream } from "node:fs";
@@ -13,6 +14,7 @@ const observations = createObservationFeed();
 const buoyHistory = createBuoyHistoryFeed();
 const accounts = createAccountRuntime();
 const telegram = createAlertRuntime(process.env, accounts);
+const waveHistory = createWaveHistoryRuntime(process.env, accounts.accountFor);
 const types: Readonly<Record<string, string>> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -41,6 +43,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (pathname === "/api/wave-history") {
+    await waveHistory.handle(request, response);
+    return;
+  }
   if (pathname.startsWith("/api/account/")) {
     await accounts.handle(request, response);
     return;
@@ -90,7 +96,7 @@ server.listen(port, "0.0.0.0", () => process.stdout.write(`Aer listening on ${po
 
 const shutdown = () => {
   server.close();
-  void telegram.stop().then(() => { accounts.stop(); process.exit(0); });
+  void Promise.all([telegram.stop(), waveHistory.stop()]).then(() => { accounts.stop(); process.exit(0); });
 };
 process.once("SIGTERM", shutdown);
 process.once("SIGINT", shutdown);

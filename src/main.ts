@@ -1,3 +1,4 @@
+import { loadEcwamHistory } from "./ecwam-history.ts";
 import { loadCompassForecast } from "./compass-forecast.ts";
 import "leaflet/dist/leaflet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -62,6 +63,8 @@ let overlayKind: "details" | "history" | "observation" | null = null;
 let previousFocus: HTMLElement | null = null;
 let playTimer: number | null = null;
 let miniMap: Readonly<{ element: HTMLElement; latitude: number; longitude: number; zoom: number; remove: () => void; setZoom: (zoom: number) => void }> | null = null;
+let historyController: AbortController | null = null;
+let historyRequest: string | null = null;
 let dayController: AbortController | null = null;
 let dayRequest = -1;
 let waybackController: AbortController | null = null;
@@ -320,7 +323,13 @@ const runEffect = (effect: Effect): void => {
   }
   if (effect.kind === "loadHistory") {
     dispatch({ kind: "historyLoadStarted", key: effect.key });
-    void loadHistoricalSpot({ point: effect.point, startYear: effect.startYear, endYear: effect.endYear, conditions: effect.conditions }).then((result) => {
+    historyController?.abort();
+    const controller = new AbortController(); historyController = controller; historyRequest = effect.key;
+    const load = effect.waveSource === "ecwam" ? loadEcwamHistory({ ...effect, partition: effect.partition ?? "primary", prepare: effect.prepare ?? false,
+      signal: controller.signal, progress: (progress, data) => dispatch({ kind: "historyArchiveProgress", key: effect.key, progress, data }) })
+      : loadHistoricalSpot({ point: effect.point, startYear: effect.startYear, endYear: effect.endYear, conditions: effect.conditions });
+    void load.then((result) => {
+      if (controller.signal.aborted) return;
       dispatch(result.ok
         ? { kind: "historyLoaded", key: effect.key, data: result.value }
         : { kind: "historyFailed", key: effect.key, error: result.error });
@@ -390,6 +399,7 @@ function dispatch(proposal: Proposal): void {
       dispatch({ kind: "telegramRequested", action: "status" });
     });
   }
+  if (historyController && (!state.history.open || state.history.requestedKey !== historyRequest)) { historyController.abort(); historyController = null; }
   if (placeController && state.placeSearch.request !== placeRequest) { placeController.abort(); placeController = null; }
   if (compassController && state.compassForecast.request !== compassRequest) { compassController.abort(); compassController = null; }
   if (waybackController && state.wayback.request !== waybackRequest) { waybackController.abort(); waybackController = null; }

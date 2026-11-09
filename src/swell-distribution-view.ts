@@ -2,7 +2,7 @@ import { html, nothing, type TemplateResult } from "lit-html";
 import { distributionPercent as percentLabel } from "./distribution-view.ts";
 import { swellHeightBands, swellPeriodBands, type SwellDistribution } from "./swell-distribution.ts";
 
-export const swellDistributionView = (distribution: SwellDistribution | null, month: string): TemplateResult | typeof nothing => {
+export const swellDistributionView = (distribution: SwellDistribution | null, month: string, partition: "primary" | "secondary" = "primary"): TemplateResult | typeof nothing => {
   if (!distribution) return nothing;
   const { availableHours, expectedHours, includedHours, withGoodWind, cells } = distribution;
   const periodTotals = swellPeriodBands.map((_, column) => cells.reduce((total, row) => total + row[column], 0));
@@ -14,11 +14,11 @@ export const swellDistributionView = (distribution: SwellDistribution | null, mo
     ${withGoodWind ? html`<p class="distribution-subtitle">with good wind</p>` : nothing}
     ${availableHours ? html`
       <p class="distribution-note">Each cell is a percentage of all usable hours, 06:00–18:00 local time.
-        ${withGoodWind ? "Counts only hours passing your wind speed and direction settings, including the calm-wind allowance." : "All primary swell heights, periods and directions are included."}</p>
+        ${withGoodWind ? "Counts only hours passing your wind speed and direction settings, including the calm-wind allowance." : `All ${partition} swell heights, periods and directions are included.`}</p>
       <p class="distribution-scroll-hint">Scroll sideways to see all period bands.</p>
       <div class="distribution-scroll" role="region" aria-label="Swell height and period table" tabindex="0">
       <table class="distribution-table">
-        <caption>Primary swell height (m) × period (s). ${withGoodWind ? "With good wind. " : ""}Ranges include the lower bound and exclude the upper bound.
+        <caption>${partition === "secondary" ? "Secondary" : "Primary"} swell height (m) × period (s). ${withGoodWind ? "With good wind. " : ""}Ranges include the lower bound and exclude the upper bound.
           The All heights row totals each period column across all sizes.</caption>
         <thead><tr><th scope="col">Height ↓<br />Period →</th>${swellPeriodBands.map((band) => html`<th scope="col">${band.label}</th>`)}</tr></thead>
         <tbody>${swellHeightBands.map((band, row) => html`<tr><th scope="row">${band.label}</th>
@@ -42,6 +42,6 @@ export const swellDistributionView = (distribution: SwellDistribution | null, mo
     ` : html`<p class="distribution-note">No usable ${withGoodWind ? "paired swell and wind" : "swell height and period"} data for this month.</p>`}
     <p class="distribution-note">${availableHours.toLocaleString("en-GB")} of ${expectedHours.toLocaleString("en-GB")} possible hourly samples available.
       Missing data is excluded. This is an hourly distribution; the cards above count qualifying days.
-      Swell limits and minimum window do not filter this grid. Modelled primary swell, not breaking-wave height.</p>
+      Swell limits and minimum window do not filter this grid. Modelled ${partition} swell, not breaking-wave height.</p>
   </section>`;
 };

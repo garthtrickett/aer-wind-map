@@ -1,3 +1,4 @@
+import type { WaveHistorySource, SwellPartition, ArchiveProgress } from "./wave-history-types.ts";
 import { initialCompassForecast, alignCompassForecast, presentCompassForecast, compassForecastEffect, type CompassForecast, type CompassForecastProposal, type CompassForecastEffect } from "./compass-forecast-model.ts";
 import { alertRulesFor, forecastLookAhead, validForecastLookAhead, validAlertRules, type AlertDayRule } from "./alert-rules.ts";
 import { initialTelegram, presentTelegram, type TelegramPanel, type TelegramProposal } from "./telegram-model.ts";
@@ -39,6 +40,10 @@ export type HistoryPanel = Readonly<{
   shoreNormal: number | null;
   startYear: number;
   endYear: number;
+  historyWaveSource?: WaveHistorySource;
+  historySwellPartition?: SwellPartition;
+  archiveProgress?: ArchiveProgress | null;
+  archivePrepare?: boolean;
   criteria: HistoryCriteria;
   requestedKey: string | null;
   data: HistoricalData | null;
@@ -121,6 +126,9 @@ export type Proposal =
   | { readonly kind: "retry" }
   | { readonly kind: "historyOpened" }
   | { readonly kind: "historyClosed" }
+  | { readonly kind: "historyWaveSourceChanged"; readonly source: WaveHistorySource; readonly partition: SwellPartition }
+  | { readonly kind: "historyArchivePrepare" }
+  | { readonly kind: "historyArchiveProgress"; readonly key: string; readonly progress: ArchiveProgress; readonly data: HistoricalData | null }
   | { readonly kind: "historyYearsChanged"; readonly startYear: number; readonly endYear: number }
   | { readonly kind: "historyCriteriaChanged"; readonly criteria: HistoryCriteria }
   | { readonly kind: "historyMapZoomChanged"; readonly zoom: number }
@@ -176,8 +184,8 @@ export const initialState: State = {
 };
 
 export const fieldKey = (run: ForecastRun, step: number, layer: Layer = "wind"): string => `${run.id}:${layer}:${step}`;
-export const historyKey = (point: Point, startYear: number, endYear: number, conditions: ConditionSource = "both"): string =>
-  `${point.latitude}:${point.longitude}:${startYear}:${endYear}${conditions === "both" ? "" : `:${conditions}`}`;
+export const historyKey = (point: Point, startYear: number, endYear: number, conditions: ConditionSource = "both", source: WaveHistorySource = "mfwam", partition: SwellPartition = "primary"): string =>
+  `${point.latitude}:${point.longitude}:${startYear}:${endYear}${conditions === "both" ? "" : `:${conditions}`}${source === "ecwam" && conditions !== "wind" ? `:ecwam:${partition}` : ""}`;
 
 export { validCriteria, lastCompleteHistoryYear } from "./history.ts";
 
@@ -185,7 +193,7 @@ const selectionChanged = (state: State, point: Point): State => ({
   ...state, selected: point, modalOpen: false,
   observations: { ...state.observations, selectedId: null },
   history: { ...state.history, forecastPreview: resetForecastPreview(state.history.forecastPreview), open: false, point: null, phase: "needsData", requestedKey: null, data: null, error: null,
-    downloadRequested: false, savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", mapZoom: defaultHistoryMapZoom, shoreNormal: null, alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
+    downloadRequested: false, historyWaveSource: undefined, historySwellPartition: undefined, archiveProgress: null, archivePrepare: false, savedSpotId: null, linkedSpotIds: [], linkedCatalog: [], sourceSpotId: null, saveName: "", mapZoom: defaultHistoryMapZoom, shoreNormal: null, alertEnabled: false, alertRules: [{ minDays: 1, withinDays: 14 }], alertLookAheadDays: 14, saveFeedback: null },
 });
 
 const presentApp = (state: State, proposal: Proposal): State => {
@@ -263,6 +271,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "telegramSpotRestored": {
       if (proposal.readOnly) return { ...state, selected: proposal.spot.point, modalOpen: false, savedSpotsOpen: false,
         history: { ...state.history, open: true, point: proposal.spot.point, phase: "needsData", data: null,
+          historyWaveSource: proposal.spot.historyWaveSource, historySwellPartition: proposal.spot.historySwellPartition, archiveProgress: null, archivePrepare: false,
           startYear: proposal.spot.startYear, endYear: proposal.spot.endYear, criteria: proposal.spot.criteria, mapZoom: proposal.spot.mapZoom ?? defaultHistoryMapZoom, shoreNormal: proposal.spot.shoreNormal ?? null,
           requestedKey: null, error: null, selectedMonth: null, savedSpotId: null,
           linkedSpotIds: proposal.spot.linkedSpotIds ?? [], linkedCatalog: proposal.linkedSpots ?? [], downloadRequested: false, sourceSpotId: proposal.spot.id,
@@ -324,7 +333,7 @@ const presentApp = (state: State, proposal: Proposal): State => {
       if (!state.selected) return state;
       return { ...state, modalOpen: false, history: {
         ...state.history, open: true, point: state.selected, forecastPreview: resetForecastPreview(state.history.forecastPreview),
-        phase: state.history.data && state.history.point?.latitude === state.selected.latitude && state.history.point.longitude === state.selected.longitude
+        phase: state.history.historyWaveSource !== "ecwam" && state.history.data && state.history.point?.latitude === state.selected.latitude && state.history.point.longitude === state.selected.longitude
           ? "ready" : "needsData",
         requestedKey: null, error: null,
       } };
@@ -335,12 +344,15 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "savedSpotOpened": {
       const spot = state.savedSpots.find((item) => item.id === proposal.id);
       if (!spot) return state;
-      const sameData = state.history.data && state.history.point?.latitude === spot.point.latitude &&
+      const sameData = spot.historyWaveSource !== "ecwam" && state.history.data && state.history.point?.latitude === spot.point.latitude &&
         state.history.point.longitude === spot.point.longitude &&
         state.history.startYear === spot.startYear && state.history.endYear === spot.endYear &&
-        conditionSource(state.history.criteria) === conditionSource(spot.criteria);
+        conditionSource(state.history.criteria) === conditionSource(spot.criteria) &&
+        (state.history.historyWaveSource ?? "mfwam") === (spot.historyWaveSource ?? "mfwam") &&
+        (state.history.historySwellPartition ?? "primary") === (spot.historySwellPartition ?? "primary");
       return { ...state, selected: spot.point, modalOpen: false, savedSpotsOpen: false, history: {
         ...state.history, open: true, point: spot.point, forecastPreview: resetForecastPreview(state.history.forecastPreview), startYear: spot.startYear, endYear: spot.endYear,
+        historyWaveSource: spot.historyWaveSource, historySwellPartition: spot.historySwellPartition, archiveProgress: null, archivePrepare: false,
         criteria: spot.criteria, mapZoom: spot.mapZoom ?? defaultHistoryMapZoom, shoreNormal: spot.shoreNormal ?? null, phase: sameData ? "ready" : "needsData", data: sameData ? state.history.data : null,
         requestedKey: null, error: null, selectedMonth: null, downloadRequested: false,
         savedSpotId: spot.id, linkedSpotIds: spot.linkedSpotIds ?? [], linkedCatalog: [], sourceSpotId: null, saveName: spot.name, alertEnabled: spot.alertEnabled, alertRules: alertRulesFor(spot), alertLookAheadDays: forecastLookAhead(spot), saveFeedback: null,
@@ -366,7 +378,8 @@ const presentApp = (state: State, proposal: Proposal): State => {
       const name = history.saveName.trim();
       if (!name || name.length > 80) return { ...state, history: { ...history, saveFeedback: "nameRequired" } };
       const spot: SavedSpot = { id: proposal.id, name, point: history.point,
-        startYear: history.startYear, endYear: history.endYear, criteria: history.criteria, mapZoom: history.mapZoom, shoreNormal: history.shoreNormal,
+        startYear: history.startYear, endYear: history.endYear, criteria: history.criteria,
+        ...(history.historyWaveSource === "ecwam" ? { historyWaveSource: history.historyWaveSource, historySwellPartition: history.historySwellPartition ?? "primary" } : {}), mapZoom: history.mapZoom, shoreNormal: history.shoreNormal,
         alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays, alertRules: history.alertRules, alertLookAheadDays: history.alertLookAheadDays, linkedSpotIds: history.linkedSpotIds.filter((id) => id !== proposal.id) };
       // Shared phone links remain ephemeral until an explicit save. Preserve the
       // linked conditions then, without opting those dependency points into alerts.
@@ -430,18 +443,28 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "forecastAlertsDismissed": return { ...state, forecastAlertsDismissed: true };
     case "forecastAlertsShown": return { ...state, forecastAlertsDismissed: false };
     case "historyClosed": return { ...state, history: { ...state.history, open: false, requestedKey: null, downloadRequested: false, forecastPreview: resetForecastPreview(state.history.forecastPreview) } };
+    case "historyWaveSourceChanged":
+      if (!["mfwam", "ecwam"].includes(proposal.source) || !["primary", "secondary"].includes(proposal.partition)) return state;
+      return { ...state, history: { ...state.history, historyWaveSource: proposal.source, historySwellPartition: proposal.source === "ecwam" ? proposal.partition : "primary",
+        ...(proposal.source === "ecwam" ? { startYear: Math.min(state.history.startYear, 2025), endYear: Math.min(state.history.endYear, 2025) } : {}),
+        phase: "needsData", requestedKey: null, data: null, error: null, archiveProgress: null, archivePrepare: false, saveFeedback: null } };
+    case "historyArchivePrepare":
+      return state.history.historyWaveSource === "ecwam" ? { ...state, history: { ...state.history, phase: "needsData", requestedKey: null, error: null, archivePrepare: true } } : state;
+    case "historyArchiveProgress":
+      return state.history.open && state.history.requestedKey === proposal.key ? { ...state, history: { ...state.history,
+        archiveProgress: proposal.progress, data: proposal.data ?? state.history.data } } : state;
     case "historyYearsChanged":
       if (!Number.isInteger(proposal.startYear) || !Number.isInteger(proposal.endYear) ||
-        proposal.startYear < 2022 || proposal.endYear > lastCompleteHistoryYear ||
+        proposal.startYear < 2022 || proposal.endYear > (state.history.historyWaveSource === "ecwam" ? Math.min(2025, lastCompleteHistoryYear) : lastCompleteHistoryYear) ||
         proposal.startYear > proposal.endYear || proposal.endYear - proposal.startYear > 4) return state;
       if (proposal.startYear === state.history.startYear && proposal.endYear === state.history.endYear) return state;
       return { ...state, history: { ...state.history, startYear: proposal.startYear, endYear: proposal.endYear,
-        phase: "needsData", requestedKey: null, data: null, error: null, selectedMonth: null, saveFeedback: null } };
+        phase: "needsData", requestedKey: null, data: null, error: null, archiveProgress: null, archivePrepare: false, selectedMonth: null, saveFeedback: null } };
     case "historyCriteriaChanged": {
       if (!validCriteria(proposal.criteria)) return state;
       const changedSource = conditionSource(proposal.criteria) !== conditionSource(state.history.criteria);
       return { ...state, history: { ...state.history, criteria: proposal.criteria, saveFeedback: null,
-        ...(changedSource ? { phase: "needsData", requestedKey: null, data: null, error: null,
+        ...(changedSource ? { phase: "needsData", requestedKey: null, data: null, error: null, archivePrepare: false, archiveProgress: null,
           forecastPreview: resetForecastPreview(state.history.forecastPreview) } : {}) } };
     }
     case "historyMapZoomChanged":
@@ -456,8 +479,8 @@ const presentApp = (state: State, proposal: Proposal): State => {
     case "historyLoadStarted": return { ...state, history: { ...state.history, phase: "loading", requestedKey: proposal.key, error: null } };
     case "historyLoaded":
       if (!state.history.open || proposal.key !== state.history.requestedKey || !state.history.point ||
-        proposal.key !== historyKey(state.history.point, state.history.startYear, state.history.endYear, conditionSource(state.history.criteria))) return state;
-      return { ...state, history: { ...state.history, phase: "ready", data: proposal.data, requestedKey: null, error: null } };
+        proposal.key !== historyKey(state.history.point, state.history.startYear, state.history.endYear, conditionSource(state.history.criteria), state.history.historyWaveSource, state.history.historySwellPartition)) return state;
+      return { ...state, history: { ...state.history, phase: "ready", data: proposal.data, requestedKey: null, error: null, archivePrepare: false } };
     case "historyFailed":
       if (!state.history.open || proposal.key !== state.history.requestedKey) return state;
       return { ...state, history: { ...state.history, phase: "failed", requestedKey: null, error: proposal.error } };
@@ -490,11 +513,12 @@ export type Effect =
   | { readonly kind: "loadForecastPreview"; readonly point: Point; readonly spot: SavedSpot; readonly catalog: readonly SavedSpot[]; readonly request: number }
   | { readonly kind: "discover"; readonly layer: Layer }
   | { readonly kind: "load"; readonly run: ForecastRun; readonly step: number; readonly key: string; readonly layer: Layer }
-  | { readonly kind: "loadHistory"; readonly conditions: ConditionSource; readonly point: Point; readonly startYear: number; readonly endYear: number; readonly key: string }
+  | { readonly kind: "loadHistory"; readonly waveSource?: WaveHistorySource; readonly partition?: SwellPartition; readonly prepare?: boolean; readonly conditions: ConditionSource; readonly point: Point; readonly startYear: number; readonly endYear: number; readonly key: string }
   | { readonly kind: "downloadHistory"; readonly data: HistoricalData; readonly criteria: HistoryCriteria };
 
 export const draftSavedSpot = (history: HistoryPanel): SavedSpot => ({
   id: history.savedSpotId ?? history.sourceSpotId ?? "draft", name: history.saveName || "This spot",
+  ...(history.historyWaveSource === "ecwam" ? { historyWaveSource: history.historyWaveSource, historySwellPartition: history.historySwellPartition ?? "primary" } : {}),
   point: history.point!, criteria: history.criteria, startYear: history.startYear, endYear: history.endYear, mapZoom: history.mapZoom, shoreNormal: history.shoreNormal,
   alertEnabled: history.alertEnabled, alertMinDays: history.alertRules[0].minDays,
   alertRules: history.alertRules, alertLookAheadDays: history.alertLookAheadDays, linkedSpotIds: history.linkedSpotIds,
@@ -513,7 +537,8 @@ export const nap = (state: State): Effect | null => {
   }
   if (state.history.open && state.history.phase === "needsData" && state.history.point) {
     return { kind: "loadHistory", conditions: conditionSource(state.history.criteria), point: state.history.point, startYear: state.history.startYear,
-      endYear: state.history.endYear, key: historyKey(state.history.point, state.history.startYear, state.history.endYear, conditionSource(state.history.criteria)) };
+      endYear: state.history.endYear, key: historyKey(state.history.point, state.history.startYear, state.history.endYear, conditionSource(state.history.criteria), state.history.historyWaveSource, state.history.historySwellPartition),
+      ...(state.history.historyWaveSource === "ecwam" && conditionSource(state.history.criteria) !== "wind" ? { waveSource: "ecwam" as const, partition: state.history.historySwellPartition ?? "primary", prepare: state.history.archivePrepare ?? false } : {}) };
   }
   if (state.history.open && state.history.alertEnabled && state.history.point && state.history.forecastPreview.phase === "idle") {
     return { kind: "loadForecastPreview", point: state.history.point, spot: draftSavedSpot(state.history),
