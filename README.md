@@ -2,7 +2,9 @@
 
 Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color covers
 the visible world, and arrows move toward the wind's destination. The main map
-zooms to level 20 for close inspection of streets and coastlines. Click the map
+zooms to level 20 for close inspection of streets and coastlines. A distance
+scale at the bottom right updates as you zoom or pan, showing kilometres or
+metres at the map's centre latitude. Click the map
 to place a wind flag, drag the flag to inspect another point, and click its card
 or amber button to open wind speed, source direction, gust, forecast time, and
 coordinates. The Wind/Waves switch shows ECMWF's combined wind waves and swell

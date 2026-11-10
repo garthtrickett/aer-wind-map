@@ -74,6 +74,7 @@ export const createWindMap = (
     }).addTo(map);
   }
   L.control.zoom({ position: "topright" }).addTo(map);
+  L.control.scale({ position: "bottomright", imperial: false, maxWidth: 100 }).addTo(map);
   map.attributionControl.setPrefix(false);
   if (webgl2) map.attributionControl.addAttribution(
     '<a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
