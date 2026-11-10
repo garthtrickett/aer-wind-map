@@ -7,9 +7,6 @@ export type DayHour = Readonly<{
   swellHeight: number | null;
   swellPeriod: number | null;
   swellDirection: number | null;
-  waveHeight: number | null;
-  wavePeriod: number | null;
-  waveDirection: number | null;
   seaLevel: number | null;
 }>;
 export type DaySource = Readonly<{ grid: Point | null; issue: string | null }>;
@@ -31,7 +28,7 @@ type SourceResult = Readonly<{ ok: true; series: Series }> | Readonly<{ ok: fals
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const number = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const windFields = ["wind_speed_10m", "wind_direction_10m"];
-const waveFields = ["swell_wave_height", "swell_wave_period", "swell_wave_direction", "wave_height", "wave_period", "wave_direction"];
+const waveFields = ["swell_wave_height", "swell_wave_period", "swell_wave_direction"];
 
 const readSource = async (url: string, fields: readonly string[], fetcher: typeof fetch, signal: AbortSignal): Promise<SourceResult> => {
   try {
@@ -81,7 +78,7 @@ export const loadDay = async (point: Point, date: string, fetcher: typeof fetch 
     readSource(`https://marine-api.open-meteo.com/v1/marine?${new URLSearchParams({ ...common,
       models: "meteofrance_currents", hourly: "sea_level_height_msl" })}`, ["sea_level_height_msl"], fetcher, requestSignal),
   ]);
-  if (!wind.ok && !waves.ok && !tide.ok) return { ok: false, message: `Wind: ${wind.message} Waves: ${waves.message} Tide: ${tide.message}` };
+  if (!wind.ok && !waves.ok && !tide.ok) return { ok: false, message: `Wind: ${wind.message} Primary swell: ${waves.message} Tide: ${tide.message}` };
   const timezone = wind.ok ? wind.series.timezone : waves.ok ? waves.series.timezone : tide.ok ? tide.series.timezone : "UTC";
   const rows = (source: SourceResult) => new Map(source.ok ? source.series.time.map((time, index) => [time, index]) : []);
   const windRows = rows(wind), waveRows = rows(waves), tideRows = rows(tide);
@@ -92,8 +89,7 @@ export const loadDay = async (point: Point, date: string, fetcher: typeof fetch 
   const hours = times.map((time): DayHour => ({ time,
     windSpeed: value(wind, windRows.get(time), "wind_speed_10m"), windDirection: value(wind, windRows.get(time), "wind_direction_10m"),
     swellHeight: value(waves, waveRows.get(time), "swell_wave_height"), swellPeriod: value(waves, waveRows.get(time), "swell_wave_period"),
-    swellDirection: value(waves, waveRows.get(time), "swell_wave_direction"), waveHeight: value(waves, waveRows.get(time), "wave_height"),
-    wavePeriod: value(waves, waveRows.get(time), "wave_period"), waveDirection: value(waves, waveRows.get(time), "wave_direction"),
+    swellDirection: value(waves, waveRows.get(time), "swell_wave_direction"),
     seaLevel: value(tide, tideRows.get(time), "sea_level_height_msl"),
   }));
   const source = (result: SourceResult): DaySource => result.ok ? { grid: result.series.grid, issue: null } : { grid: null, issue: result.message };

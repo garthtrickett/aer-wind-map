@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
+import { currentPrimarySwellStep } from "./primary-swell.ts";
 import { historyCsv, loadHistoricalSpot } from "./history.ts";
 import { bearingFromPointer, type BearingHandle } from "./history-compass.ts";
 import { createHistoryMiniMap } from "./history-mini-map.ts";
@@ -343,7 +344,8 @@ const runEffect = (effect: Effect): void => {
     dispatch({ kind: "discoverStarted" });
     void discoverLatest(fetch, effect.layer).then((result) => {
       dispatch(result.ok
-        ? { kind: "runFound", run: result.value, layer: effect.layer }
+        ? { kind: "runFound", run: result.value, layer: effect.layer,
+          initialStep: effect.layer === "waves" ? currentPrimarySwellStep(result.value, Date.now()) : undefined }
         : { kind: "failed", key: null, layer: effect.layer, error: result.error });
     });
     return;
@@ -425,7 +427,7 @@ function dispatch(proposal: Proposal): void {
     displayedObservations = state.observations;
     if (previous.observations.data !== state.observations.data || previous.observations.buoys !== state.observations.buoys ||
       previous.observations.wind !== state.observations.wind || (previous.observations.zoom >= 5) !== (state.observations.zoom >= 5)) {
-      observationMarkers.update(state.observations.zoom >= 5 ? state.observations.data?.stations ?? [] : [], state.observations.buoys, state.observations.wind);
+      observationMarkers.update(state.observations.zoom >= 5 ? state.observations.data?.stations ?? [] : [], state.observations.wind);
     }
   }
 

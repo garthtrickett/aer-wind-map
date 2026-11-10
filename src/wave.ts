@@ -2,6 +2,7 @@ import type { ForecastRun, WindField } from "./wind.ts";
 
 export type WaveField = Readonly<{
   kind: "waves";
+  source: "mfwam-primary";
   run: ForecastRun;
   step: number;
   width: number;
@@ -11,7 +12,7 @@ export type WaveField = Readonly<{
   increment: number;
   waveHeight: Float32Array;
   wavePeriod: Float32Array;
-  /** Mean combined-wave bearing FROM true north, in degrees. */
+  /** Primary swell bearing FROM true north, in degrees. */
   waveDirection?: Float32Array;
 }>;
 

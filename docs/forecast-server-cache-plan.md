@@ -1,6 +1,6 @@
 # Aer forecast and hindcast storage plan
 
-Status: proposed implementation, 9 November 2026. No bucket has been provisioned.
+Status: proposed implementation, updated 10 November 2026 for primary-swell-only views. No bucket has been provisioned.
 
 ## Outcome
 
@@ -13,8 +13,7 @@ Historical ECWAM data already persists on the server. Extend that storage to a b
 | Data | Current path | Gap |
 | --- | --- | --- |
 | Global wind map | Browser downloads ECMWF GRIB ranges and decodes with ecCodes WASM | No durable forecast cache; timeline currently +3 to +72 hours |
-| Global combined wave map | ECMWF `swh`, `mwp`, `mwd`, decoded in browser | Same caching gap |
-| Primary swell in point flag | MFWAM via Open-Meteo, separate hourly point series | Different source from the ECMWF map; must remain labelled |
+| Global primary swell map and flag | MFWAM spatial OM byte ranges, decoded in a browser worker; only `swell_wave_height`, `swell_wave_period`, `swell_wave_direction` | No durable forecast cache; 0.167° display grid sampled from 0.083° native cells |
 | Historical primary and secondary swell | Persistent `/data/aer-wave-history.sqlite`, month and grid cell queue/cache | Stored on the server already; capacity should grow independently of the web volume |
 
 The hindcast cache key includes source/version, 0.125° output grid cell, year and UTC month. Both swell partitions are retained together and shared across users. Closing the browser does not cancel server downloads. Boundary months support joining local calendar dates. The CY50R1 research hindcast is distinct from historical operational forecasts.
@@ -27,20 +26,22 @@ Cloudflare R2 is a candidate for read-heavy traffic because direct egress is not
 
 ## Source and horizon
 
-- Start with the existing ECMWF 0.25° open data feed, using wind `10u`, `10v`, gust `10fg`/`10fg3`, and combined waves `swh`, `mwp`, `mwd`.
-- Use native steps 0–144 hours every 3 hours and 150–240 every 6 hours: 65 steps. Discover and verify each cycle's objects before accepting it; start with 00/12 UTC cycles.
+- Use ECMWF 0.25° open data for wind `10u`, `10v`, gust `10fg`/`10fg3`. Use MFWAM spatial OM files for the three primary-swell fields. Combined wave fields must not enter a published Aer layer.
+- For ECMWF wind, use native steps 0–144 hours every 3 hours and 150–240 every 6 hours: 65 steps. MFWAM primary swell has its own run and three-hour steps; discover its actual horizon independently. Verify each cycle's objects before accepting it; start with 00/12 UTC cycles.
 - Do not advertise interpolated values as native hourly forecasts. Show the run time, valid time, model and update age.
 - At step zero, inspect gust accumulation metadata: a zero-length interval is not proof of calm gusts.
-- Primary/secondary swell are not present in the sampled public wave indices. Cache the MFWAM primary swell point series separately and keep its source label. If another ECMWF partition forecast feed is added later, version the source explicitly.
+- Primary swell is absent from the sampled public ECMWF wave indices. Cache MFWAM primary-swell grids and point series with explicit run/source/version keys. Never fill missing primary swell with combined seas. Convert native OM propagation bearings to FROM bearings before publishing.
 - ECMWF now also advertises 0.1° data, released later than 0.25°. That is a separate future resolution/capacity decision; retain 0.25° for the first implementation.
 
 ECMWF's public origin is a short rolling archive, so Aer must capture each run while it is available. It is not a dependable way to retrieve a missed 2022–2025 run. Preserve attribution required by the data licence. [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data).
 
-### Finite source probe
+### Historical finite source probe (superseded wave-map source)
 
 On 9 November, `2026110812` returned valid wind and wave indices at steps 0, 3, 144, 150 and 240. `2026110900` was not yet published. All sampled wave indices contained `mwd`; none contained `swh1`, `mwp1`, `mwd1`. This verifies these sampled steps, not every step of every cycle.
 
-The +3 hour six-field GRIB payload total was 3,430,257 bytes. Multiplying by 65 gives roughly 213 MiB per run; actual compression varies by step and field. A decoded 1440 × 721 Float32 field is 4,152,960 bytes. Six fields × 65 steps occupy approximately 1.51 GiB uncompressed per run. Two published runs plus one incoming run would occupy about 4.52 GiB before database, temporary files or other application data. Measure compressed objects before setting retention.
+These measurements predate the primary-swell-only change and must not be used to size the MFWAM cache. Measure its three fields independently.
+
+The former +3 hour six-field GRIB payload total was 3,430,257 bytes. Multiplying by 65 gives roughly 213 MiB per run; actual compression varies by step and field. A decoded 1440 × 721 Float32 field is 4,152,960 bytes. Six fields × 65 steps occupy approximately 1.51 GiB uncompressed per run. Two published runs plus one incoming run would occupy about 4.52 GiB before database, temporary files or other application data. Measure compressed objects before setting retention.
 
 Private measurement receipt: `/home/gust/.local/state/aer-wave-ui-20261109/forecast-index-probe.json`.
 
@@ -98,7 +99,7 @@ This is a storage change: it does not change the hindcast model, period definiti
 - Restart during transfer, decode, upload and publication; recover without losing receipts or publishing partial runs.
 - Verify every advertised step and field, coastal masks, 0°/360° averaging, zero-step gust metadata, and matching flag/map valid times.
 - Demonstrate no upstream calls on a warm point or tile hit.
-- Demonstrate all 65 native steps through +240 hours; reject incomplete new cycles while serving the previous complete run.
+- Demonstrate ECMWF wind's 65 native steps through +240 hours and MFWAM primary swell's separately published native steps; reject incomplete new cycles while serving the previous complete run for that source.
 - Check browser cancellation, stale replies, bounded memory and eviction without removing the current/fallback run.
 - Measure targets on named devices/networks: warm point backend p95 below 200 ms; prefetched viewport/time changes around 300–500 ms; preserve at least 30 fps animation on the reference device. These are targets, not measured promises.
 - For hindcasts, compare both migrated monthly samples value-for-value, then confirm local calendar boundaries, reused requests, source labels and server persistence after restart.

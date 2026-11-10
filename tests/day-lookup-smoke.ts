@@ -88,7 +88,9 @@ try {
     await expect(first).toContainText("3.6 km/h");
     await expect(first).toContainText("N 355°");
     await expect(first).toContainText("1.2 m · 8.0 s");
-    await expect(first).toContainText("1.7 m · 6.0 s");
+    await expect(first).not.toContainText("1.7 m · 6.0 s");
+    await expect(page.locator(".day-lookup-table thead th")).toHaveText(["Local time", "Wind", "Primary swell", "Tide / sea level"]);
+    assert.ok(dayRequests.filter((url) => new URL(url).searchParams.get("models") === "meteofrance_wave").every((url) => new URL(url).searchParams.get("hourly") === "swell_wave_height,swell_wave_period,swell_wave_direction"));
     await expect(first.locator(".day-lookup-tide")).toContainText("-0.40 m");
     await expect(first.locator(".day-lookup-tide")).toContainText("Rising");
     await expect(page.locator(".day-tide-chart")).toContainText("mean sea level");
@@ -114,14 +116,14 @@ try {
 
     failWaves = true;
     await page.getByRole("button", { name: "Load day", exact: true }).click();
-    await expect(page.locator(".day-lookup-warning")).toContainText("Waves: Source unavailable");
+    await expect(page.locator(".day-lookup-warning")).toContainText("Primary swell: Source unavailable");
     await expect(page.locator(".day-lookup-table tbody tr").first()).toContainText("3.6 km/h");
-    await expect(page.locator(".day-lookup-table tbody tr").first()).not.toContainText("1.7 m");
+    await expect(page.locator(".day-lookup-table tbody tr").first()).not.toContainText("1.2 m");
     await expect(page.locator(".day-lookup-tide").first()).toContainText("-0.40 m");
     failWaves = false; failTide = true;
     await page.getByRole("button", { name: "Load day", exact: true }).click();
     await expect(page.locator(".day-lookup-warning")).toContainText("Tide: Source unavailable");
-    await expect(page.locator(".day-lookup-table tbody tr").first()).toContainText("1.7 m");
+    await expect(page.locator(".day-lookup-table tbody tr").first()).toContainText("1.2 m");
     await expect(page.locator(".day-lookup-tide").first()).toHaveText("——");
     await expect(page.locator(".day-tide-chart")).toHaveCount(0);
     failTide = false; nullValues = true;

@@ -21,7 +21,7 @@ const response = (value: unknown) => new Response(JSON.stringify(value), { statu
 const fetcher = (async (input) => response(String(input).includes("archive-api") ? wind()
   : String(input).includes("meteofrance_currents") ? tide() : waves())) as typeof fetch;
 
-test("day lookup requests only one date in local time and separates swell from combined waves", async () => {
+test("day lookup requests only one date in local time and requests primary swell only", async () => {
   const urls: URL[] = [];
   const result = await loadDay(point, date, (async (input) => {
     urls.push(new URL(String(input)));
@@ -32,7 +32,9 @@ test("day lookup requests only one date in local time and separates swell from c
   assert.equal(result.data.hours.length, 24);
   assert.equal(result.data.hours[0].windSpeed, 3.6);
   assert.equal(result.data.hours[0].swellHeight, 1.2);
-  assert.equal(result.data.hours[0].waveHeight, 1.7);
+  assert.equal("waveHeight" in result.data.hours[0], false);
+  const swellUrl = urls.find((url) => url.searchParams.get("models") === "meteofrance_wave")!;
+  assert.equal(swellUrl.searchParams.get("hourly"), "swell_wave_height,swell_wave_period,swell_wave_direction");
   assert.equal(result.data.hours[0].seaLevel, -1, "Negative heights relative to MSL are valid");
   assert.equal(result.data.tide.issue, null);
   assert.equal(urls.length, 3);
@@ -63,7 +65,7 @@ test("joins sources by UTC instant, preserving missing hours and values", async 
   assert.equal(result.data.hours[6].swellHeight, 1.2);
   assert.equal(result.data.hours[7].windDirection, 355);
   assert.equal(result.data.hours[7].swellHeight, null);
-  assert.equal(result.data.hours[7].waveHeight, 1.7);
+  assert.equal(result.data.hours[7].swellPeriod, 8);
 });
 
 test("keeps successful source when the other source fails", async () => {
@@ -73,7 +75,7 @@ test("keeps successful source when the other source fails", async () => {
     assert.ok(result.ok);
     assert.equal(result.data.hours.length, 24);
     assert.match((failed === "archive-api" ? result.data.wind : result.data.waves).issue!, /503/);
-    assert.equal(failed === "archive-api" ? result.data.hours[0].windSpeed : result.data.hours[0].waveHeight, null);
+    assert.equal(failed === "archive-api" ? result.data.hours[0].windSpeed : result.data.hours[0].swellHeight, null);
   }
 });
 
@@ -114,7 +116,7 @@ test("tide survives failed wind and waves, with its own grid and local timezone"
   assert.equal(result.data.hours.length, 24);
   assert.equal(result.data.hours[6].seaLevel, -.4);
   assert.equal(result.data.hours[6].windSpeed, null);
-  assert.equal(result.data.hours[6].waveHeight, null);
+  assert.equal(result.data.hours[6].swellHeight, null);
   assert.deepEqual(result.data.tide.grid, { latitude: 22.9583, longitude: 121.2917 });
 });
 
@@ -128,7 +130,7 @@ test("tide failures and all-null archives do not remove wind or waves or fabrica
     assert.ok(result.data.tide.issue);
     assert.equal(result.data.hours[6].seaLevel, null);
     assert.equal(result.data.hours[6].windSpeed, 3.6);
-    assert.equal(result.data.hours[6].waveHeight, 1.7);
+    assert.equal(result.data.hours[6].swellHeight, 1.2);
   }
 });
 

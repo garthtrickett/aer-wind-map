@@ -246,15 +246,14 @@ export const historyCsv = (data: HistoricalData, criteria: HistoryCriteria): str
   const value = (number: number | null): string => number === null ? "" : String(number);
   const clock = historyClock(data.timezone);
   const ecwam = data.waveSource === "ecwam";
-  const extraHeader = ecwam ? ",source,selected_component,period_definition,primary_height_m,primary_period_s,primary_from_degrees,secondary_height_m,secondary_period_s,secondary_from_degrees" : "";
+  const extraHeader = ecwam ? ",source,selected_component,period_definition" : "";
   const lines = ["time_utc,local_day,swell_height_m,swell_period_s,swell_from_degrees,wind_speed_ms,wind_from_degrees,meets_conditions" + extraHeader];
   for (const hour of data.hours) {
     lines.push([
       new Date(hour.time * 1000).toISOString(), hour.day, value(hour.swellHeight), value(hour.swellPeriod),
       value(hour.swellDirection), value(hour.windSpeed), value(hour.windDirection),
       withinHistoryHours(hour.time, clock) && hourMatchesCriteria(hour, criteria) ? "1" : "0",
-    ].concat(ecwam ? ["ECMWF_ECWAM_CY50R1_hindcast", data.swellPartition ?? "primary", "Tm-1_0",
-      ...[hour.primarySwell, hour.secondarySwell].flatMap((swell) => [value(swell?.height ?? null), value(swell?.period ?? null), value(swell?.direction ?? null)])] : []).join(","));
+    ].concat(ecwam ? ["ECMWF_ECWAM_CY50R1_hindcast", data.swellPartition ?? "primary", "Tm-1_0"] : []).join(","));
   }
   return `${lines.join("\n")}\n`;
 };

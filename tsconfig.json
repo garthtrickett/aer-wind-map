@@ -23,7 +23,7 @@
     "vite.config.ts"
   ],
   "exclude": [
-    "src/decoder.worker.ts",
+    "src/decoder.worker.ts", "src/primary-swell.worker.ts",
     "src/**/*.test.ts",
     "scripts/**/*.test.ts"
   ]

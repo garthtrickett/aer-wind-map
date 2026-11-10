@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "files": ["src/decoder.worker.ts"]
+  "files": ["src/decoder.worker.ts", "src/primary-swell.worker.ts"]
 }

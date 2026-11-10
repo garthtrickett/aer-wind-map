@@ -15,7 +15,7 @@ const arrows = document.querySelector<HTMLCanvasElement>("#wind-arrows")!;
 const map = createWindMap({ element, flag, onSelect: () => {}, onSavedSpotSelect: () => {}, onSatelliteError: () => {} });
 const renderer = createWindRenderer(map.map, map.maplibre, color, arrows);
 const size = 360 * 181;
-const wave: WaveField = { kind: "waves", run: { id: "2026110900", date: "20261109", hour: 0, startedAt: "2026-11-09T00:00:00Z" },
+const wave: WaveField = { kind: "waves", source: "mfwam-primary", run: { id: "2026110900", date: "20261109", hour: 0, startedAt: "2026-11-09T00:00:00Z" },
   step: 3, width: 360, height: 181, firstLatitude: 90, firstLongitude: 0, increment: 1,
   waveHeight: new Float32Array(size).fill(1.8), wavePeriod: new Float32Array(size).fill(11), waveDirection: new Float32Array(size).fill(180) };
 // A masked area in the northwest of the test view must not grow particle crests.
@@ -27,11 +27,9 @@ const spots: SavedSpot[] = Array.from({ length: 24 }, (_, index) => ({ id: `spot
 map.map.setView([26.4, 127.4], 8, { animate: false });
 map.setSavedSpots(spots);
 const point = { latitude: 26.5, longitude: 127.7 };
-const setFlag = (direction: number | null = 225) => {
-  const time = Date.parse(wave.run.startedAt) / 1000 + 3 * 3600;
-  render(flagView({ ...initialState, phase: "ready", layer: "waves", field: wave, run: wave.run, step: 3, selected: point,
-    compassForecast: { ...initialState.compassForecast, phase: "ready", point, source: "swell", data: { wind: null,
-      swell: { latitude: point.latitude, longitude: point.longitude, timezone: "UTC", time: [time], first: [1.4], second: [13], third: [direction] } } } }, () => {}), flag);
+const setFlag = (direction: number | null = 180) => {
+  wave.waveDirection!.fill(direction === null ? NaN : direction);
+  render(flagView({ ...initialState, phase: "ready", layer: "waves", field: wave, run: wave.run, step: 3, selected: point }, () => {}), flag);
   map.select(point);
 };
 setFlag();

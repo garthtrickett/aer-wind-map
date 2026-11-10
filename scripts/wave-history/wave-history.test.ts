@@ -131,17 +131,17 @@ test("joins UTC hours to local calendar days, preserves both components and vali
   const criteria = { ...defaultHistoryCriteria, conditions: "swell" as const, minSwellHeight: 0, minSwellPeriod: 0 };
   assert.equal(hourHasData(absent.hours[0], criteria), true);
   assert.equal(hourMatchesCriteria(absent.hours[0], criteria), false);
-  assert.match(historyCsv(secondary, criteria), /primary_height_m.*secondary_height_m/);
+  assert.doesNotMatch(historyCsv(secondary, criteria), /secondary_height_m/);
   assert.match(historyCsv(secondary, criteria), /ECMWF_ECWAM_CY50R1_hindcast,secondary,Tm-1_0/);
 });
-test("source and component survive save/reopen and stale source responses cannot replace current data", () => {
+test("source survives save/reopen, primary-only selection replaces legacy secondary, and stale responses are ignored", () => {
   let state = present(initialState, { kind: "locationSelected", point: { latitude: 23.36, longitude: 122.42 } });
   state = present(state, { kind: "historyOpened" });
   state = present(state, { kind: "historyWaveSourceChanged", source: "ecwam", partition: "secondary" });
   const effect = nap(state);
   assert.equal(effect?.kind, "loadHistory");
   if (effect?.kind !== "loadHistory") return;
-  assert.equal(effect.waveSource, "ecwam"); assert.equal(effect.partition, "secondary");
+  assert.equal(effect.waveSource, "ecwam"); assert.equal(effect.partition, "primary");
   state = present(state, { kind: "historyLoadStarted", key: effect.key });
   state = present(state, { kind: "savedSpotNameChanged", name: "Taiwan" });
   state = present(state, { kind: "savedSpotSaved", id: "taiwan" });
@@ -150,7 +150,7 @@ test("source and component survive save/reopen and stale source responses cannot
   const stale = present(state, { kind: "historyArchiveProgress", key: effect.key, progress: { configured: true, total: 13, ready: 1, pending: 12, failed: 0, missing: 0, active: null, error: null }, data: null });
   assert.equal(stale, state);
   state = present(state, { kind: "savedSpotOpened", id: "taiwan" });
-  assert.equal(state.history.historySwellPartition, "secondary");
+  assert.equal(state.history.historySwellPartition, "primary");
 });
 test("worker lease excludes overlapping replicas and retains known provider requests after expiry", () => {
   const { store, path, dir } = temporaryStore();

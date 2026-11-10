@@ -1,4 +1,3 @@
-import { flagSwellView } from "./flag-swell-view.ts";
 import { conditionSourceLabel } from "./history.ts";
 import { telegramView } from "./telegram-view.ts";
 import { accountView } from "./account-view.ts";
@@ -33,7 +32,7 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
       ? html`<span class="flag-speed"><strong>${waves.height.toFixed(1)}</strong><span>m</span></span><span class="flag-wave-meta"><span class="flag-bearing">${waves.period.toFixed(1)} s period</span>
           <span class="flag-wave-direction">${waves.directionFrom !== null && waves.directionFrom !== undefined ? html`<span aria-hidden="true" class="flag-direction-arrow" style=${`transform:rotate(${waves.directionFrom + 180}deg)`}>↑</span>
             from ${compassDirection(waves.directionFrom)} · ${Math.round(waves.directionFrom)}°` : "Direction unavailable"}</span></span>`
-      : html`<span class="flag-waiting">${state.phase === "failed" ? "Unavailable" : state.phase === "ready" ? "No data here" : `Loading ${state.layer === "wind" ? "wind" : "waves"}…`}</span>`;
+      : html`<span class="flag-waiting">${state.phase === "failed" ? "Unavailable" : state.phase === "ready" ? "No data here" : `Loading ${state.layer === "wind" ? "wind" : "primary swell"}…`}</span>`;
   const openWithKeyboard = (event: MouseEvent): void => {
     if (event.detail === 0) propose({ kind: "detailsOpened" });
   };
@@ -43,9 +42,9 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
     <button class="flag-point" type="button" data-flag-drag aria-label="Drag selected forecast point" @click=${openWithKeyboard}></button>
     <div class="flag-panel">
       <button class="flag-grab" type="button" data-flag-drag aria-label="Drag forecast flag or open details" @click=${openWithKeyboard}>
-        <span class="flag-caption">${state.layer === "wind" ? "Wind" : "Waves"} <span aria-hidden="true">≋</span></span>
+        <span class="flag-caption">${state.layer === "wind" ? "Wind" : "Primary swell"} <span aria-hidden="true">≋</span></span>
+        ${state.layer === "waves" ? html`<span class="flag-source">MFWAM</span>` : nothing}
         <span class="flag-reading">${reading}</span>
-        ${state.layer === "waves" ? flagSwellView(state) : nothing}
       </button>
       <button class="flag-expand" type="button" aria-label="Open forecast details" @click=${() => propose({ kind: "detailsOpened" })}>⌄</button>
       <button class="flag-dismiss" type="button" aria-label="Remove forecast flag" @click=${() => propose({ kind: "selectionCleared" })}>×</button>
@@ -84,11 +83,11 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
       </div>
       <div class="masthead-meta">
         <div class="status-line"><span class=${`status-dot ${busy ? "busy" : state.phase === "failed" ? "failed" : ""}`}></span>${status}</div>
-        <div class="model-line">ECMWF IFS · ${state.layer === "wind" ? "10 m wind" : "Waves + swell"}</div>
+        <div class="model-line">${state.layer === "wind" ? "ECMWF IFS · 10 m wind" : "MFWAM · Primary swell"}</div>
       </div>
       <div class="layer-switch" role="group" aria-label="Forecast layer">
         <button type="button" aria-pressed=${state.layer === "wind"} @click=${() => propose({ kind: "layerSelected", layer: "wind" })}>Wind</button>
-        <button type="button" aria-pressed=${state.layer === "waves"} @click=${() => propose({ kind: "layerSelected", layer: "waves" })}>Waves</button>
+        <button type="button" aria-pressed=${state.layer === "waves"} @click=${() => propose({ kind: "layerSelected", layer: "waves" })}>Swell</button>
       </div>
       <div class="map-tools"><button class="saved-spots-toggle" type="button" aria-expanded=${state.savedSpotsOpen}
         @click=${() => propose({ kind: "savedSpotsToggled" })}>Saved spots <span>${state.savedSpots.length}</span></button>
@@ -173,10 +172,10 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         <button class="secondary-button" @click=${() => propose({ kind: "retry" })}>Try again</button>
       </div>` : nothing}
 
-    ${state.selected ? nothing : html`<div class="map-hint">${state.layer === "wind" ? "Click anywhere to inspect the wind" : "Click the ocean to inspect the waves"}</div>`}
+    ${state.selected ? nothing : html`<div class="map-hint">${state.layer === "wind" ? "Click anywhere to inspect the wind" : "Click the ocean to inspect primary swell"}</div>`}
 
-    <section class="legend ${state.layer === "waves" ? "wave-legend" : ""}" aria-label=${state.layer === "wind" ? "Wind speed legend" : "Combined wave height legend"}>
-      <div class="legend-heading"><span>${state.layer === "wind" ? "WIND SPEED" : "WAVES + SWELL HEIGHT"}</span><span>${state.layer === "wind" ? "m/s" : "m"}</span></div>
+    <section class="legend ${state.layer === "waves" ? "wave-legend" : ""}" aria-label=${state.layer === "wind" ? "Wind speed legend" : "Primary swell height legend"}>
+      <div class="legend-heading"><span>${state.layer === "wind" ? "WIND SPEED" : "PRIMARY SWELL HEIGHT"}</span><span>${state.layer === "wind" ? "m/s" : "m"}</span></div>
       <div class="legend-ramp" aria-hidden="true"></div>
       <div class="legend-labels">${state.layer === "wind"
         ? html`<span>0</span><span>5</span><span>10</span><span>20</span><span>35+</span>`
@@ -208,7 +207,7 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
           <div class="details-head">
             <div>
               <div class="eyebrow">POINT FORECAST</div>
-              <h2 id="details-title">${state.layer === "wind" ? "Wind at this location" : "Waves at this location"}</h2>
+              <h2 id="details-title">${state.layer === "wind" ? "Wind at this location" : "Primary swell at this location"}</h2>
             </div>
             <button class="close-button" aria-label="Close details" @click=${() => propose({ kind: "modalClosed" })}>×</button>
           </div>
@@ -222,14 +221,14 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
             </div>
             <p class="gust-note">Gust is the maximum since the previous forecast output.</p>
           ` : waves ? html`
-            <div class="primary-reading"><strong>${waves.height.toFixed(1)}</strong><span>m<br />Significant wave height</span></div>
-            <div class="detail-grid"><div><span>Mean wave period</span><strong>${waves.period.toFixed(1)} s</strong></div>
-              <div><span>Combined waves from</span><strong>${waves.directionFrom === undefined || waves.directionFrom === null ? "Unavailable" : `${compassDirection(waves.directionFrom)} · ${Math.round(waves.directionFrom)}°`}</strong></div></div>
-            <p class="gust-note">Height and period include both wind waves and swell. They do not isolate the primary swell.</p>
-          ` : html`<p class="modal-loading">${busy ? `Loading ${state.layer === "wind" ? "wind" : "waves"} at this time…` : "Forecast data is unavailable here."}</p>`}
+            <div class="primary-reading"><strong>${waves.height.toFixed(1)}</strong><span>m<br />Primary swell height</span></div>
+            <div class="detail-grid"><div><span>Primary swell period</span><strong>${waves.period.toFixed(1)} s</strong></div>
+              <div><span>Primary swell from</span><strong>${waves.directionFrom === undefined || waves.directionFrom === null ? "Unavailable" : `${compassDirection(waves.directionFrom)} · ${Math.round(waves.directionFrom)}°`}</strong></div></div>
+            <p class="gust-note">Météo-France MFWAM primary swell. Map values use a 0.167° display grid sampled from the native 0.083° model. Heights are offshore model estimates, not breaking-wave heights.</p>
+          ` : html`<p class="modal-loading">${busy ? `Loading ${state.layer === "wind" ? "wind" : "primary swell"} at this time…` : "Forecast data is unavailable here."}</p>`}
           <button class="history-open" type="button" @click=${() => propose({ kind: "historyOpened" })}>Explore historical swell and wind →</button>
           ${dayLookupView(state.dayLookup, propose, now)}
-          <div class="details-footer"><span>Valid ${forecastTime}</span><span>ECMWF IFS</span></div>
+          <div class="details-footer"><span>Valid ${forecastTime}</span><span>${state.layer === "wind" ? "ECMWF IFS" : "MFWAM · Primary swell"}</span></div>
         </section>
       </div>` : nothing}
     ${historyView(state.history, propose, state.savedSpots, state.dayLookup, now, state.compassForecast, state.run ? validTime({ run: state.run, step: state.step }).getTime() / 1000 : null, state.placeSearch, state.account)}

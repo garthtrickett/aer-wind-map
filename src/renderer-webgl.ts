@@ -28,7 +28,8 @@ const common = `
     float latitude = degrees(atan(sinh(3.141592653589793 * (1.0 - 2.0 * world.y))));
     float longitude = world.x * 360.0 - 180.0;
     float x = mod((longitude - u_firstLongitude) / u_increment, u_grid.x);
-    float y = clamp((u_firstLatitude - latitude) / u_increment, 0.0, u_grid.y - 1.0);
+    float y = (u_firstLatitude - latitude) / u_increment;
+    if (y < 0.0 || y > u_grid.y - 1.0) return vec2(0.0);
     int x0 = int(floor(x));
     int x1 = (x0 + 1) % int(u_grid.x);
     int y0 = int(floor(y));
@@ -65,7 +66,8 @@ const colorFragment = `#version 300 es
     float latitude = degrees(atan(sinh(3.141592653589793 * (1.0 - 2.0 * world.y))));
     float longitude = world.x * 360.0 - 180.0;
     float x = mod((longitude - u_firstLongitude) / u_increment, u_grid.x);
-    float y = clamp((u_firstLatitude - latitude) / u_increment, 0.0, u_grid.y - 1.0);
+    float y = (u_firstLatitude - latitude) / u_increment;
+    if (y < 0.0 || y > u_grid.y - 1.0) { outColor = vec4(0.0); return; }
     outColor = texture(u_colors, vec2((x + .5) / u_grid.x, (y + .5) / u_grid.y));
   }
 `;

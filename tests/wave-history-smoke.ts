@@ -62,17 +62,17 @@ try {
     await expect(page.locator(".swell-distribution caption")).toContainText("Primary swell");
     await expect(page.locator(".history-source")).toContainText("CY50R1");
     assert.equal(posts, 0, "Opening or changing source must not submit archive downloads");
-    await page.getByLabel("Swell component", { exact: true }).selectOption("secondary");
-    await expect(page.locator(".swell-distribution caption")).toContainText("Secondary swell");
+    await expect(page.getByLabel("Swell component", { exact: true })).toHaveCount(0);
+    await expect(page.locator(".swell-distribution caption")).toContainText("Primary swell");
     await page.getByRole("button", { name: "Update saved spot", exact: true }).click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aer.saved-spots.v1")!).spots[0]);
-    assert.equal(saved.historySwellPartition, "secondary");
+    assert.equal(saved.historySwellPartition, "primary");
     const downloadEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download hourly CSV" }).click();
     const download = await downloadEvent; const path = await download.path(); assert.ok(path);
-    assert.match(await readFile(path, "utf8"), /ECMWF_ECWAM_CY50R1_hindcast,secondary,Tm-1_0/);
+    assert.match(await readFile(path, "utf8"), /ECMWF_ECWAM_CY50R1_hindcast,primary,Tm-1_0/);
     await page.getByRole("button", { name: "Prepare missing ECMWF history" }).click();
-    await expect(page.locator(".history-message[role=alert]")).toContainText("Sign in to prepare");
+    await expect(page.locator(".wave-history-source [role=alert]")).toContainText("Sign in to prepare");
     assert.equal(posts, 1);
     // Source controls and message must stay inside their parent on narrow screens.
     const geometry = await page.locator(".wave-history-source").evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));

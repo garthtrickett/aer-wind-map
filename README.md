@@ -1,4 +1,4 @@
-# Aer — global wind and wave forecast
+# Aer — global wind and primary swell forecast
 
 Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color covers
 the visible world, and arrows move toward the wind's destination. The main map
@@ -7,11 +7,18 @@ scale at the bottom right updates as you zoom or pan, showing kilometres or
 metres at the map's centre latitude. Click the map
 to place a wind flag showing speed in km/h, drag the flag to inspect another
 point, and click its card or amber button to open wind speed, source direction,
-gust, forecast time, and coordinates. The Wind/Waves switch shows ECMWF's
-combined wind waves and swell height as map color, with mean wave period in the
-flag and details panel. These
-are not primary swell partition values. The timeline steps through the first
-72 forecast hours. Displayed times use the browser's local timezone.
+gust, forecast time, and coordinates. The **Wind / Swell** switch shows MFWAM
+primary swell height as map colour, with primary period and source direction in
+the flag and details. Crest animation follows that primary swell's travel direction.
+The map reads only the three primary-swell fields from Open-Meteo's public
+MFWAM spatial OM files using a separate WASM worker. It samples every second
+native cell (0.083°) to a 0.167° global display grid, preserving missing data.
+Native propagation bearings are converted to FROM bearings. Map and flag use
+the same run and fields; there is no combined-wave fallback or duplicate point reading.
+The timeline covers +3 through +72 forecast hours and initially selects the
+first three-hour step at or after the current time for MFWAM. Displayed times
+use the browser's local timezone. Changing the slider cancels obsolete swell loads.
+
 
 Dates throughout the app and Telegram alerts use **DD/MM/YYYY**, with 24-hour
 times. The day and wave-history controls accept that format directly and retain
@@ -289,10 +296,9 @@ from 2022 onward and press **Load day**. The hourly table defaults to
 06:00–18:00, with the end hour excluded; choose 00:00–24:00 for the whole day.
 Changing the hour range filters the loaded data without downloading it again.
 
-Wind shows km/h, compass direction and degrees from ECMWF IFS. Swell and
-combined waves each show height, period and direction from Météo-France MFWAM.
-Combined waves include wind waves and swell; these heights are not surf-face
-heights. MFWAM's native three-hour values are interpolated to hourly by Open-Meteo.
+Wind shows km/h, compass direction and degrees from ECMWF IFS. Primary swell
+shows height, period and direction from Météo-France MFWAM. These are offshore
+swell estimates rather than surf-face heights. MFWAM's native three-hour values are interpolated to hourly by Open-Meteo.
 These are historical model estimates, not station measurements. Times are local
 to the displayed timezone, and the actual wind, wave and tide grid coordinates are
 shown separately. Recent days may not yet be published. Missing values stay
@@ -306,62 +312,19 @@ bridging missing readings. These are sea levels including tides and weather
 effects relative to global mean sea level, not local chart datum or a pure
 astronomical tide prediction. The approximately 8 km grid has limited coastal
 accuracy. Historical tide coverage varies; unavailable dates show missing
-values and a source message while retaining wind and waves.
+values and a source message while retaining wind and primary swell.
 
-## Measured wave and wind stations
+## Measured wind stations
 
-Open **Observations**, select **Wave buoys** or **Wind stations**, and zoom into
-an area (zoom 5 or closer). Click a marker for measured height, reported wave
-period and direction, or wind speed, direction and gust where supplied. Times
-use the browser's timezone. Reports older than three hours are grey and labelled
-as older reports. Moving the forecast slider does not change station readings.
-Japan NOWPHAS wave gauges and offshore GPS buoys are also included. Grey ↶
-markers identify archive stations without a current report.
+Open **Observations**, enable **Wind stations**, and zoom to level 5 or closer.
+Markers show measured wind in km/h; station details show wind direction and gusts
+where supplied. Reports older than three hours are grey. The Taiwan coastal
+wind filter remains available. Buoy total-wave readings and their history views
+are hidden because they do not isolate primary swell. Their source integrations
+and stored data are retained; they are never relabelled as primary swell.
 
-With **Wind stations** enabled, **Taiwan coastal wind only** is on by default.
-It keeps Taiwan land stations and airports within approximately 5 km of the
-ocean shoreline. Uncheck it to restore inland Taiwan stations. Offshore buoy
-winds and stations in other countries remain available. Distance uses bundled
-Natural Earth 1:10m coastline data (public domain), including offshore islands;
-it does not treat lake shores or county boundaries as the coast. The cutoff is
-approximate and describes location, not how sheltered or exposed a sensor is.
-
-For Japan NOWPHAS and Taiwan CWA archive stations, choose **Wave history** in
-the station popup, select a date, and press **Load date**. A wave-height chart,
-measurement table and CSV export show the measured record. Historical times
-use the station's local timezone (Japan UTC+9, Taiwan UTC+8), explicitly
-labelled above the table. All hours of the day are included, independently
-of the 06–18 model-based seasonal score.
-
-NOWPHAS supplies significant wave height and significant wave period at
-20-minute intervals, with a two-hour fallback for older records. CWA's archive
-supplies significant height, **peak period** and **mean period** hourly.
-These period definitions are kept separate; neither archive is labelled as
-primary swell. Gaps stay missing. NOWPHAS marks confirmed versus provisional
-records, and its downloadable archive can lag several months behind today.
-The app reads its current publication limit rather than inventing newer data.
-Coverage varies by station and year; the CWA history integration uses stations
-listed in CWA's own accessible archive, not every buoy shown by other agencies.
-
-Sources are NDBC's reporting marine/coastal stations, Taiwan CWA's buoys and
-wave stations (including Chenggong), CWA land wind stations, and worldwide
-airport METAR reports (including Ngurah Rai). Availability varies by location;
-this does not provide a complete global buoy network or BMKG harbour AWS data.
-CWA land directions are compass sectors; METAR variable and calm winds retain
-their meaning. Wave heights describe significant sea-state height, not surf
-face height or a primary-swell partition.
-
-The existing Node server and Vite dev server expose `/api/observations` because
-the providers do not allow direct browser requests. It accepts bounded map
-coordinates and layer flags only, uses fixed public upstream URLs, caches
-reports for 5–10 minutes, and shares in-flight requests. No API key, database or
-new dependency is required. `/api/buoy-history` validates station/date inputs
-against provider station catalogues, uses fixed archive URLs and keeps up to
-eight station/year or station/month datasets in memory for six hours. Only
-three concurrent archive requests are allowed. ZIP entries are read in memory
-with compressed and expanded size limits; no provider paths are written to
-disk. Station readings refresh every five minutes while
-the page is visible. A failed feed is labelled while other providers continue.
+Sources are NDBC, Taiwan CWA and airport METAR reports. Station readings are
+independent of the model forecast slider and may differ from nearby beaches.
 
 ## Run locally
 
@@ -399,7 +362,8 @@ the [reviewed implementation plan](docs/telegram-alerts-plan.md). Configuration
 names are in [.env.example](.env.example); credentials are server-only.
 
 The browser fetches ECMWF's `.index` and GRIB2 byte ranges directly from its
-Google Cloud Open Data mirror. Wind uses the `oper` stream; waves use `wave`.
+Google Cloud Open Data mirror for wind using the `oper` stream. Primary swell
+uses `data_spatial/meteofrance_wave` in the public Open-Meteo S3 bucket instead.
 No ECMWF key or weather proxy is needed.
 Historical swell uses Météo-France MFWAM through Open-Meteo Marine; historical
 10 m wind uses ECMWF IFS through Open-Meteo Archive. Both are requested directly
@@ -411,8 +375,9 @@ days at a native three-hour cadence, interpolated to hourly values by Open-Meteo
 wind remains hourly. Saved look-ahead settings still support 1–14 days. Dates
 beyond the available swell forecast remain unknown, with paired coverage shown
 in results and notifications. No GFS fallback or extrapolated swell is used.
-This uses the same swell model as historical scoring, and differs from the
-live ECMWF combined-wave GRIB map layer.
+This uses the same swell model as the primary-swell map. Point series use the
+provider's native sea-cell selection and hourly interpolation; the map uses its
+labelled display grid and a fixed three-hourly run.
 MapLibre renders OpenFreeMap Positron vector tiles where WebGL2 is available;
 Leaflet uses standard OpenStreetMap raster tiles as a fallback. Source credits
 stay visible on the map.
@@ -461,7 +426,8 @@ It is a filtering preference, not a guarantee of a glassy sea surface.
 - ECMWF keeps a rolling archive, so Aer selects the newest reachable run with
   its 72-hour file available. A new run may appear after the page was opened;
   reload to select it.
-- Wind downloads three compressed global fields per step; waves download two.
+- Wind downloads up to three compressed global GRIB fields per step; primary swell
+  reads three partition fields from spatial OM files using HTTP byte ranges.
   First use downloads a 39.6 MB WASM decoder (about 6.8 MB over the network
   with gzip).
   In one Chromium step-3 check, its WASM heap was 64 MiB and the three decoded
@@ -495,8 +461,7 @@ For imagery sources and Google Earth's historical imagery button, see the
 ### Direct ECMWF hourly swell history
 
 The historical panel offers **ECMWF ECWAM · hourly hindcast** alongside the existing
-MFWAM source. Existing saved spots keep MFWAM. Source and primary/secondary swell
-selection are saved with the spot and sync through accounts. Forecast alerts and
+MFWAM source. Existing saved spots keep MFWAM. The source selection is saved with the spot and syncs through accounts. Forecast alerts and
 the separate day lookup retain their existing data sources.
 
 This uses the public CY50R1 research experiments
@@ -511,8 +476,10 @@ bathymetry remains unresolved; put swell markers offshore.
 Both partitions are retrieved together: 140121/122/123 (first swell height,
 direction, period), 140124/125/126 (second swell height, direction, period).
 ECWAM period is Tm−1,0; existing MFWAM historical period is Tm01. The same numeric
-period threshold is not an equivalent filter between models. CSV exports name
-the source, selected component and period definition and retain both triples.
+period threshold is not an equivalent filter between models. The app displays
+primary swell only; older secondary selections open as primary. CSV exports name
+the source, primary component and period definition. Both partitions remain in
+the server cache.
 A zero-height component counts as available data but cannot qualify as swell.
 
 Set server-only `ECMWF_API_EMAIL` and `ECMWF_API_KEY` from the registered
@@ -543,6 +510,6 @@ Provider results are deleted only after validated data is committed to the cache
 `npm run test:wave-history` checks real packed NetCDF values, UTC joins, absent
 components, persistence, queue deduplication, worker exclusion, uncertain sends,
 and HTTP authentication/origin restrictions. `node tests/wave-history-smoke.ts`
-checks source/component controls, saved settings, CSV and desktop/mobile layouts
+checks source controls, primary swell, saved settings, CSV and desktop/mobile layouts
 against a real extracted month fixture with mocked transport. The fixture's
 0.25° validation cell is explicitly separate from the production 0.125° cache.

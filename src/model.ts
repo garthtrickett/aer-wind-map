@@ -110,7 +110,7 @@ export type Proposal =
   | { readonly kind: "telegramSpotRestored"; readonly spot: SavedSpot; readonly linkedSpots?: readonly SavedSpot[]; readonly readOnly?: boolean }
   | ObservationProposal
   | { readonly kind: "discoverStarted" }
-  | { readonly kind: "runFound"; readonly run: ForecastRun; readonly layer: Layer }
+  | { readonly kind: "runFound"; readonly run: ForecastRun; readonly layer: Layer; readonly initialStep?: number }
   | { readonly kind: "loadStarted"; readonly key: string }
   | { readonly kind: "fieldLoaded"; readonly key: string; readonly field: ForecastField }
   | { readonly kind: "failed"; readonly key: string | null; readonly layer: Layer; readonly error: WeatherError }
@@ -183,7 +183,7 @@ export const initialState: State = {
   },
 };
 
-export const fieldKey = (run: ForecastRun, step: number, layer: Layer = "wind"): string => `${run.id}:${layer}:${step}`;
+export const fieldKey = (run: ForecastRun, step: number, layer: Layer = "wind"): string => `${run.id}:${layer === "waves" ? "primary-swell-v1" : layer}:${step}`;
 export const historyKey = (point: Point, startYear: number, endYear: number, conditions: ConditionSource = "both", source: WaveHistorySource = "mfwam", partition: SwellPartition = "primary"): string =>
   `${point.latitude}:${point.longitude}:${startYear}:${endYear}${conditions === "both" ? "" : `:${conditions}`}${source === "ecwam" && conditions !== "wind" ? `:ecwam:${partition}` : ""}`;
 
@@ -305,10 +305,11 @@ const presentApp = (state: State, proposal: Proposal): State => {
       };
     }
     case "discoverStarted": return { ...state, phase: "discovering", error: null };
-    case "runFound": return proposal.layer === state.layer ? { ...state, phase: "needsField", run: proposal.run, error: null } : state;
+    case "runFound": return proposal.layer === state.layer ? { ...state, phase: "needsField", run: proposal.run, error: null,
+      step: proposal.initialStep !== undefined && Number.isInteger(proposal.initialStep) && proposal.initialStep >= 3 && proposal.initialStep <= 72 && proposal.initialStep % 3 === 0 ? proposal.initialStep : state.step } : state;
     case "loadStarted": return { ...state, phase: "loading", requestedKey: proposal.key, error: null };
     case "fieldLoaded":
-      if (proposal.key !== state.requestedKey || proposal.key !== (state.run && fieldKey(state.run, state.step, state.layer)) || proposal.field.kind !== state.layer) return state;
+      if (proposal.key !== state.requestedKey || proposal.key !== (state.run && fieldKey(state.run, state.step, state.layer)) || proposal.field.kind !== state.layer || (proposal.field.kind === "waves" && proposal.field.source !== "mfwam-primary")) return state;
       return { ...state, phase: "ready", field: proposal.field, requestedKey: null, error: null };
     case "failed":
       if (proposal.layer !== state.layer || proposal.key !== state.requestedKey) return state;
@@ -493,15 +494,16 @@ const presentApp = (state: State, proposal: Proposal): State => {
 
 export const present = (state: State, proposal: Proposal): State => {
   let next = presentApp(state, proposal);
+  if (next.history.historySwellPartition === "secondary") next = { ...next, history: { ...next.history,
+    historySwellPartition: "primary", phase: "needsData", data: null, requestedKey: null, selectedMonth: null } };
   if (["locationSelected", "locationDragged", "selectionCleared", "savedSpotOpened", "telegramSpotRestored", "modalClosed", "historyClosed", "savedSpotsToggled", "observationsToggled"].includes(proposal.kind)) {
     const placeSearch = dismissPlaceSearch(next.placeSearch);
     if (placeSearch !== next.placeSearch) next = { ...next, placeSearch };
   }
   const dayLookup = alignDayLookup(next.dayLookup, next.history.open ? next.history.point : next.selected);
   const wayback = alignWayback(next.wayback, next.selected, next.basemap === "wayback");
-  const waveFlag = next.layer === "waves" && !next.history.open ? next.selected : null;
-  const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : waveFlag,
-    next.history.open ? conditionSource(next.history.criteria) : waveFlag ? "swell" : conditionSource(next.history.criteria));
+  const compassForecast = alignCompassForecast(next.compassForecast, next.history.open ? next.history.point : null,
+    conditionSource(next.history.criteria));
   return dayLookup === next.dayLookup && wayback === next.wayback && compassForecast === next.compassForecast ? next : { ...next, dayLookup, wayback, compassForecast };
 };
 

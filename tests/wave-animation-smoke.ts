@@ -26,8 +26,9 @@ try {
   await page.goto(`http://127.0.0.1:${address.port}/tests/fixtures/map-visual.html`);
   await page.waitForFunction(() => (window as any).mapVisual?.ready);
   await expect(page.locator(".flag-wave-direction")).toContainText("from S · 180°");
-  await expect(page.locator(".flag-swell-direction")).toContainText("from SW · 225°");
-  await expect(page.locator(".flag-swell")).toContainText("1.4 m · 13.0 s");
+  await expect(page.locator(".flag-caption")).toContainText("Primary swell");
+  await expect(page.locator(".flag-source")).toHaveText("MFWAM");
+  await expect(page.locator(".flag-swell")).toHaveCount(0);
   // Frame captures prove live motion and reduced-motion stability without reading discarded WebGL back buffers.
   await page.waitForTimeout(500);
   const canvas = page.locator("#wind-arrows");
@@ -87,7 +88,7 @@ try {
     await page.addStyleTag({ content: ".maplibregl-canvas, .saved-spot-icon, #selected-flag, .leaflet-control-container { visibility: visible !important; }" });
   }
   await page.evaluate(() => (window as any).mapVisual.setFlag(null));
-  await expect(page.locator(".flag-swell-direction")).toHaveText("Direction unavailable");
+  await expect(page.locator(".flag-wave-direction")).toHaveText("Direction unavailable");
   if (!fallback && !reduced) for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     await page.waitForTimeout(150);

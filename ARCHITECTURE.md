@@ -14,10 +14,9 @@
   selection.
 - A legend and forecast-time control keep the color, arrows, and modal on the
   same model run and valid time.
-- A Wind/Waves switch selects ECMWF's combined wind waves and swell height
-  (`swh`) and mean wave period (`mwp`) from the `wave` stream. Wave map color
-  shows height, while the flag and modal also show period. The free feed does
-  not supply first swell partition (`swh1`/`mwp1`) fields.
+- A Wind/Swell switch selects Météo-France MFWAM primary swell. Map color shows
+  primary height; the flag and modal show period and source direction. Combined
+  seas are never a fallback. Public ECMWF wave fields do not supply these partitions.
 - A selected point's history panel compares swell-specific height, period, and
   source direction with wind speed and source direction. Swell period has an
   inclusive minimum and optional inclusive maximum; a blank maximum has no
@@ -90,7 +89,7 @@
 
 - The particular-day lookup is separate from seasonal scoring and forecast
   alerts. `day-lookup.ts` requests one local calendar day of ECMWF IFS wind and
-  MFWAM swell/combined waves, joins sources by UTC instant and preserves nulls
+  MFWAM primary swell, joins sources by UTC instant and preserves nulls
   and per-source failures. Wind is requested in km/h. `day-lookup-model.ts`
   owns date, hour range and request generation; marker or date changes discard
   stale results and abort superseded browser requests. Hour edits only filter
@@ -150,16 +149,19 @@
   wave measurements, station metadata and public county wind reports. CWA's
   county JavaScript data is parsed as quoted fields, never executed. Failures
   remain visible per source. No forecast is substituted for an observation.
-- Observation cards distinguish UTC instants (Taiwan source timestamps carry
+- Observation cards display measured wind only. Total-wave buoy controls,
+  markers, readings and measured-wave history are hidden to keep the app primary
+  swell only; their existing backend and archive parsers remain available internally.
+  Cards distinguish UTC instants (Taiwan source timestamps carry
   UTC+8), browser-local display time, old reports, calm/variable wind, reported
-  compass sectors, significant wave height and provider period definitions.
+  compass sectors and wind units.
   The forecast slider does not change observation times.
-- NOWPHAS supplies Japanese wave-gauge and GPS-buoy metadata/current readings.
-  Only its wave-enabled sites are shown; tide-only sensors are excluded.
+- The retained NOWPHAS backend supplies Japanese wave-gauge and GPS-buoy metadata/current readings.
+  These measured total-wave readings are not exposed by the primary-only UI.
   CWA's accessible archive station list adds historical sites even when a
   current observation is unavailable. Such markers have no observation time
   and show an archive symbol, never a synthetic current reading.
-- A station's Wave history tab has its own immutable proposals and explicit
+- The retained measured-wave history module has its own immutable proposals and explicit
   fetch/download effects, separate from model history. Request keys include
   station identity and local date; late results cannot replace a newer choice.
   The Node/Vite endpoint downloads official measured archives on demand.
@@ -200,11 +202,14 @@
   DOM flag follows Leaflet's projected point. Pointer movement on the flag
   proposes location changes. Animation frames do not dispatch SAM proposals;
   user choices and completed loads do.
-- The data source is ECMWF's Google Cloud Open Data mirror. Read `.index` rows,
-  request `10u`, `10v`, and optional `10fg` from `oper`, or `swh` and `mwp` from
-  `wave`, by GRIB2 byte range, then decode in a Web Worker. Select a complete
-  forecast run for the active stream and retain its identity in every
-  request so late responses cannot replace a newer selection.
+- Wind reads ECMWF's Google Cloud Open Data mirror: `.index` rows and GRIB2
+  byte ranges for `10u`, `10v`, and optional `10fg` from `oper`, decoded in a
+  classic Web Worker. Swell uses a separate module worker and range reads of
+  MFWAM spatial OM files in Open-Meteo's public S3 bucket, requesting only
+  primary height, period and direction. Every second native 1/12° cell supplies
+  the 1/6° display grid. Native propagation bearings are converted to FROM.
+  Complete run identity and source-versioned keys reject stale/combined fields.
+  A new swell time terminates obsolete worker reads without interrupting wind.
 - Keep forecast instants in UTC internally and format timeline, run, and point
   details times in the browser's local timezone.
 - Historical data is a separate on-demand browser effect. Open-Meteo Marine

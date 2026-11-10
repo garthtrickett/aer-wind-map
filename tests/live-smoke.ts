@@ -238,7 +238,7 @@ try {
   await page.getByRole("button", { name: "Remove forecast flag" }).click();
   if (await page.locator(".flag-grab").count()) throw new Error("Wind flag did not close");
   const windColorBeforeSwitch = await colorSnapshot(page);
-  await page.getByRole("button", { name: "Waves" }).click();
+  await page.getByRole("button", { name: "Swell" }).click();
   await page.getByText("Live forecast").waitFor({ timeout: 60_000 });
   await page.screenshot({ path: "/tmp/wind-map-waves.png", fullPage: true });
   if (!await page.locator(".legend").innerText().then((text) => text.includes("WAVES + SWELL HEIGHT"))) {
@@ -258,7 +258,7 @@ try {
   }
   console.log(`Live wave flag: ${await page.locator(".flag-reading").innerText()}`);
   await page.getByRole("button", { name: "Open forecast details" }).click();
-  const waveModal = await page.getByRole("dialog", { name: "Waves at this location" }).innerText();
+  const waveModal = await page.getByRole("dialog", { name: "Primary swell at this location" }).innerText();
   if (!waveModal.includes("Mean wave period") || !waveModal.includes("both wind waves and swell")) {
     throw new Error(`Wave details are incomplete or mislabeled: ${waveModal}`);
   }
@@ -440,7 +440,7 @@ try {
       throw new Error(`Canvas fallback arrows stayed fixed during pan: ${panTransform}`);
     }
     await fallback.waitForFunction(() => (document.querySelector("#wind-arrows") as HTMLElement)?.style.transform === "none");
-    await fallback.getByRole("button", { name: "Waves" }).click();
+    await fallback.getByRole("button", { name: "Swell" }).click();
     await fallback.getByText("Live forecast").waitFor({ timeout: 60_000 });
     await fallback.waitForFunction(() => {
       const canvas = document.querySelector("#wind-color") as HTMLCanvasElement;

@@ -82,6 +82,7 @@ export const createWindMap = (
   map.attributionControl.addAttribution(
     '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data">ECMWF IFS</a> · CC BY 4.0',
   );
+  map.attributionControl.addAttribution('<a href="https://open-meteo.com/en/docs/marine-weather-api">MFWAM / Open-Meteo</a> · CC BY 4.0');
 
   let basemap: Basemap = "map";
   let satellite: Satellite | null = null;

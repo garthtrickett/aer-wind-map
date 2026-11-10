@@ -1,5 +1,6 @@
 import type { ForecastRun } from "./wind.ts";
 import type { Layer } from "./wave.ts";
+import { discoverPrimarySwell } from "./primary-swell.ts";
 
 export type WeatherError =
   | { readonly kind: "network"; readonly detail: string }
@@ -30,7 +31,8 @@ export const runCandidates = (now: Date): readonly ForecastRun[] =>
 
 const forecastPath = (run: ForecastRun, step: number, extension: "index" | "grib2", layer: Layer = "wind"): string => {
   const hh = String(run.hour).padStart(2, "0");
-  const stream = layer === "wind" ? "oper" : "wave";
+  if (layer !== "wind") throw new Error("Primary swell is provided by MFWAM, not the ECMWF combined-wave feed");
+  const stream = "oper";
   return `${run.date}/${hh}z/ifs/0p25/${stream}/${run.id}0000-${step}h-${stream}-fc.${extension}`;
 };
 
@@ -43,6 +45,7 @@ const listingUrl = (name: string): string => {
 };
 
 export const discoverLatest = async (fetcher: typeof fetch = fetch, layer: Layer = "wind"): Promise<RunResult> => {
+  if (layer === "waves") return discoverPrimarySwell(fetcher);
   for (const run of runCandidates(new Date())) {
     try {
       const name = forecastPath(run, 72, "index", layer);

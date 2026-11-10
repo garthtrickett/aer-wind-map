@@ -92,21 +92,12 @@ test("compass clock refreshes stale point forecasts, and solid wedges handle nor
   assert.equal(clockwiseWedgePath(50, 50, 130), "");
 });
 
-test("the wave flag loads primary swell and timeline edits reuse its hourly data", () => {
+test("the primary swell map flag does not fetch a duplicate point forecast", () => {
   let state = present(initialState, { kind: "layerSelected", layer: "waves" });
   state = present(state, { kind: "locationSelected", point });
-  assert.equal(state.compassForecast.source, "swell");
-  assert.equal(state.compassForecast.phase, "needsData");
-  const request = state.compassForecast.request;
-  state = present(state, { kind: "compassForecastStarted", request });
-  state = present(state, { kind: "compassForecastCompleted", request, result: { ok: true, data }, checkedAt: time * 1000 });
-  state = present(state, { kind: "timeSelected", step: 48 });
-  assert.equal(state.compassForecast.request, request);
-  assert.equal(state.compassForecast.data, data);
-  state = present(state, { kind: "locationDragged", point: { ...point, longitude: point.longitude + 1 } });
-  assert.equal(state.compassForecast.data, null);
-  state = present(state, { kind: "compassForecastCompleted", request, result: { ok: true, data }, checkedAt: time * 1000 });
-  assert.equal(state.compassForecast.data, null);
-  state = present(state, { kind: "layerSelected", layer: "wind" });
   assert.equal(state.compassForecast.phase, "idle");
+  state = present(state, { kind: "timeSelected", step: 48 });
+  assert.equal(state.compassForecast.phase, "idle");
+  state = present(state, { kind: "historyOpened" });
+  assert.equal(state.compassForecast.phase, "needsData");
 });

@@ -15,13 +15,13 @@ export const dayLookupView = (panel: DayLookupPanel, propose: (proposal: DayLook
   const loading = panel.phase === "loading" || panel.phase === "needsData";
   const data = panel.data;
   const rows = data ? dayHours(data, panel.startHour, panel.endHour) : [];
-  const hasValues = rows.some((row) => row.windSpeed !== null || row.swellHeight !== null || row.waveHeight !== null || row.seaLevel !== null);
+  const hasValues = rows.some((row) => row.windSpeed !== null || row.swellHeight !== null || row.seaLevel !== null);
   const clock = data ? new Intl.DateTimeFormat("en-GB", { timeZone: data.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) : null;
   return html`<section class="day-lookup">
     <button type="button" class="day-lookup-toggle" aria-expanded=${String(panel.open)} aria-controls="day-lookup-content"
       @click=${() => propose({ kind: "dayLookupToggled" })}><span>Look up a day</span><span aria-hidden="true">${panel.open ? "−" : "+"}</span></button>
     ${panel.open ? html`<div id="day-lookup-content" class="day-lookup-content">
-      <p class="day-lookup-note">Historical wind, swell, combined waves and tide / sea level at this marker. Dates and hours are local to the spot; recent days may not yet be available.</p>
+      <p class="day-lookup-note">Historical wind, primary swell and tide / sea level at this marker. Dates and hours are local to the spot; recent days may not yet be available.</p>
       <form class="day-lookup-controls" @submit=${(event: Event) => { event.preventDefault(); propose({ kind: "dayLookupRequested" }); }}>
         <div class="day-lookup-date date-control"><span>Date</span>${dateInput({ label: "Lookup date", value: panel.date,
           min: firstLookupDate, max: new Date(now).toISOString().slice(0, 10),
@@ -40,27 +40,26 @@ export const dayLookupView = (panel: DayLookupPanel, propose: (proposal: DayLook
         : panel.message ?? (data ? `${displayDay(data.date)} · ${data.timezone} · ${rows.length} hourly records · ${timeLabel(panel.startHour)}–${timeLabel(panel.endHour)} (end excluded)` : "Choose a date and load its hourly history.")}</div>
       ${data ? html`
         ${data.wind.issue ? html`<p class="day-lookup-warning">Wind: ${data.wind.issue}</p>` : nothing}
-        ${data.waves.issue ? html`<p class="day-lookup-warning">Waves: ${data.waves.issue}</p>` : nothing}
+        ${data.waves.issue ? html`<p class="day-lookup-warning">Primary swell: ${data.waves.issue}</p>` : nothing}
         ${data.tide.issue ? html`<p class="day-lookup-warning">Tide: ${data.tide.issue}</p>` : nothing}
         ${!hasValues ? html`<p class="day-lookup-warning">No usable values for these hours. Missing data does not mean calm wind, flat waves or zero tide height.</p>` : nothing}
         ${dayTideView(rows, data.timezone)}
         ${rows.length ? html`<p class="day-lookup-note">Scroll the table sideways to see all columns.</p>` : nothing}
         ${rows.length ? html`<div class="day-lookup-table" tabindex="0" role="region" aria-label="Hourly wind, wave and tide history"><table>
-          <caption>Directions show where wind and waves come from. Swell and combined waves are separate.
+          <caption>Directions show where wind and primary swell come from.
             Tide / sea level is relative to mean sea level; rising/falling is estimated from adjacent hourly samples.</caption>
-          <thead><tr><th scope="col">Local time</th><th scope="col">Wind</th><th scope="col">Swell</th><th scope="col">Combined waves</th><th scope="col">Tide / sea level</th></tr></thead>
+          <thead><tr><th scope="col">Local time</th><th scope="col">Wind</th><th scope="col">Primary swell</th><th scope="col">Tide / sea level</th></tr></thead>
           <tbody>${rows.map((row) => html`<tr><th scope="row">${clock!.format(new Date(row.time * 1000))}</th>
             <td><strong>${reading(row.windSpeed, "km/h")}</strong><span>${row.windSpeed === 0 ? "Calm" : direction(row.windDirection)}</span></td>
             <td><strong>${reading(row.swellHeight, "m")} · ${reading(row.swellPeriod, "s")}</strong><span>${direction(row.swellDirection)}</span></td>
-            <td><strong>${reading(row.waveHeight, "m")} · ${reading(row.wavePeriod, "s")}</strong><span>${direction(row.waveDirection)}</span></td>
             <td class="day-lookup-tide"><strong>${row.seaLevel === null ? "—" : `${row.seaLevel.toFixed(2)} m`}</strong><span>${seaLevelTrend(data, row.time) ?? "—"}</span></td>
           </tr>`)}</tbody>
         </table></div>` : nothing}
         <p class="day-lookup-note">Wind: <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener noreferrer">ECMWF IFS / Open-Meteo Archive</a> · model cell ${grid(data.wind)}.<br />
-          Waves: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Météo-France MFWAM / Open-Meteo Marine</a> · model cell ${grid(data.waves)}.<br />
+          Primary swell: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Météo-France MFWAM / Open-Meteo Marine</a> · model cell ${grid(data.waves)}.<br />
           Tide / sea level: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Météo-France SMOC / Open-Meteo Marine</a> · model cell ${grid(data.tide)}.<br />
           Sea level includes tides and weather effects, relative to global mean sea level rather than local chart datum. The roughly 8 km grid has limited coastal accuracy.<br />
-          Model estimates, not station measurements or breaking-wave heights. MFWAM's three-hourly values are interpolated to hourly; combined waves include wind waves and swell.</p>
+          Model estimates, not station measurements or breaking-wave heights. MFWAM's three-hourly primary swell values are interpolated to hourly.</p>
       ` : nothing}
     </div>` : nothing}
   </section>`;
