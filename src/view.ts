@@ -28,7 +28,7 @@ export const flagView = (state: State, propose: (proposal: Proposal) => void): T
   const wind = state.field?.kind === "wind" ? sampleWind(state.field, state.selected.latitude, state.selected.longitude) : null;
   const waves = state.field?.kind === "waves" ? sampleWave(state.field, state.selected.latitude, state.selected.longitude) : null;
   const reading = state.layer === "wind" && wind
-    ? html`<span class="flag-speed"><strong>${wind.speed.toFixed(1)}</strong><span>m/s</span></span><span class="flag-bearing">from ${compassDirection(wind.directionFrom)}</span>`
+    ? html`<span class="flag-speed"><strong>${(wind.speed * 3.6).toFixed(1)}</strong><span>km/h</span></span><span class="flag-bearing">from ${compassDirection(wind.directionFrom)}</span>`
     : state.layer === "waves" && waves
       ? html`<span class="flag-speed"><strong>${waves.height.toFixed(1)}</strong><span>m</span></span><span class="flag-wave-meta"><span class="flag-bearing">${waves.period.toFixed(1)} s period</span>
           <span class="flag-wave-direction">${waves.directionFrom !== null && waves.directionFrom !== undefined ? html`<span aria-hidden="true" class="flag-direction-arrow" style=${`transform:rotate(${waves.directionFrom + 180}deg)`}>↑</span>
