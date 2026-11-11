@@ -514,7 +514,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .distance-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
 .distance-actions button { padding: 6px 8px; border: 1px solid #698b87; border-radius: 6px; background: #184e59; color: #eff9f5; font-size: 10px; font-weight: 700; }
 .distance-actions button:hover:not(:disabled) { background: #276775; }
-#app:has(.modal-scrim, .history-scrim, .saved-spots-panel, .observations-panel) .distance-control { display: none; }
+#app:has(.modal-scrim, .history-scrim, .saved-spots-panel, .observations-panel, .forecast-alert-card) .distance-control { display: none; }
+#app:has(.forecast-alert-chip) .distance-control { top: 170px; }
 #app:has(.distance-toggle[aria-pressed="true"]) #map { cursor: crosshair; }
 .leaflet-control-attribution { background: rgba(255,255,255,.83) !important; color: #3a565e !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: #254c59 !important; }
@@ -569,6 +570,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .leaflet-top.leaflet-right { top: 10px; right: 10px; }
   .distance-control { top: 90px; right: 10px; }
   #app:has(.basemap-tools) .distance-control { top: 205px; }
+  #app:has(.forecast-alert-chip) .distance-control { top: 90px; }
+  #app:has(.forecast-alert-chip):has(.basemap-tools) .distance-control { top: 280px; }
   .distance-toggle { min-width: 48px; min-height: 42px; padding-inline: 7px; font-size: 11px; }
   .distance-panel { position: fixed; top: auto; right: 10px; bottom: 170px; }
   #app:has(.distance-panel:not([hidden])) .legend { visibility: hidden; }

@@ -54,6 +54,23 @@ try {
     assert.ok(route?.includes("L"));
     await expect(page.locator("#selected-flag")).toHaveAttribute("hidden", "");
     await page.screenshot({ path: join(output, `distance-${viewport.width}.png`) });
+    await page.evaluate(() => {
+      const card = document.createElement("section");
+      card.className = "forecast-alert-card";
+      document.querySelector("#app")!.append(card);
+    });
+    await expect(toggle).toBeHidden();
+    await page.locator(".forecast-alert-card").evaluate((card) => card.remove());
+    await page.evaluate(() => {
+      const chip = document.createElement("button");
+      chip.className = "forecast-alert-chip";
+      chip.textContent = "3 forecast matches";
+      document.querySelector("#app")!.append(chip);
+    });
+    const buttonBox = await toggle.boundingBox(), chipBox = await page.locator(".forecast-alert-chip").boundingBox();
+    assert.ok(buttonBox && chipBox && (buttonBox.y + buttonBox.height <= chipBox.y || chipBox.y + chipBox.height <= buttonBox.y),
+      "Distance button must not overlap the collapsed forecast alert");
+    await page.locator(".forecast-alert-chip").evaluate((chip) => chip.remove());
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await page.getByRole("button", { name: "Zoom in" }).click();
