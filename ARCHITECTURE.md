@@ -14,6 +14,10 @@
   selection.
 - A legend and forecast-time control keep the color, arrows, and modal on the
   same model run and valid time.
+- A separate map distance control stores temporary geographic points in memory.
+  Map taps add segments while drawing instead of selecting a forecast point.
+  Leaflet's great-circle distance sums the segments; the overlay reprojects
+  on pan and zoom. No measurement is saved to an account or spot.
 - A Wind/Swell switch selects Météo-France MFWAM primary swell. Map color shows
   primary height; the flag and modal show period and source direction. Combined
   seas are never a fallback. Public ECMWF wave fields do not supply these partitions.

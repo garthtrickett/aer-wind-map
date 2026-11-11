@@ -496,6 +496,26 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .leaflet-control-zoom a { border: 0 !important; color: #153c48 !important; }
 .leaflet-control-scale { padding: 5px 6px; border-radius: 5px; background: rgba(6,34,47,.9); pointer-events: none; }
 .leaflet-control-scale-line { border-color: #f5faf9; background: transparent; color: #f5faf9; font: 500 11px/1.2 "DM Sans", sans-serif; text-shadow: none; }
+.distance-overlay { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.distance-line-halo, .distance-line, .distance-line-preview { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.distance-line-halo { stroke: #082d38; stroke-width: 7; opacity: .85; }
+.distance-line { stroke: #ffe083; stroke-width: 3.5; }
+.distance-line-preview { stroke: #ffe083; stroke-width: 2; stroke-dasharray: 5 7; opacity: .9; }
+.distance-start, .distance-point { fill: #fff8d8; stroke: #123b46; stroke-width: 2.5; }
+.distance-control { position: absolute; z-index: 6; top: 94px; right: 12px; }
+.distance-toggle { min-width: 70px; min-height: 40px; padding: 8px 12px; border: 1px solid #c9dbd8; border-radius: 9px; background: #103c49; color: #f5faf9; box-shadow: 0 5px 18px #03202a40; font-size: 12px; font-weight: 700; }
+.distance-toggle:hover, .distance-toggle[aria-pressed="true"] { background: #f2bd4d; border-color: #f2bd4d; color: #113946; }
+.distance-toggle:focus-visible, .distance-actions button:focus-visible { outline: 3px solid #9ff1d8; outline-offset: 2px; }
+.distance-panel { position: absolute; top: calc(100% + 8px); right: 0; width: min(255px, calc(100vw - 20px)); padding: 13px; border: 1px solid #4c7375; border-radius: 12px; background: #103c49; color: #eff9f5; box-shadow: 0 12px 30px #03202a59; }
+.distance-panel[hidden] { display: none; }
+.distance-panel strong { display: block; font: 600 15px/1.2 "Outfit", sans-serif; }
+.distance-result { display: block; margin-top: 6px; color: #ffe083; font: 600 25px/1.15 "Outfit", sans-serif; font-variant-numeric: tabular-nums; }
+.distance-hint { margin-top: 7px; color: #c4dedb; font-size: 11px; line-height: 1.4; }
+.distance-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
+.distance-actions button { padding: 6px 8px; border: 1px solid #698b87; border-radius: 6px; background: #184e59; color: #eff9f5; font-size: 10px; font-weight: 700; }
+.distance-actions button:hover:not(:disabled) { background: #276775; }
+#app:has(.modal-scrim, .history-scrim, .saved-spots-panel, .observations-panel) .distance-control { display: none; }
+#app:has(.distance-toggle[aria-pressed="true"]) #map { cursor: crosshair; }
 .leaflet-control-attribution { background: rgba(255,255,255,.83) !important; color: #3a565e !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: #254c59 !important; }
 
@@ -547,6 +567,12 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .legend-labels { font-size: 8px; }
   .forecast-time { font-size: 15px; }
   .leaflet-top.leaflet-right { top: 10px; right: 10px; }
+  .distance-control { top: 90px; right: 10px; }
+  #app:has(.basemap-tools) .distance-control { top: 205px; }
+  .distance-toggle { min-width: 48px; min-height: 42px; padding-inline: 7px; font-size: 11px; }
+  .distance-panel { position: fixed; top: auto; right: 10px; bottom: 170px; }
+  #app:has(.distance-panel:not([hidden])) .legend { visibility: hidden; }
+  #app:has(.distance-panel:not([hidden])) .leaflet-control-scale { position: fixed; left: 12px; right: auto; bottom: 170px; margin: 0 !important; }
   .leaflet-control-attribution { max-width: 100%; white-space: normal; line-height: 1.2 !important; }
 }
 /* Telegram controls share the saved-spots panel's existing type and colour. */

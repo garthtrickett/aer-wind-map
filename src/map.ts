@@ -6,6 +6,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Point } from "./model.ts";
 import type { SavedSpot } from "./saved-spots.ts";
 import type { Basemap, Satellite } from "./satellite.ts";
+import { createDistanceTool } from "./distance-tool.ts";
 
 export type WindMap = Readonly<{
   map: L.Map;
@@ -177,9 +178,11 @@ export const createWindMap = (
     flag.classList.toggle("flag-below", below);
   };
   map.on("move zoom resize", positionFlag);
-  map.on("click", (event: L.LeafletMouseEvent) =>
-    onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) }),
-  );
+  const distanceTool = createDistanceTool(map);
+  map.on("click", (event: L.LeafletMouseEvent) => {
+    if (distanceTool.isDrawing()) distanceTool.addPoint(event.latlng);
+    else onSelect({ latitude: event.latlng.lat, longitude: longitudeWithinWorld(event.latlng.lng) });
+  });
   const savedLinkRenderer = L.svg();
   const savedLayer = L.layerGroup().addTo(map);
   const setSavedSpots = (spots: readonly SavedSpot[]): void => {
@@ -205,7 +208,10 @@ export const createWindMap = (
         iconSize: [34, 36], iconAnchor: [17, 35] });
       L.marker([spot.point.latitude, spot.point.longitude], { icon, title })
         .bindTooltip(label, { direction: "top", offset: [0, -18] })
-        .on("click", () => onSavedSpotSelect(spot.id))
+        .on("click", () => {
+          if (distanceTool.isDrawing()) distanceTool.addPoint(L.latLng(spot.point.latitude, spot.point.longitude));
+          else onSavedSpotSelect(spot.id);
+        })
         .addTo(savedLayer);
     }
   };

@@ -10,6 +10,7 @@
     "test": "node --test src/shore-reference.test.ts src/forecast-window.test.ts src/place-search.test.ts src/dates.test.ts src/wind.test.ts src/wave.test.ts src/primary-swell.test.ts src/worker-client.test.ts src/ecmwf.test.ts src/model.test.ts src/history.test.ts src/swell-distribution.test.ts src/wind-distribution.test.ts src/day-lookup.test.ts src/satellite.test.ts src/wayback.test.ts src/history-compass.test.ts src/compass-forecast.test.ts src/saved-spots.test.ts src/forecast-alerts.test.ts src/observations.test.ts src/buoy-history.test.ts src/telegram-model.test.ts scripts/alerts/alerts.test.ts && npm run test:accounts && npm run test:wave-history",
     "smoke:places": "node tests/place-search-smoke.ts",
     "smoke:live": "node tests/live-smoke.ts",
+    "smoke:distance": "node tests/distance-tool-smoke.ts",
     "smoke:primary-swell": "node tests/primary-swell-smoke.ts",
     "smoke:waves": "node tests/wave-animation-smoke.ts",
     "smoke:compass": "node tests/compass-forecast-smoke.ts",

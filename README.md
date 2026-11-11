@@ -4,7 +4,13 @@ Aer shows ECMWF IFS 10 m wind on a global OpenStreetMap-derived map. Color cover
 the visible world, and arrows move toward the wind's destination. The main map
 zooms to level 20 for close inspection of streets and coastlines. A distance
 scale at the bottom right updates as you zoom or pan, showing kilometres or
-metres at the map's centre latitude. Click the map
+metres at the map's centre latitude. Use **Measure** near the zoom buttons to
+draw a temporary line. Tap or click
+to add points; the panel shows the total ground distance in metres or kilometres.
+**Done** leaves the line visible while you pan or zoom, **Edit line** adds more
+points, and **Undo**, **Clear** or **Close** adjust or remove it. Zoom changes the
+line's screen size but not the distance between its geographic points. While
+measuring, map taps add points instead of moving the forecast flag. Click the map
 to place a wind flag showing speed in km/h, drag the flag to inspect another
 point, and click its card or amber button to open wind speed, source direction,
 gust, forecast time, and coordinates. The **Wind / Swell** switch shows MFWAM
