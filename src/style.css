@@ -45,7 +45,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #9ff1d8; outline-
 .flag-dismiss:hover { background: #61747a; }
 .flag-below .flag-stem { top: 0; bottom: auto; }
 .flag-below .flag-panel { top: var(--flag-rise, 95px); bottom: auto; }
-#ui { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+#ui { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 24px 24px 0; pointer-events: none; }
+#ui:not(:has(.basemap-tools)) { padding-top: 118px; }
 #ui > * { pointer-events: auto; }
 
 .masthead {
@@ -86,7 +87,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .layer-switch button { flex: 1; padding: 7px 4px; border: 0; border-radius: 8px; background: transparent; color: #b9d6d7; font-size: 11px; font-weight: 700; }
 .layer-switch button[aria-pressed="true"] { background: #80dacd; color: #082e3b; box-shadow: 0 2px 9px rgba(0, 0, 0, .2); }
 .layer-switch button:hover:not([aria-pressed="true"]) { background: rgba(255,255,255,.12); color: #fff; }
-.basemap-tools { position: absolute; top: 24px; right: 76px; width: 160px; padding: 5px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; background: #103c49; box-shadow: 0 4px 16px rgba(0,20,30,.2); }
+.basemap-tools { position: relative; order: 1; flex: none; width: 160px; margin-right: 52px; padding: 5px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; background: #103c49; box-shadow: 0 4px 16px rgba(0,20,30,.2); }
 .basemap-switch { margin-top: 0; padding: 2px; }
 .basemap-switch button { min-height: 34px; }
 .basemap-tools > p { padding: 7px; color: #e4d8b8; font-size: 11px; line-height: 1.5; }
@@ -207,7 +208,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .forecast-alert-list small { margin-top: 5px; color: #acd0cb; font-size: 10px; }
 .forecast-alert-card > p { margin-top: 11px; color: #a9c9ca; font-size: 10px; line-height: 1.4; }
 .forecast-alert-card a { color: #d0ebd9; }
-.forecast-alert-chip { width: auto; padding: 10px 12px; color: #eaf8f3; font-size: 11px; font-weight: 700; text-align: left; }
+.forecast-alert-chip { position: relative; top: auto; right: auto; order: 2; flex: none; width: auto; padding: 10px 12px; color: #eaf8f3; font-size: 11px; font-weight: 700; text-align: left; }
 
 .map-hint {
   position: absolute;
@@ -514,8 +515,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .distance-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
 .distance-actions button { padding: 6px 8px; border: 1px solid #698b87; border-radius: 6px; background: #184e59; color: #eff9f5; font-size: 10px; font-weight: 700; }
 .distance-actions button:hover:not(:disabled) { background: #276775; }
-#app:has(.modal-scrim, .history-scrim, .saved-spots-panel, .observations-panel, .forecast-alert-card) .distance-control { display: none; }
-#app:has(.forecast-alert-chip) .distance-control { top: 170px; }
+#app:has(.modal-scrim, .history-scrim, .saved-spots-panel, .observations-panel, .forecast-alert-card, .imagery-history-panel) .distance-control { display: none; }
+#app:has(.basemap-tools, .forecast-alert-chip) .distance-control { top: 45vh; }
 #app:has(.distance-toggle[aria-pressed="true"]) #map { cursor: crosshair; }
 .leaflet-control-attribution { background: rgba(255,255,255,.83) !important; color: #3a565e !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: #254c59 !important; }
@@ -527,11 +528,14 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .leaflet-bottom .leaflet-control-scale { margin-bottom: 170px; }
 }
 @media (max-width: 680px) {
+  #ui { padding: 84px 12px 0; }
+  #ui:not(:has(.basemap-tools)) { padding-top: 310px; }
   .account-settings input { font-size: 16px; }
   .masthead .place-search-results { left: -14px; right: -14px; }
   .masthead:has(.place-search) ~ .error-card { top: 285px; }
   .place-search-inputs input, .masthead .place-search-inputs input { font-size: 16px; }
-  .basemap-tools { top: 84px; right: 12px; width: 126px; }
+  .basemap-tools { width: 126px; margin-right: 0; }
+  #ui:has(.basemap-tools) .forecast-alert-chip { margin-top: 100px; }
   .basemap-overlay { font-size: 10px; gap: 4px; }
   .history-scrim { padding: 7px; }
   .history-panel { max-height: calc(100dvh - 14px); border-radius: 16px; }
@@ -553,7 +557,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .flag-speed strong { font-size: 27px; }
   .masthead { top: 12px; left: 12px; width: 225px; padding: 12px 14px; border-radius: 15px; }
   .saved-spots-panel { top: 194px; left: 12px; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - 210px); }
-  .forecast-alert-card, .forecast-alert-chip { top: 230px; right: 12px; width: min(310px, calc(100vw - 24px)); }
+  .forecast-alert-card { top: 230px; right: 12px; width: min(310px, calc(100vw - 24px)); }
   .forecast-alert-card { max-height: calc(100dvh - 430px); }
   .forecast-alert-chip { width: auto; }
   .logo { width: 34px; height: 34px; font-size: 25px; border-radius: 10px; }
@@ -569,9 +573,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
   .forecast-time { font-size: 15px; }
   .leaflet-top.leaflet-right { top: 10px; right: 10px; }
   .distance-control { top: 90px; right: 10px; }
-  #app:has(.basemap-tools) .distance-control { top: 205px; }
-  #app:has(.forecast-alert-chip) .distance-control { top: 90px; }
-  #app:has(.forecast-alert-chip):has(.basemap-tools) .distance-control { top: 280px; }
+  #app:has(.basemap-tools, .forecast-alert-chip) .distance-control { top: 45vh; }
   .distance-toggle { min-width: 48px; min-height: 42px; padding-inline: 7px; font-size: 11px; }
   .distance-panel { position: fixed; top: auto; right: 10px; bottom: 170px; }
   #app:has(.distance-panel:not([hidden])) .legend { visibility: hidden; }
@@ -678,7 +680,7 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 /* Imagery dates are independent of forecast time and weather-history dialogs. */
 .imagery-history-toggle { width: 100%; min-height: 34px; margin-top: 4px; padding: 6px; border: 1px solid #59808a; border-radius: 7px; color: #d6eee8; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
 .imagery-history-toggle[aria-pressed="true"] { color: #103c49; background: #80dacd; border-color: #80dacd; font-weight: 700; }
-.imagery-history-panel { position: absolute; z-index: 7; top: 180px; right: 76px; width: 310px; max-height: calc(100dvh - 350px); overflow-y: auto; padding: 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #d6eee8; background: #103c49; box-shadow: 0 4px 16px rgba(0,20,30,.2); font-size: 12px; line-height: 1.5; }
+.imagery-history-panel { position: relative; z-index: 7; order: 3; flex: none; width: 310px; max-height: calc(100dvh - 350px); margin-right: 52px; overflow-y: auto; padding: 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #d6eee8; background: #103c49; box-shadow: 0 4px 16px rgba(0,20,30,.2); font-size: 12px; line-height: 1.5; }
 .imagery-history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .imagery-history-head strong { color: #fff; font-size: 15px; }
 .imagery-history-head span, .imagery-location, .imagery-note { color: #acc9cf; font-size: 11px; }
@@ -696,7 +698,8 @@ h1 { margin-top: 2px; font: 600 25px/1 "Outfit", sans-serif; letter-spacing: -.0
 .imagery-history-toggle:active, .imagery-action:active, .imagery-navigation button:not(:disabled):active { transform: scale(.97); }
 .imagery-history-toggle:focus-visible, .imagery-action:focus-visible, .imagery-navigation button:focus-visible, .imagery-date-label select:focus-visible { outline: 2px solid #f3c962; outline-offset: 3px; }
 @media (max-width: 680px) {
-  .imagery-history-panel { top: auto; bottom: 150px; right: 12px; width: min(310px, calc(100vw - 24px)); max-height: calc(100dvh - 395px); padding: 13px; }
+  .imagery-history-panel { width: min(310px, calc(100vw - 24px)); max-height: clamp(160px, calc(100dvh - 620px), 45dvh); margin: 100px 0 0; padding: 13px; }
+  #ui:not(:has(.forecast-alert-chip)) .imagery-history-panel { margin-top: 240px; }
 }
 @media (max-width: 380px) {
   .imagery-history-toggle { font-size: 10px; overflow-wrap: anywhere; }

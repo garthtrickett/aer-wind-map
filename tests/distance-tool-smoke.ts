@@ -21,7 +21,7 @@ const base = `http://127.0.0.1:${address.port}`;
 const browser = await chromium.launch({ headless: true });
 const output = await mkdtemp(join(tmpdir(), "aer-distance-"));
 try {
-  for (const viewport of [{ width: 1000, height: 760 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1000, height: 760 }, { width: 856, height: 608 }, { width: 390, height: 844 }]) {
     const touch = viewport.width < 500;
     const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch });
     await context.route("**/*", (route) => {
@@ -71,6 +71,35 @@ try {
     assert.ok(buttonBox && chipBox && (buttonBox.y + buttonBox.height <= chipBox.y || chipBox.y + chipBox.height <= buttonBox.y),
       "Distance button must not overlap the collapsed forecast alert");
     await page.locator(".forecast-alert-chip").evaluate((chip) => chip.remove());
+    await page.evaluate(() => {
+      const ui = document.querySelector("#ui")!;
+      const base = document.createElement("section");
+      base.className = "basemap-tools";
+      base.innerHTML = '<div class="layer-switch basemap-switch"><button>Map</button><button>Satellite</button></div><button class="imagery-history-toggle">Imagery history</button><label class="basemap-overlay"><input type="checkbox">Weather overlay</label>';
+      const chip = document.createElement("button");
+      chip.className = "forecast-alert-chip";
+      chip.textContent = "7 forecast matches ↗";
+      const history = document.createElement("section");
+      history.className = "imagery-history-panel";
+      history.innerHTML = '<div class="imagery-history-head"><strong>Imagery history</strong><span>Esri Wayback</span></div><p>Dates at selected pin · zoom 14</p><p>Finding local captures…</p>';
+      ui.append(base, chip, history);
+    });
+    await expect(toggle).toBeHidden();
+    const [baseBox, stackedChipBox, historyBox] = await Promise.all([
+      page.locator(".basemap-tools").boundingBox(), page.locator(".forecast-alert-chip").boundingBox(), page.locator(".imagery-history-panel").boundingBox(),
+    ]);
+    assert.ok(baseBox && stackedChipBox && historyBox &&
+      baseBox.y + baseBox.height <= stackedChipBox.y && stackedChipBox.y + stackedChipBox.height <= historyBox.y,
+      "Map background, forecast matches, and imagery history must stack without overlap");
+    const intersects = (a: { x: number; y: number; width: number; height: number }, b: typeof a): boolean =>
+      a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    for (const selector of [".masthead", ".error-card", ".timeline"]) {
+      const other = await page.locator(selector).boundingBox();
+      if (other) assert.ok(!intersects(historyBox, other), `Imagery history must clear ${selector}`);
+    }
+    await page.screenshot({ path: join(output, `controls-${viewport.width}.png`) });
+    await page.locator(".basemap-tools, .forecast-alert-chip, .imagery-history-panel").evaluateAll((elements) => elements.forEach((element) => element.remove()));
+    await expect(toggle).toBeVisible();
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await page.getByRole("button", { name: "Zoom in" }).click();
