@@ -25,7 +25,7 @@ const spots: SavedSpot[] = Array.from({ length: 24 }, (_, index) => ({ id: `spot
   point: { latitude: 26.1 + index * .025, longitude: 127.1 + index * .025 }, startYear: 2025, endYear: 2025,
   criteria: { ...defaultHistoryCriteria, conditions: index % 2 ? "wind" : "swell" }, linkedSpotIds: index < 23 ? [`spot-${index + 1}`] : [], alertEnabled: false, alertMinDays: 1 }));
 map.map.setView([26.4, 127.4], 8, { animate: false });
-map.setSavedSpots(spots);
+map.setSavedSpots(spots, new Map());
 const point = { latitude: 26.5, longitude: 127.7 };
 const setFlag = (direction: number | null = 180) => {
   wave.waveDirection!.fill(direction === null ? NaN : direction);

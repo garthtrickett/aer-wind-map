@@ -1,4 +1,4 @@
-import { conditionSourceLabel } from "./history.ts";
+import { conditionSource, conditionSourceLabel } from "./history.ts";
 import { telegramView } from "./telegram-view.ts";
 import { accountView } from "./account-view.ts";
 import { html, nothing, type TemplateResult } from "lit-html";
@@ -141,6 +141,8 @@ export const view = (state: State, propose: (proposal: Proposal) => void, center
         </div>`;
       })}</div>` : html`<p class="saved-spots-empty">${state.savedSpots.length
         ? "No saved spots match that title." : "Open a point’s Find your season panel to save its settings here."}</p>`}
+      ${state.savedSpots.some((spot) => conditionSource(spot.criteria) !== "wind")
+        ? html`<p class="saved-spots-foot">Purple on a swell marker means all selected ECMWF months are cached; purple and gold means some months are cached. Choose ECMWF in the marker to use that history.</p>` : nothing}
       ${telegramView(state.telegram, propose)}
       <p class="saved-spots-foot">${state.account.user ? "Presets saved to your account. Telegram alerts run on the server."
         : "Presets saved in this browser. Sign in to save them across devices."}</p>

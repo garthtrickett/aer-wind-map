@@ -6,7 +6,7 @@ import "./style.css";
 import { render } from "lit-html";
 import { discoverLatest } from "./ecmwf.ts";
 import { currentPrimarySwellStep } from "./primary-swell.ts";
-import { historyCsv, loadHistoricalSpot } from "./history.ts";
+import { conditionSource, historyCsv, loadHistoricalSpot } from "./history.ts";
 import { bearingFromPointer, type BearingHandle } from "./history-compass.ts";
 import { createHistoryMiniMap } from "./history-mini-map.ts";
 import { shoreHandleBearing, shoreNormalFromHandle, type ShoreHandle } from "./shore-reference.ts";
@@ -24,6 +24,7 @@ import { loadBuoyHistory, buoyHistoryCsv } from "./buoy-history.ts";
 import { createObservationMarkers } from "./observations-map.ts";
 import { telegramRequest, telegramSpotsKey } from "./telegram-model.ts";
 import { isSavedSpot } from "./saved-spots.ts";
+import type { ArchiveProgress } from "./wave-history-types.ts";
 import { loadDay } from "./day-lookup.ts";
 import { loadSatellite, mapTilerTileJson } from "./satellite.ts";
 import { loadWayback, waybackEnabled, waybackImagery } from "./wayback.ts";
@@ -56,6 +57,7 @@ const accounts = createAccountClient({ storage: () => window.localStorage,
 let accountGeneration = 0;
 let displayedField: ForecastField | null = null;
 let displayedSavedSpots: State["savedSpots"] = initialState.savedSpots;
+let archiveMarkerStatuses = new Map<string, Pick<ArchiveProgress, "ready" | "total">>();
 let alertSignature = "";
 let nextAlertRefreshAt = 0;
 let alertGeneration = 0;
@@ -385,6 +387,36 @@ const refreshForecastAlerts = (): void => {
   });
 };
 
+let archiveMarkerController: AbortController | null = null;
+const refreshArchiveMarkers = async (): Promise<void> => {
+  archiveMarkerController?.abort();
+  const controller = new AbortController();
+  archiveMarkerController = controller;
+  const spots = state.savedSpots.filter((spot) => conditionSource(spot.criteria) !== "wind");
+  if (!spots.length) return;
+  const statuses = new Map(archiveMarkerStatuses);
+  const queue = [...spots];
+  const worker = async (): Promise<void> => {
+    while (queue.length && !controller.signal.aborted) {
+      const spot = queue.shift()!;
+      const query = new URLSearchParams({ latitude: String(spot.point.latitude), longitude: String(spot.point.longitude),
+        startYear: String(spot.startYear), endYear: String(spot.endYear) });
+      try {
+        const response = await fetch(`/api/wave-history?${query}`, { signal: controller.signal, credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) continue;
+        const reply = await response.json() as { progress?: Pick<ArchiveProgress, "ready" | "total"> };
+        const progress = reply.progress;
+        if (progress && Number.isInteger(progress.ready) && Number.isInteger(progress.total) &&
+          progress.total > 0 && progress.ready >= 0 && progress.ready <= progress.total) statuses.set(spot.id, progress);
+      } catch { /* Leave the last confirmed status visible when the archive is temporarily unavailable. */ }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  if (controller.signal.aborted) return;
+  archiveMarkerStatuses = statuses;
+  windMap.setSavedSpots(state.savedSpots, archiveMarkerStatuses);
+};
+
 function dispatch(proposal: Proposal): void {
   if (proposal.kind === "accountAction") { void accounts.action(proposal.action); return; }
   const previous = state;
@@ -449,10 +481,14 @@ function dispatch(proposal: Proposal): void {
   }
   if (displayedSavedSpots !== state.savedSpots) {
     displayedSavedSpots = state.savedSpots;
-    windMap.setSavedSpots(displayedSavedSpots);
+    archiveMarkerStatuses = new Map();
+    windMap.setSavedSpots(displayedSavedSpots, archiveMarkerStatuses);
+    queueMicrotask(refreshArchiveMarkers);
     queueMicrotask(refreshForecastAlerts);
     queueMicrotask(() => dispatch({ kind: "telegramSpotsChanged", key: telegramSpotsKey(state.savedSpots), edited: true }));
   }
+  if (proposal.kind === "historyArchiveProgress" && proposal.progress.ready !== previous.history.archiveProgress?.ready)
+    queueMicrotask(refreshArchiveMarkers);
   if ((proposal.kind === "savedSpotOpened" && state.history.savedSpotId === proposal.id || proposal.kind === "telegramSpotRestored") && state.history.point) {
     windMap.focus(state.history.point);
   }
@@ -508,18 +544,21 @@ const compassClockTimer = window.setInterval(refreshCompassClock, 60_000);
 window.addEventListener("focus", refreshCompassClock);
 const alertTimer = window.setInterval(refreshForecastAlerts, 15 * 60 * 1000);
 const observationTimer = window.setInterval(() => { if (!document.hidden) dispatch({ kind: "observationsRefreshed" }); }, 5 * 60 * 1000);
+const archiveMarkerTimer = window.setInterval(() => { if (!document.hidden) void refreshArchiveMarkers(); }, 60_000);
+window.addEventListener("focus", () => { void refreshArchiveMarkers(); });
 const refreshTelegram = () => {
   if (!document.hidden && (state.savedSpotsOpen || state.telegram.connectUrl)) dispatch({ kind: "telegramRequested", action: "status" });
 };
 const telegramTimer = window.setInterval(refreshTelegram, 10_000);
 window.addEventListener("focus", refreshTelegram);
-window.addEventListener("pagehide", () => { placeController?.abort(); compassController?.abort(); clearInterval(compassClockTimer); dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); });
+window.addEventListener("pagehide", () => { placeController?.abort(); compassController?.abort(); archiveMarkerController?.abort(); clearInterval(compassClockTimer); dayController?.abort(); waybackController?.abort(); forecastWorker.terminate(); miniMap?.remove(); observationMarkers.remove(); clearInterval(alertTimer); clearInterval(observationTimer); clearInterval(telegramTimer); clearInterval(archiveMarkerTimer); });
 const savedSpotsResult = readSavedSpots(() => window.localStorage);
 state = present(state, savedSpotsResult.ok
   ? { kind: "savedSpotsLoaded", spots: savedSpotsResult.value }
   : { kind: "savedSpotsLoadFailed", error: savedSpotsResult.error });
 displayedSavedSpots = state.savedSpots;
-windMap.setSavedSpots(displayedSavedSpots);
+windMap.setSavedSpots(displayedSavedSpots, archiveMarkerStatuses);
+queueMicrotask(refreshArchiveMarkers);
 state = present(state, { kind: "telegramSpotsChanged", key: telegramSpotsKey(state.savedSpots), edited: false });
 try { state = present(state, { kind: "telegramSyncRemembered", key: window.localStorage.getItem("aer.telegram.synced.v1") }); }
 catch { /* Local preset storage already reports its own error. */ }

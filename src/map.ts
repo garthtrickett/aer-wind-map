@@ -5,6 +5,7 @@ import { setWorkerUrl, type Map as MapLibreMap, type VisibilitySpecification } f
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Point } from "./model.ts";
 import type { SavedSpot } from "./saved-spots.ts";
+import type { ArchiveProgress } from "./wave-history-types.ts";
 import type { Basemap, Satellite } from "./satellite.ts";
 import { createDistanceTool } from "./distance-tool.ts";
 
@@ -16,7 +17,7 @@ export type WindMap = Readonly<{
   screenPoint: (point: Point) => Readonly<{ x: number; y: number }>;
   pointAt: (position: Readonly<{ x: number; y: number }>) => Point;
   focus: (point: Point, zoom?: number) => void;
-  setSavedSpots: (spots: readonly SavedSpot[]) => void;
+  setSavedSpots: (spots: readonly SavedSpot[], archive: ReadonlyMap<string, Pick<ArchiveProgress, "ready" | "total">>) => void;
   setBasemap: (basemap: Basemap, satellite: Satellite | null) => void;
 }>;
 
@@ -185,7 +186,7 @@ export const createWindMap = (
   });
   const savedLinkRenderer = L.svg();
   const savedLayer = L.layerGroup().addTo(map);
-  const setSavedSpots = (spots: readonly SavedSpot[]): void => {
+  const setSavedSpots = (spots: readonly SavedSpot[], archive: ReadonlyMap<string, Pick<ArchiveProgress, "ready" | "total">>): void => {
     savedLayer.clearLayers();
     const drawn = new Set<string>();
     for (const spot of spots) for (const id of spot.linkedSpotIds ?? []) {
@@ -201,9 +202,11 @@ export const createWindMap = (
     for (const spot of spots) {
       const label = document.createElement("span");
       const source = conditionSource(spot.criteria);
-      const title = `${spot.name} · ${conditionSourceLabel(spot.criteria)}`;
+      const cached = source !== "wind" ? archive.get(spot.id) : undefined;
+      const cacheState = cached && cached.ready > 0 ? cached.ready === cached.total ? "complete" : "partial" : null;
+      const title = `${spot.name} · ${conditionSourceLabel(spot.criteria)}${cacheState ? ` · ECMWF history ${cached!.ready}/${cached!.total} months cached` : ""}`;
       label.textContent = title;
-      const icon = L.divIcon({ className: `saved-spot-icon saved-spot-${source}`,
+      const icon = L.divIcon({ className: `saved-spot-icon saved-spot-${source}${cacheState ? ` saved-spot-archive-${cacheState}` : ""}`,
         html: `<span aria-hidden="true">${source === "both" ? "W+S" : source === "wind" ? "W" : "S"}</span>`,
         iconSize: [34, 36], iconAnchor: [17, 35] });
       L.marker([spot.point.latitude, spot.point.longitude], { icon, title })
