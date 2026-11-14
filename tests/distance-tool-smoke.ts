@@ -47,6 +47,11 @@ try {
     const second = touch ? [310, 470] : [610, 390];
     await add(first[0]!, first[1]!);
     await expect(page.locator(".distance-result")).toHaveText("Start point set");
+    if (!touch) {
+      await page.locator("#map").hover({ position: { x: second[0]!, y: second[1]! } });
+      await expect(page.locator(".distance-line-preview")).not.toHaveAttribute("d", "");
+      await expect(page.locator(".distance-result")).toContainText("km");
+    }
     await add(second[0]!, second[1]!);
     await expect(page.locator(".distance-result")).toContainText("km");
     const distance = await page.locator(".distance-result").innerText();

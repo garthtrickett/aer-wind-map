@@ -64,6 +64,11 @@ export const createDistanceTool = (map: L.Map): DistanceTool => {
   map.getContainer().parentElement?.append(control);
 
   const total = (): number => points.slice(1).reduce((sum, point, index) => sum + map.distance(points[index]!, point), 0);
+  const updateResult = (): void => {
+    const previewDistance = drawing && hover && points.length ? map.distance(points.at(-1)!, hover) : 0;
+    result.textContent = points.length > 1 || previewDistance > 0 ? distanceLabel(total() + previewDistance)
+      : points.length ? "Start point set" : "Ready to measure";
+  };
   const project = (point: L.LatLng): L.Point => {
     const longitude = point.lng + Math.round((map.getCenter().lng - point.lng) / 360) * 360;
     return map.latLngToContainerPoint([point.lat, longitude]);
@@ -88,7 +93,7 @@ export const createDistanceTool = (map: L.Map): DistanceTool => {
     panel.hidden = !drawing && points.length === 0;
     toggle.textContent = drawing ? "Done" : points.length ? "Edit line" : "Measure";
     toggle.setAttribute("aria-pressed", String(drawing));
-    result.textContent = points.length > 1 ? distanceLabel(total()) : points.length ? "Start point set" : "Ready to measure";
+    updateResult();
     hint.textContent = drawing ? "Tap the map to add points. Pan or zoom to place them precisely."
       : "The line stays in place as you zoom. Edit to add more points.";
     center.hidden = !drawing;
@@ -101,8 +106,8 @@ export const createDistanceTool = (map: L.Map): DistanceTool => {
   undo.addEventListener("click", () => { if (drawing && points.length) { points.pop(); hover = null; refresh(); } });
   clear.addEventListener("click", () => { points = []; hover = null; drawing = true; refresh(); });
   close.addEventListener("click", () => { points = []; hover = null; drawing = false; refresh(); });
-  map.on("mousemove", (event: L.LeafletMouseEvent) => { if (drawing && points.length) { hover = event.latlng; redraw(); } });
-  map.on("mouseout", () => { if (hover) { hover = null; redraw(); } });
+  map.on("mousemove", (event: L.LeafletMouseEvent) => { if (drawing && points.length) { hover = event.latlng; updateResult(); redraw(); } });
+  map.on("mouseout", () => { if (hover) { hover = null; updateResult(); redraw(); } });
   map.on("move zoom resize", redraw);
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !drawing) return;
